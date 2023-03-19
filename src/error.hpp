@@ -3,25 +3,24 @@
 //  of this project, including this file, may be copied, modified, propagated,
 //  or distributed except according to the terms contained in the LICENSE file.
 
-#ifndef TOML_LEXER_HPP
-#define TOML_LEXER_HPP
+#ifndef TOML_ERROR_HPP
+#define TOML_ERROR_HPP
 
 #include <string>
-#include <vector>
-
-#include "error.hpp"
-#include "token.hpp"
 
 
 namespace toml
 {
 
 
-bool
-lex_toml(const std::string &toml, std::vector<Token> &tokens, std::vector<Error> &errors);
+struct Error
+{
+    std::string::size_type line;
+    std::string::size_type column;
+    std::string message;
+};
 
 
-} // namespace toml
+}
 
-
-#endif // TOML_LEXER_HPP
+#endif // TOML_ERROR_HPP

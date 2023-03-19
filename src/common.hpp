@@ -10,12 +10,33 @@
 #include <climits>
 
 
-static_assert(CHAR_BIT == 8, "Byte must be 8 bits wide");
+static_assert(CHAR_BIT == 8, "Expected byte be 8 bits.");
 
+using s8  = signed char;
+using s16 = short;
+using s32 = int;
+using s64 = long long;
+
+using u8  = unsigned char;
+using u16 = unsigned short;
+using u32 = unsigned;
+using u64 = unsigned long long;
 
 using byte = unsigned char;
 
+
 #define BYTE_MAX UCHAR_MAX
+
+
+static_assert(sizeof(s8) == 1, "Expected s8 to be 1 byte.");
+static_assert(sizeof(s16) == 2, "Expected s16 to be 2 bytes.");
+static_assert(sizeof(s32) == 4, "Expected s32 to be 4 bytes.");
+static_assert(sizeof(s64) == 8, "Expected s64 to be 8 bytes.");
+
+static_assert(sizeof(u8) == 1, "Expected u8 to be 1 byte.");
+static_assert(sizeof(u16) == 2, "Expected u16 to be 2 bytes.");
+static_assert(sizeof(u32) == 4, "Expected u32 to be 4 bytes.");
+static_assert(sizeof(u64) == 8, "Expected u64 to be 8 bytes.");
 
 
 #endif // toml_common_hpp

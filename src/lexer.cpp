@@ -6,6 +6,8 @@
 #include "lexer.hpp"
 
 #include <cstdio> // fputs
+#include <iomanip>
+#include <sstream>
 #include <utility> // move
 
 #include "common.hpp"
@@ -37,7 +39,8 @@ struct TomlIterator
     string::size_type current_line;
     string::size_type current_column;
 
-    TokenList &tokens;
+    vector<Token> &tokens;
+    vector<Error> &errors;
 };
 
 
@@ -50,10 +53,19 @@ advance(TomlIterator &iterator)
 
 
 void
+add_error(TomlIterator &iterator, string message)
+{
+    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    iterator.errors.push_back(move(error));
+    advance(iterator);
+}
+
+
+void
 add_token(TomlIterator &iterator, TokenType type, string lexeme)
 {
     Token token = { type, move(lexeme), iterator.start_line, iterator.start_column };
-    iterator.tokens.emplace_back(move(token));
+    iterator.tokens.push_back(move(token));
     advance(iterator);
 }
 
@@ -214,16 +226,187 @@ eat_whitespace(TomlIterator &iterator)
 
 
 void
-lex_string_char(TomlIterator &iterator, string &result)
+resynchronize(TomlIterator &iterator, string message)
 {
-    byte c = eat_byte(iterator);
-    if (!((c == 0x09) || ((c >= 0x20) && (c <= 0x7e))))
+    bool eating = true;
+    while (eating)
     {
-        fprintf(stderr, "Invalid or unhandled string char: '%c'\n", c);
-        assert(false);
+        if (match_eol(iterator))
+        {
+            eating = false;
+        }
+        else
+        {
+            message.push_back(eat_byte(iterator));
+        }
     }
 
+    add_error(iterator, move(message));
+}
+
+
+constexpr byte B10000000 = 0x80;
+constexpr byte B11000000 = 0xc0;
+constexpr byte B11100000 = 0xe0;
+constexpr byte B11110000 = 0xf0;
+constexpr byte B11111000 = 0xf8;
+
+constexpr byte B00000111 = 0x07;
+constexpr byte B00001111 = 0x0f;
+constexpr byte B00011111 = 0x1f;
+constexpr byte B00111111 = 0x3f;
+constexpr byte B01111111 = 0x7f;
+
+
+void
+byte_to_hex(ostream &o, u8 value)
+{
+    o << setw(2) << setfill('0') << uppercase << hex << static_cast<u32>(value);
+}
+
+
+void
+format_unicode(ostream &o, u32 codepoint)
+{
+    o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
+}
+
+
+void
+lex_string_char(TomlIterator &iterator, string &result)
+{
+    assert(!end_of_file(iterator));
+
+    byte c = eat_byte(iterator);
     result.push_back(c);
+
+    u32 codepoint = 0;
+    u32 nbytes = 0;
+    bool valid = true;
+
+    if ((c & B10000000) == 0)
+    {
+        codepoint = c;
+        nbytes = 1;
+    }
+    else if ((c & B11100000) == B11000000)
+    {
+        codepoint = ((c & B00011111) << 6);
+        nbytes = 2;
+    }
+    else if ((c & B11110000) == B11100000)
+    {
+        codepoint = ((c & B00001111) << 12);
+        nbytes = 3;
+    }
+    else if ((c & B11111000) == B11110000)
+    {
+        codepoint = ((c & B00001111) << 18);
+        nbytes = 4;
+    }
+    else
+    {
+        ostringstream message;
+        message << "Invalid UTF-8 byte: 0x";
+        byte_to_hex(message, c);
+        add_error(iterator, move(message.str()));
+        nbytes = 1; // Let's just eat the byte and (try to) keep going
+        valid = false;
+    }
+
+    u32 eaten = 1;
+    for ( ; (eaten < nbytes) && !end_of_file(iterator); ++eaten)
+    {
+        c = eat_byte(iterator);
+        result.push_back(c);
+
+        if ((c & B11000000) == B10000000)
+        {
+            byte masked = c & B00111111;
+            u32 shift = 6 * (nbytes - 1 - eaten);
+            codepoint |= (masked << shift);
+        }
+        else
+        {
+            ostringstream message;
+            message << "Invalid UTF-8 byte: 0x";
+            byte_to_hex(message, c);
+            message << ". Expected a continuation byte in the range of 0x";
+            byte_to_hex(message, 0x80);
+            message << "-";
+            byte_to_hex(message, 0xbf);
+            add_error(iterator, move(message.str()));
+            valid = false;
+        }
+    }
+
+    // if eaten < nbytes, then we'll err on an unterminated string
+    if (valid && (eaten == nbytes))
+    {
+        if ((nbytes == 2) && (codepoint < 0x80))
+        {
+            ostringstream message;
+            message << "Overlong encoding of Unicode value: ";
+            format_unicode(message, codepoint);
+            message << " is a 1-byte value but was encoded in 2 bytes.";
+            add_error(iterator, move(message.str()));
+        }
+        else if ((nbytes == 3) && (codepoint < 0x800))
+        {
+            u32 expected_bytes = (codepoint < 0x80) ? 1 : 2;
+
+            ostringstream message;
+            message << "Overlong encoding of Unicode value: ";
+            format_unicode(message, codepoint);
+            message << " is a " << expected_bytes << "-byte value but was encoded in 3 bytes.";
+            add_error(iterator, move(message.str()));
+        }
+        else if ((nbytes == 4) && (codepoint < 0x10000))
+        {
+            u32 expected_bytes = 1;
+            if (codepoint < 0x800)
+            {
+                expected_bytes = 3;
+            }
+            else if (codepoint < 0x80)
+            {
+                expected_bytes = 2;
+            }
+
+            ostringstream message;
+            message << "Overlong encoding of Unicode value: ";
+            format_unicode(message, codepoint);
+            message << " is a " << expected_bytes << "-byte value but was encoded in 4 bytes.";
+            add_error(iterator, move(message.str()));
+        }
+        else if (codepoint > 0x10ffff)
+        {
+            ostringstream message;
+            message << "Invalid Unicode value: ";
+            format_unicode(message, codepoint);
+            message << " (maximum allowed value is ";
+            format_unicode(message, 0x10ffff);
+            message << ")";
+            add_error(iterator, move(message.str()));
+        }
+        else if (!(
+            (codepoint == 0x09)
+            || ((codepoint >= 0x20) && (codepoint <= 0x7e))
+            || ((codepoint >= 0x80) && (codepoint <= 0xd7ff))
+            || (codepoint >= 0xe000)))
+        {
+            ostringstream message;
+            message << "Unicode value ";
+            format_unicode(message, codepoint);
+            message << " is not allowed in a string";
+            add_error(iterator, move(message.str()));
+        }
+
+        // Adjust the current column to reflect only 1 "character". Although
+        // this probably falls apart with combining characters, etc. Pull
+        // requests accepted. :-)
+        iterator.current_column -= (nbytes - 1);
+    }
 }
 
 
@@ -286,10 +469,13 @@ lex_value(TomlIterator &iterator)
         string key = lex_string(iterator, c);
         add_token(iterator, TOKEN_STRING, move(key));
     }
+    else if (match(iterator, '#'))
+    {
+        add_error(iterator, "Missing value");
+    }
     else
     {
-        fprintf(stderr, "Invalid or unhandled value character: '%c'\n", c);
-        assert(false);
+        resynchronize(iterator, "Invalid value: ");
     }
 }
 
@@ -311,7 +497,11 @@ lex_unquoted_key(TomlIterator &iterator)
         }
     }
 
-    assert(value.length());
+    if (!value.length())
+    {
+        add_error(iterator, "Missing key");
+    }
+
     add_token(iterator, TOKEN_KEY, move(value));
 }
 
@@ -346,6 +536,8 @@ lex_key(TomlIterator &iterator)
         if (match(iterator, '.'))
         {
             eat_byte(iterator);
+            eat_whitespace(iterator);
+            advance(iterator);
         }
         else
         {
@@ -399,9 +591,9 @@ lex_expression(TomlIterator &iterator)
 
 
 bool
-lex_toml(const string &toml, TokenList &tokens)
+lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
 {
-    TomlIterator iterator = { toml, 0, toml.length(), 1, 1, 1, 1, tokens };
+    TomlIterator iterator = { toml, 0, toml.length(), 1, 1, 1, 1, tokens, errors };
 
     while (!end_of_file(iterator))
     {
@@ -412,10 +604,13 @@ lex_toml(const string &toml, TokenList &tokens)
             lexing = eat_newline(iterator);
         }
 
-        assert(end_of_file(iterator));
+        if (!end_of_file(iterator))
+        {
+            resynchronize(iterator, "Expected new line but got: ");
+        }
     }
 
-    return true;
+    return errors.size() == 0;
 }
 
 
