@@ -39,9 +39,9 @@ inline std::ostream& operator<<(std::ostream &os, const Token &token)
 {
     os << "Token("
         << TOKEN_NAMES[token.type] << ", \""
-        << token.lexeme << ", "
+        << token.lexeme << "\", "
         << token.line << ", "
-        << token.column  << "\")";
+        << token.column  << ")";
     return os;
 }
 
@@ -109,8 +109,8 @@ TEST(lex, comments)
         ;
 
     const vector<Token> tokens = {
-        {TOKEN_KEY, "key", 2, 1}, {TOKEN_STRING, "value", 2, 7},
-        {TOKEN_KEY, "another", 3, 1}, {TOKEN_STRING, "# This is not a comment", 3, 11},
+        { TOKEN_KEY, "key", 2, 1 }, { TOKEN_STRING, "value", 2, 7 },
+        { TOKEN_KEY, "another", 3, 1 }, { TOKEN_STRING, "# This is not a comment", 3, 11 } ,
     };
 
     assert_lexed(toml, tokens);
@@ -122,7 +122,7 @@ TEST(lex, keyvals)
     const string toml = "key = \"value\"";
 
     const vector<Token> tokens = {
-        {TOKEN_KEY, "key", 1, 1}, {TOKEN_STRING, "value", 1, 7},
+        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
     };
 
     assert_lexed(toml, tokens);
@@ -155,10 +155,10 @@ TEST(lex, bare_keys)
         ;
 
     const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7},
-        { TOKEN_KEY, "bare_key", 2, 1 }, { TOKEN_STRING, "value", 2, 12},
-        { TOKEN_KEY, "bare-key", 3, 1 }, { TOKEN_STRING, "value", 3, 12},
-        { TOKEN_KEY, "1234", 4, 1 }, { TOKEN_STRING, "value", 4, 8},
+        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
+        { TOKEN_KEY, "bare_key", 2, 1 }, { TOKEN_STRING, "value", 2, 12 },
+        { TOKEN_KEY, "bare-key", 3, 1 }, { TOKEN_STRING, "value", 3, 12 },
+        { TOKEN_KEY, "1234", 4, 1 }, { TOKEN_STRING, "value", 4, 8 },
     };
 
     assert_lexed(toml, tokens);
@@ -176,11 +176,11 @@ TEST(lex, quoted_keys)
         ;
 
     const vector<Token> tokens = {
-        { TOKEN_KEY, "127.0.0.1", 1, 1 }, { TOKEN_STRING, "value", 1, 15},
-        { TOKEN_KEY, "character encoding", 2, 1 }, { TOKEN_STRING, "value", 2, 24},
-        { TOKEN_KEY, "ʎǝʞ", 3, 1 }, { TOKEN_STRING, "value", 3, 9},
-        { TOKEN_KEY, "key2", 4, 1 }, { TOKEN_STRING, "value", 4, 10},
-        { TOKEN_KEY, "quoted \"value\"", 5, 1 }, { TOKEN_STRING, "value", 5, 20},
+        { TOKEN_KEY, "127.0.0.1", 1, 1 }, { TOKEN_STRING, "value", 1, 15 },
+        { TOKEN_KEY, "character encoding", 2, 1 }, { TOKEN_STRING, "value", 2, 24 },
+        { TOKEN_KEY, "ʎǝʞ", 3, 1 }, { TOKEN_STRING, "value", 3, 9 },
+        { TOKEN_KEY, "key2", 4, 1 }, { TOKEN_STRING, "value", 4, 10 },
+        { TOKEN_KEY, "quoted \"value\"", 5, 1 }, { TOKEN_STRING, "value", 5, 20 },
     };
 
     assert_lexed(toml, tokens);
@@ -336,6 +336,153 @@ TEST(lex, out_of_order_keys)
         { TOKEN_KEY, "orange", 7, 1 }, { TOKEN_KEY, "skin", 7, 8 }, { TOKEN_STRING, "thick", 7, 15 },
         { TOKEN_KEY, "apple", 9, 1 }, { TOKEN_KEY, "color", 9, 7 }, { TOKEN_STRING, "red", 9, 15 },
         { TOKEN_KEY, "orange", 10, 1 }, { TOKEN_KEY, "color", 10, 8 }, { TOKEN_STRING, "orange", 10, 16 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, basic_strings)
+{
+    const string toml =
+        "str = \"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "str", 1, 1 }, { TOKEN_STRING, "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.", 1, 7 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, multiline_basic_strings)
+{
+    const string toml =
+        "str1 = \"\"\"\n"
+        "Roses are red\n"
+        "Violets are blue\"\"\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "str1", 1, 1 }, { TOKEN_STRING, "Roses are red\nViolets are blue", 1, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, line_ending_backslash)
+{
+    const string toml =
+        "# The following strings are byte-for-byte equivalent:\n"
+        "str1 = \"The quick brown fox jumps over the lazy dog.\"\n"
+        "\n"
+        "str2 = \"\"\"\n"
+        "The quick brown \\\n"
+        "\n"
+        "\n"
+        "  fox jumps over \\\n"
+        "    the lazy dog.\"\"\"\n"
+        "\n"
+        "str3 = \"\"\"\\\n"
+        "       The quick brown \\\n"
+        "       fox jumps over \\\n"
+        "       the lazy dog.\\\n"
+        "       \"\"\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "str1", 2, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 2, 8 },
+        { TOKEN_KEY, "str2", 4, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 4, 8 },
+        { TOKEN_KEY, "str3", 11, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 11, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, multiline_basic_string_escapes)
+{
+    const string toml =
+        "str4 = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"\n"
+        "# str5 = \"\"\"Here are three quotation marks: \"\"\".\"\"\"  # INVALID\n"
+        "str5 = \"\"\"Here are three quotation marks: \"\"\\\".\"\"\"\n"
+        "str6 = \"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"\n"
+        "\n"
+        "# \"This,\" she said, \"is just a pointless statement.\"\n"
+        "str7 = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "str4", 1, 1 }, { TOKEN_STRING, "Here are two quotation marks: \"\". Simple enough.", 1, 8 },
+        { TOKEN_KEY, "str5", 3, 1 }, { TOKEN_STRING, "Here are three quotation marks: \"\"\".", 3, 8 },
+        { TOKEN_KEY, "str6", 4, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".", 4, 8 },
+        { TOKEN_KEY, "str7", 7, 1 }, { TOKEN_STRING, "\"This,\" she said, \"is just a pointless statement.\"", 7, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, literal_strings)
+{
+    const string toml =
+        "# What you see is what you get.\n"
+        "winpath  = 'C:\\Users\\nodejs\\templates'\n"
+        "winpath2 = '\\\\ServerX\\admin$\\system32\\'\n"
+        "quoted   = 'Tom \"Dubs\" Preston-Werner'\n"
+        "regex    = '<\\i\\c*\\s*>'\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "winpath", 2, 1 }, { TOKEN_STRING, "C:\\Users\\nodejs\\templates", 2, 12 },
+        { TOKEN_KEY, "winpath2", 3, 1 }, { TOKEN_STRING, "\\\\ServerX\\admin$\\system32\\", 3, 12 },
+        { TOKEN_KEY, "quoted", 4, 1 }, { TOKEN_STRING, "Tom \"Dubs\" Preston-Werner", 4, 12 },
+        { TOKEN_KEY, "regex", 5, 1 }, { TOKEN_STRING, "<\\i\\c*\\s*>", 5, 12 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, multiline_literal_strings)
+{
+    const string toml =
+        "regex2 = '''I [dw]on't need \\d{2} apples'''\n"
+        "lines  = '''\n"
+        "The first newline is\n"
+        "trimmed in raw strings.\n"
+        "   All other whitespace\n"
+        "   is preserved.\n"
+        "'''\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "regex2", 1, 1 }, { TOKEN_STRING, "I [dw]on't need \\d{2} apples", 1, 10 },
+        { TOKEN_KEY, "lines", 2, 1 }, { TOKEN_STRING, "The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n", 2, 10 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, mulitiline_literal_string_escapes)
+{
+    const string toml =
+        "quot15 = '''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''\n"
+        "\n"
+        "# apos15 = '''Here are fifteen apostrophes: ''''''''''''''''''  # INVALID\n"
+        "apos15 = \"Here are fifteen apostrophes: '''''''''''''''\"\n"
+        "\n"
+        "# 'That,' she said, 'is still pointless.'\n"
+        "str = ''''That,' she said, 'is still pointless.''''\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "quot15", 1, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"", 1, 10 },
+        { TOKEN_KEY, "apos15", 4, 1 }, { TOKEN_STRING, "Here are fifteen apostrophes: '''''''''''''''", 4, 10 },
+        { TOKEN_KEY, "str", 7, 1}, { TOKEN_STRING, "'That,' she said, 'is still pointless.'", 7, 7 },
     };
 
     assert_lexed(toml, tokens);

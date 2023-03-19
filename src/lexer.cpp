@@ -27,6 +27,21 @@ namespace
 constexpr byte INVALID_BYTE = BYTE_MAX;
 
 
+constexpr byte B10000000 = 0x80;
+constexpr byte B11000000 = 0xc0;
+constexpr byte B11100000 = 0xe0;
+constexpr byte B11110000 = 0xf0;
+constexpr byte B11111000 = 0xf8;
+
+constexpr byte B00000111 = 0x07;
+constexpr byte B00001111 = 0x0f;
+constexpr byte B00011111 = 0x1f;
+constexpr byte B00111111 = 0x3f;
+constexpr byte B01111111 = 0x7f;
+
+constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                              'A', 'B', 'C', 'D', 'E', 'F' };
+
 struct TomlIterator
 {
     const string &toml;
@@ -45,19 +60,19 @@ struct TomlIterator
 
 
 void
-advance(TomlIterator &iterator)
+byte_to_hex(byte value, string &out)
 {
-    iterator.start_line = iterator.current_line;
-    iterator.start_column = iterator.current_column;
+    out += "0x";
+    out.push_back(HEX2CHAR[(value >> 4) & 0xf]);
+    out.push_back(HEX2CHAR[value & 0xf]);
 }
 
 
 void
-add_error(TomlIterator &iterator, string message)
+advance(TomlIterator &iterator)
 {
-    Error error = { iterator.start_line, iterator.start_column, move(message) };
-    iterator.errors.push_back(move(error));
-    advance(iterator);
+    iterator.start_line = iterator.current_line;
+    iterator.start_column = iterator.current_column;
 }
 
 
@@ -71,19 +86,19 @@ add_token(TomlIterator &iterator, TokenType type, string lexeme)
 
 
 bool
-end_of_file(const TomlIterator &iterator)
+end_of_file(const TomlIterator &iterator, u64 ahead = 0)
 {
     assert(iterator.position <= iterator.length);
-    bool result = iterator.position == iterator.length;
+    bool result = iterator.length - iterator.position <= ahead;
     return result;
 }
 
 
 byte
-get_char(const TomlIterator &iterator)
+get_byte(const TomlIterator &iterator, u64 ahead = 0)
 {
-    assert(!end_of_file(iterator));
-    byte result = iterator.toml[iterator.position];
+    assert(!end_of_file(iterator, ahead));
+    byte result = iterator.toml[iterator.position + ahead];
     return result;
 }
 
@@ -166,12 +181,12 @@ eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
 
 
 void
-eat_bytes(TomlIterator &iterator, string::size_type count)
+eat_bytes(TomlIterator &iterator, string::size_type count, byte expected = INVALID_BYTE)
 {
     assert(count);
     for (string::size_type i = 0; i < count; ++i)
     {
-        eat_byte(iterator);
+        eat_byte(iterator, expected);
     }
 }
 
@@ -186,8 +201,6 @@ eat_comment(TomlIterator &iterator)
             eat_byte(iterator);
         } while (!match_eol(iterator));
     }
-
-    advance(iterator);
 }
 
 
@@ -199,28 +212,86 @@ eat_newline(TomlIterator &iterator)
     if (match(iterator, '\n'))
     {
         eat_byte(iterator);
-        advance(iterator);
         result = true;
     }
     else if (match(iterator, '\r') && match(iterator, '\n', 1))
     {
         eat_bytes(iterator, 2);
-        advance(iterator);
         result = true;
     }
 
+    return result;
+}
+
+
+bool
+eat_whitespace(TomlIterator &iterator)
+{
+    bool result = false;
+
+    if (match_whitespace(iterator))
+    {
+        result = true;
+        do
+        {
+            eat_byte(iterator);
+        } while (match_whitespace(iterator));
+    }
 
     return result;
 }
 
 
 void
-eat_whitespace(TomlIterator &iterator)
+convert_unicode_to_utf8(u32 codepoint, string &out)
 {
-    while (match_whitespace(iterator))
+    assert(codepoint <= 0x10ffff);
+
+    u32 nbytes = 1;
+    if (codepoint < 0x80)
     {
-        eat_byte(iterator);
+        out.push_back(codepoint & B01111111);
     }
+    else if (codepoint <= 0x800)
+    {
+        nbytes = 2;
+        byte c = B11000000 | ((codepoint >> 6) & B00011111);
+        out.push_back(c);
+    }
+    else if (codepoint <= 0x10000)
+    {
+        nbytes = 3;
+        byte c = B11100000 | ((codepoint >> 12) & B00001111);
+        out.push_back(c);
+    }
+    else
+    {
+        nbytes = 4;
+        byte c = B11110000 | ((codepoint >> 18) & B00000111);
+        out.push_back(c);
+    }
+
+    for (u32 i = 1; i < nbytes; ++i)
+    {
+        u32 shift = 6 * (nbytes - 1 - i);
+        byte c = B10000000 | ((codepoint >> shift) & B00111111);
+        out.push_back(c);
+    }
+}
+
+
+void
+format_unicode(ostream &o, u32 codepoint)
+{
+    o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
+}
+
+
+void
+add_error(TomlIterator &iterator, string message)
+{
+    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    iterator.errors.push_back(move(error));
     advance(iterator);
 }
 
@@ -228,6 +299,7 @@ eat_whitespace(TomlIterator &iterator)
 void
 resynchronize(TomlIterator &iterator, string message)
 {
+    advance(iterator);
     bool eating = true;
     while (eating)
     {
@@ -245,30 +317,74 @@ resynchronize(TomlIterator &iterator, string message)
 }
 
 
-constexpr byte B10000000 = 0x80;
-constexpr byte B11000000 = 0xc0;
-constexpr byte B11100000 = 0xe0;
-constexpr byte B11110000 = 0xf0;
-constexpr byte B11111000 = 0xf8;
-
-constexpr byte B00000111 = 0x07;
-constexpr byte B00001111 = 0x0f;
-constexpr byte B00011111 = 0x1f;
-constexpr byte B00111111 = 0x3f;
-constexpr byte B01111111 = 0x7f;
-
-
-void
-byte_to_hex(ostream &o, u8 value)
+bool
+is_printable(byte value)
 {
-    o << setw(2) << setfill('0') << uppercase << hex << static_cast<u32>(value);
+    bool result = (value >= 0x20) && (value <= 0x7e); // ASCII printable range
+    return result;
 }
 
 
 void
-format_unicode(ostream &o, u32 codepoint)
+invalid_escape(TomlIterator &iterator, byte value)
 {
-    o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
+    string message = "Invalid escape: ";
+    if (is_printable(value))
+    {
+        message.push_back(value);
+    }
+    else
+    {
+        byte_to_hex(value, message);
+    }
+
+    Error error = { iterator.current_line, iterator.current_column, move(message) };
+    iterator.errors.push_back(move(error));
+
+    eat_byte(iterator);
+}
+
+
+void
+invalid_unicode(TomlIterator &iterator, u32 codepoint)
+{
+    string message = "Invalid Unicode character: U+";
+
+    u32 nchars = (codepoint / 0xf) + 1;
+    for (u32 i = 4; i > nchars; --i)
+    {
+        message.push_back('0');
+    }
+
+    for( ; nchars; --nchars)
+    {
+        u32 shift = 4 * (nchars - 1);
+        message.push_back(HEX2CHAR[(codepoint >> shift) & 0xf]);
+    }
+
+    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    iterator.errors.push_back(move(error));
+}
+
+
+void
+invalid_unicode_escape(TomlIterator &iterator, u64 position)
+{
+    string message = "Unicode escape sequence contains non-hexadecimal value: ";
+    byte value = get_byte(iterator, position);
+
+    if (is_printable(value))
+    {
+        message.push_back(value);
+    }
+    else
+    {
+        byte_to_hex(value, message);
+    }
+
+
+    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    iterator.errors.push_back(move(error));
 }
 
 
@@ -306,10 +422,9 @@ lex_string_char(TomlIterator &iterator, string &result)
     }
     else
     {
-        ostringstream message;
-        message << "Invalid UTF-8 byte: 0x";
-        byte_to_hex(message, c);
-        add_error(iterator, move(message.str()));
+        string message = "Invalid UTF-8 byte: ";
+        byte_to_hex(c, message);
+        add_error(iterator, move(message));
         nbytes = 1; // Let's just eat the byte and (try to) keep going
         valid = false;
     }
@@ -328,14 +443,13 @@ lex_string_char(TomlIterator &iterator, string &result)
         }
         else
         {
-            ostringstream message;
-            message << "Invalid UTF-8 byte: 0x";
-            byte_to_hex(message, c);
-            message << ". Expected a continuation byte in the range of 0x";
-            byte_to_hex(message, 0x80);
-            message << "-";
-            byte_to_hex(message, 0xbf);
-            add_error(iterator, move(message.str()));
+            string message = "Invalid UTF-8 byte: ";
+            byte_to_hex(c, message);
+            message += ". Expected a continuation byte in the range of ";
+            byte_to_hex(0x80, message);
+            message += "-";
+            byte_to_hex(0xbf, message);
+            add_error(iterator, move(message));
             valid = false;
         }
     }
@@ -411,12 +525,226 @@ lex_string_char(TomlIterator &iterator, string &result)
 
 
 void
-lex_escape(TomlIterator &iterator, string &)
+lex_unicode(TomlIterator &iterator, string &result, u64 count)
 {
-    eat_byte(iterator, '\\');
+    assert((count == 4) || (count == 8));
 
-    fputs("Implement lex_escape\n", stderr);
-    assert(false);
+    u32 codepoint = 0;
+    bool valid = true;
+    u64 lexed = 0;
+    for ( ; (lexed < count) && !end_of_file(iterator, lexed); ++lexed)
+    {
+        byte c = get_byte(iterator, lexed);
+
+        if ((c >= '0') && (c <= '9'))
+        {
+            c -= '0';
+        }
+        else if ((c >= 'a') && (c <= 'f'))
+        {
+            // In ASCII: 'a' == 97 -> 10 == 'a' - 87
+            c -= 87;
+        }
+        else if ((c >= 'A') && (c <= 'F'))
+        {
+            // In ASCII: 'A' == 65 -> 10 == 'A' - 55
+            c -= 55;
+        }
+        else
+        {
+            valid = false;
+            break;
+        }
+
+        u64 shift = 4 * (count - 1 - lexed);
+        codepoint |= (c << shift);
+    }
+
+    if (valid && (lexed == count))
+    {
+        if ((codepoint <= 0xd7ff) || ((codepoint >= 0xe000) && (codepoint <= 0x10ffff)))
+        {
+            convert_unicode_to_utf8(codepoint, result);
+        }
+        else
+        {
+            invalid_unicode(iterator, codepoint);
+        }
+    }
+    else if (!valid)
+    {
+        invalid_unicode_escape(iterator, lexed);
+    }
+
+    eat_bytes(iterator, lexed);
+}
+
+
+void
+lex_escape(TomlIterator &iterator, string &result)
+{
+    assert (!end_of_file(iterator));
+
+    byte c = get_byte(iterator);
+    switch (get_byte(iterator))
+    {
+        case '"':
+        case '\'':
+        case '\\':
+        {
+            eat_byte(iterator);
+            result.push_back(c);
+        } break;
+
+        case 'b':
+        {
+            eat_byte(iterator);
+            result.push_back('\b');
+        } break;
+
+        case 'f':
+        {
+            eat_byte(iterator);
+            result.push_back('\f');
+        } break;
+
+        case 'n':
+        {
+            eat_byte(iterator);
+            result.push_back('\n');
+        } break;
+
+        case 'r':
+        {
+            eat_byte(iterator);
+            result.push_back('\r');
+        } break;
+
+        case 't':
+        {
+            eat_byte(iterator);
+            result.push_back('\t');
+        } break;
+
+        case 'u':
+        {
+            eat_byte(iterator);
+            lex_unicode(iterator, result, 4);
+        } break;
+
+        case 'U':
+        {
+            eat_byte(iterator);
+            lex_unicode(iterator, result, 8);
+        } break;
+
+        default:
+        {
+            invalid_escape(iterator, c);
+            eat_byte(iterator);
+            result.push_back(c);
+        }
+    }
+}
+
+
+string
+lex_multiline_string(TomlIterator &iterator, byte delimiter)
+{
+    assert((delimiter == '"') || (delimiter == '\''));
+    eat_bytes(iterator, 3, delimiter);
+    eat_newline(iterator);
+
+    string result;
+    bool lexing = true;
+    while (lexing)
+    {
+        if (end_of_file(iterator))
+        {
+            assert(false);
+            lexing = false;
+        }
+        else if (eat_newline(iterator))
+        {
+            result.push_back('\n');
+        }
+        else
+        {
+            byte c = get_byte(iterator);
+            if (c == delimiter)
+            {
+                u32 i = 1;
+                for ( ; match(iterator, delimiter, i) && (i < 5); ++i);
+
+                eat_bytes(iterator, i);
+                switch (i)
+                {
+                    case 1:
+                    {
+                        result.push_back(delimiter);
+                    } break;
+
+                    case 2:
+                    {
+                        result.push_back(delimiter);
+                        result.push_back(delimiter);
+                    } break;
+
+                    case 3:
+                    {
+                        lexing = false;
+                    } break;
+
+                    case 4:
+                    {
+                        result.push_back(delimiter);
+                        lexing = false;
+                    } break;
+
+                    case 5:
+                    {
+                        result.push_back(delimiter);
+                        result.push_back(delimiter);
+                        lexing = false;
+                    } break;
+                }
+            }
+            else if ((c == '\\') && (delimiter == '"'))
+            {
+                eat_byte(iterator);
+                if (!end_of_file(iterator))
+                {
+                    c = get_byte(iterator);
+                    if (eat_whitespace(iterator) || match_eol(iterator))
+                    {
+                        bool eating = eat_newline(iterator);
+                        if (eating)
+                        {
+                            while (eating)
+                            {
+                                eat_whitespace(iterator);
+                                eating = eat_newline(iterator);
+                            }
+                        }
+                        else
+                        {
+                            invalid_escape(iterator, c);
+                        }
+                    }
+                    else
+                    {
+                        lex_escape(iterator, result);
+                    }
+                }
+            }
+            else
+            {
+                lex_string_char(iterator, result);
+            }
+        }
+    }
+
+    return result;
 }
 
 
@@ -437,7 +765,7 @@ lex_string(TomlIterator &iterator, byte delimiter)
         }
         else
         {
-            byte c = get_char(iterator);
+            byte c = get_byte(iterator);
             if (c == delimiter)
             {
                 eat_byte(iterator);
@@ -445,7 +773,11 @@ lex_string(TomlIterator &iterator, byte delimiter)
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
-                lex_escape(iterator, result);
+                eat_byte(iterator);
+                if (!end_of_file(iterator))
+                {
+                    lex_escape(iterator, result);
+                }
             }
             else
             {
@@ -461,13 +793,22 @@ lex_string(TomlIterator &iterator, byte delimiter)
 void
 lex_value(TomlIterator &iterator)
 {
-    assert(!match_eol(iterator));
+    assert(!match_whitespace(iterator) && !match_eol(iterator));
+    advance(iterator);
 
-    byte c = get_char(iterator);
+    byte c = get_byte(iterator);
     if ((c == '"') || (c == '\''))
     {
-        string key = lex_string(iterator, c);
-        add_token(iterator, TOKEN_STRING, move(key));
+        if (match(iterator, c, 1) && match(iterator, c, 2))
+        {
+            string value = lex_multiline_string(iterator, c);
+            add_token(iterator, TOKEN_STRING, move(value));
+        }
+        else
+        {
+            string value = lex_string(iterator, c);
+            add_token(iterator, TOKEN_STRING, move(value));
+        }
     }
     else if (match(iterator, '#'))
     {
@@ -487,7 +828,7 @@ lex_unquoted_key(TomlIterator &iterator)
     bool lexing = true;
     while (lexing)
     {
-        if (end_of_file(iterator) || !is_key_char(get_char(iterator)))
+        if (end_of_file(iterator) || !is_key_char(get_byte(iterator)))
         {
             lexing = false;
         }
@@ -511,7 +852,7 @@ lex_simple_key(TomlIterator &iterator)
 {
     assert(!match_whitespace(iterator) && !match_eol(iterator));
 
-    byte c = get_char(iterator);
+    byte c = get_byte(iterator);
     if ((c == '"') || (c == '\''))
     {
         string key = lex_string(iterator, c);
@@ -530,6 +871,7 @@ lex_key(TomlIterator &iterator)
     bool lexing = true;
     while (lexing)
     {
+        advance(iterator);
         lex_simple_key(iterator);
 
         eat_whitespace(iterator);
@@ -537,7 +879,6 @@ lex_key(TomlIterator &iterator)
         {
             eat_byte(iterator);
             eat_whitespace(iterator);
-            advance(iterator);
         }
         else
         {
