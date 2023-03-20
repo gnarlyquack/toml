@@ -18,7 +18,13 @@ namespace toml
 
 constexpr const char *TOKEN_NAMES[] = {
     "ERROR",
+    "BINARY",
+    "DECIMAL",
     "KEY",
+    "HEXADECIMAL",
+    "MINUS",
+    "OCTAL",
+    "PLUS",
     "STRING",
 };
 
@@ -78,9 +84,9 @@ assert_lexed(const string &toml, const vector<Token> &expected)
     vector<Error> errors;
     bool result = lex_toml(toml, actual, errors);
 
-    ASSERT_TRUE(result);
-    ASSERT_EQ(actual, expected);
-    ASSERT_EQ(errors, vector<Error>{});
+    EXPECT_TRUE(result);
+    EXPECT_EQ(actual, expected);
+    EXPECT_EQ(errors, vector<Error>{});
 }
 
 
@@ -483,6 +489,52 @@ TEST(lex, mulitiline_literal_string_escapes)
         { TOKEN_KEY, "quot15", 1, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"", 1, 10 },
         { TOKEN_KEY, "apos15", 4, 1 }, { TOKEN_STRING, "Here are fifteen apostrophes: '''''''''''''''", 4, 10 },
         { TOKEN_KEY, "str", 7, 1}, { TOKEN_STRING, "'That,' she said, 'is still pointless.'", 7, 7 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, integers)
+{
+    const string toml =
+        "int1 = +99\n"
+        "int2 = 42\n"
+        "int3 = 0\n"
+        "int4 = -17\n"
+        "int5 = 1_000\n"
+        "int6 = 5_349_221\n"
+        "int7 = 53_49_221  # Indian number system grouping\n"
+        "int8 = 1_2_3_4_5  # VALID but discouraged\n"
+        "\n"
+        "# hexadecimal with prefix `0x`\n"
+        "hex1 = 0xDEADBEEF\n"
+        "hex2 = 0xdeadbeef\n"
+        "hex3 = 0xdead_beef\n"
+        "\n"
+        "# octal with prefix `0o`\n"
+        "oct1 = 0o01234567\n"
+        "oct2 = 0o755 # useful for Unix file permissions\n"
+        "\n"
+        "# binary with prefix `0b`\n"
+        "bin1 = 0b11010110\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "int1", 1, 1 }, { TOKEN_PLUS, "+", 1, 8 }, { TOKEN_DECIMAL, "99", 1, 9 },
+        { TOKEN_KEY, "int2", 2, 1 }, { TOKEN_DECIMAL, "42", 2, 8 },
+        { TOKEN_KEY, "int3", 3, 1 }, { TOKEN_DECIMAL, "0", 3, 8 },
+        { TOKEN_KEY, "int4", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "17", 4, 9 },
+        { TOKEN_KEY, "int5", 5, 1 }, { TOKEN_DECIMAL, "1000", 5, 8 },
+        { TOKEN_KEY, "int6", 6, 1 }, { TOKEN_DECIMAL, "5349221", 6, 8 },
+        { TOKEN_KEY, "int7", 7, 1 }, { TOKEN_DECIMAL, "5349221", 7, 8 },
+        { TOKEN_KEY, "int8", 8, 1 }, { TOKEN_DECIMAL, "12345", 8, 8 },
+        { TOKEN_KEY, "hex1", 11, 1 }, { TOKEN_HEXADECIMAL, "DEADBEEF", 11, 8 },
+        { TOKEN_KEY, "hex2", 12, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 12, 8 },
+        { TOKEN_KEY, "hex3", 13, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 13, 8 },
+        { TOKEN_KEY, "oct1", 16, 1 }, { TOKEN_OCTAL, "01234567", 16, 8 },
+        { TOKEN_KEY, "oct2", 17, 1 }, { TOKEN_OCTAL, "755", 17, 8 },
+        { TOKEN_KEY, "bin1", 20, 1 }, { TOKEN_BINARY, "11010110", 20, 8 },
     };
 
     assert_lexed(toml, tokens);

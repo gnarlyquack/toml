@@ -16,7 +16,14 @@ namespace toml
 enum TokenType
 {
     TOKEN_ERROR,
+
+    TOKEN_BINARY,
+    TOKEN_DECIMAL,
     TOKEN_KEY,
+    TOKEN_HEXADECIMAL,
+    TOKEN_MINUS,
+    TOKEN_OCTAL,
+    TOKEN_PLUS,
     TOKEN_STRING,
 };
 

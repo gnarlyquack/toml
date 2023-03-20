@@ -23,6 +23,9 @@ namespace
 {
 
 
+using IsDigit = bool (*)(byte value);
+
+
 // No UTF-8 byte can be 0xff
 constexpr byte INVALID_BYTE = BYTE_MAX;
 
@@ -45,17 +48,29 @@ constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 struct TomlIterator
 {
     const string &toml;
-    string::size_type position;
     string::size_type length;
 
+    string::size_type start_position;
     string::size_type start_line;
     string::size_type start_column;
 
+    string::size_type current_position;
     string::size_type current_line;
     string::size_type current_column;
 
     vector<Token> &tokens;
     vector<Error> &errors;
+};
+
+
+struct LexDigitResult
+{
+    static constexpr u32 INVALID_DIGIT         = 1 << 0;
+    static constexpr u32 HAS_UNDERSCORE        = 1 << 1;
+    static constexpr u32 INVALID_UNDERSCORE    = 1 << 2;
+
+    string digits;
+    u32 flags;
 };
 
 
@@ -71,13 +86,14 @@ byte_to_hex(byte value, string &out)
 void
 advance(TomlIterator &iterator)
 {
+    iterator.start_position = iterator.current_position;
     iterator.start_line = iterator.current_line;
     iterator.start_column = iterator.current_column;
 }
 
 
 void
-add_token(TomlIterator &iterator, TokenType type, string lexeme)
+add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 {
     Token token = { type, move(lexeme), iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
@@ -86,10 +102,18 @@ add_token(TomlIterator &iterator, TokenType type, string lexeme)
 
 
 bool
+prev_token(const vector<Token> &tokens, TokenType type)
+{
+    bool result = tokens.size() && (tokens.back().type == type);
+    return result;
+}
+
+
+bool
 end_of_file(const TomlIterator &iterator, u64 ahead = 0)
 {
-    assert(iterator.position <= iterator.length);
-    bool result = iterator.length - iterator.position <= ahead;
+    assert(iterator.current_position <= iterator.length);
+    bool result = iterator.length - iterator.current_position <= ahead;
     return result;
 }
 
@@ -98,7 +122,33 @@ byte
 get_byte(const TomlIterator &iterator, u64 ahead = 0)
 {
     assert(!end_of_file(iterator, ahead));
-    byte result = iterator.toml[iterator.position + ahead];
+    byte result = iterator.toml[iterator.current_position + ahead];
+    return result;
+}
+
+
+string
+get_lexeme(const TomlIterator &iterator)
+{
+    string result = iterator.toml.substr(
+        iterator.start_position,
+        iterator.current_position - iterator.start_position + 1);
+    return result;
+}
+
+
+bool
+is_binary(byte value)
+{
+    bool result = (value == '0') || (value <= '1');
+    return result;
+}
+
+
+bool
+is_decimal(byte value)
+{
+    bool result = (value >= '0') && (value <= '9');
     return result;
 }
 
@@ -117,14 +167,41 @@ is_key_char(byte value)
 
 
 bool
+is_hexadecimal(byte value)
+{
+    bool result =
+        ((value >= '0') && (value <= '9'))
+        || ((value >= 'a') && (value <= 'f'))
+        || ((value >= 'A') && (value <= 'F'));
+    return result;
+}
+
+
+bool
+is_octal(byte value)
+{
+    bool result = (value >= '0') && (value <= '7');
+    return result;
+}
+
+
+bool
+is_printable(byte value)
+{
+    bool result = (value >= 0x20) && (value <= 0x7e); // ASCII printable range
+    return result;
+}
+
+
+bool
 match(const TomlIterator &iterator, byte value, string::size_type ahead = 0)
 {
-    assert(iterator.position <= iterator.length);
+    assert(iterator.current_position <= iterator.length);
 
     bool result = false;
-    if ((iterator.length - iterator.position) > ahead)
+    if ((iterator.length - iterator.current_position) > ahead)
     {
-        result = iterator.toml[iterator.position + ahead] == value;
+        result = iterator.toml[iterator.current_position + ahead] == value;
     }
 
     return result;
@@ -162,10 +239,10 @@ eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
 {
     assert(!end_of_file(iterator));
 
-    byte result = iterator.toml[iterator.position];
+    byte result = iterator.toml[iterator.current_position];
     assert((expected == INVALID_BYTE) || (result == expected));
-    ++iterator.position;
 
+    ++iterator.current_position;
     if (result == '\n')
     {
         ++iterator.current_line;
@@ -317,14 +394,6 @@ resynchronize(TomlIterator &iterator, string message)
 }
 
 
-bool
-is_printable(byte value)
-{
-    bool result = (value >= 0x20) && (value <= 0x7e); // ASCII printable range
-    return result;
-}
-
-
 void
 invalid_escape(TomlIterator &iterator, byte value)
 {
@@ -385,6 +454,163 @@ invalid_unicode_escape(TomlIterator &iterator, u64 position)
 
     Error error = { iterator.start_line, iterator.start_column, move(message) };
     iterator.errors.push_back(move(error));
+}
+
+
+void
+validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type, bool no_sign = false)
+{
+    if (no_sign && (prev_token(iterator.tokens, TOKEN_MINUS) || prev_token(iterator.tokens, TOKEN_PLUS)))
+    {
+        const Token &token = iterator.tokens.back();
+        Error error = { token.line, token.column, "'" + token.lexeme + "' sign not allowed for " + type + "number" };
+        iterator.errors.push_back(move(error));
+    }
+
+    if (result.flags & result.INVALID_DIGIT)
+    {
+        add_error(iterator, "Invalid value for " + type + " number: " + get_lexeme(iterator));
+    }
+    else if (result.flags & result.INVALID_UNDERSCORE)
+    {
+        add_error(iterator, "'_' must separate digits in " + type + " number: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing value for " + type + " number");
+    }
+}
+
+
+LexDigitResult
+lex_digits(TomlIterator &iterator, IsDigit is_digit)
+{
+    LexDigitResult result = {};
+    bool underscore_allowed = false;
+
+    while (!match_eol(iterator) && !match_whitespace(iterator))
+    {
+        byte c = eat_byte(iterator);
+        if (is_digit(c))
+        {
+            result.digits.push_back(c);
+            underscore_allowed = true;
+        }
+        else if (c == '_')
+        {
+            result.flags |= result.HAS_UNDERSCORE;
+            if (underscore_allowed)
+            {
+                underscore_allowed = false;
+            }
+            else
+            {
+                result.flags |= result.INVALID_UNDERSCORE;
+            }
+        }
+        else
+        {
+            result.flags |= result.INVALID_DIGIT;
+        }
+    }
+
+    if ((result.flags & result.HAS_UNDERSCORE) && !underscore_allowed)
+    {
+        result.flags |= result.INVALID_UNDERSCORE;
+    }
+
+    return result;
+}
+
+
+void
+lex_decimal(TomlIterator &iterator)
+{
+    LexDigitResult result = lex_digits(iterator, is_decimal);
+    validate_digits(iterator, result, "decimal");
+    add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+}
+
+
+void
+lex_hexadecimal(TomlIterator &iterator)
+{
+    LexDigitResult result = lex_digits(iterator, is_hexadecimal);
+    validate_digits(iterator, result, "hexadecimal", true);
+    add_token(iterator, TOKEN_HEXADECIMAL, move(result.digits));
+}
+
+
+void
+lex_octal(TomlIterator &iterator)
+{
+    LexDigitResult result = lex_digits(iterator, is_octal);
+    validate_digits(iterator, result, "octal", true);
+    add_token(iterator, TOKEN_OCTAL, move(result.digits));
+}
+
+
+void
+lex_binary(TomlIterator &iterator)
+{
+    LexDigitResult result = lex_digits(iterator, is_binary);
+    validate_digits(iterator, result, "binary", true);
+    add_token(iterator, TOKEN_BINARY, move(result.digits));
+}
+
+
+void
+lex_sign(TomlIterator &iterator)
+{
+    assert(!end_of_file(iterator));
+    switch (get_byte(iterator))
+    {
+        case '-':
+        {
+            eat_byte(iterator);
+            add_token(iterator, TOKEN_MINUS, "-");
+        } break;
+
+        case '+':
+        {
+            eat_byte(iterator);
+            add_token(iterator, TOKEN_PLUS, "+");
+        } break;
+    }
+}
+
+
+void
+lex_number(TomlIterator &iterator)
+{
+    lex_sign(iterator);
+
+    if (match(iterator, '0'))
+    {
+        if (match(iterator, 'x', 1))
+        {
+            eat_bytes(iterator, 2);
+            lex_hexadecimal(iterator);
+        }
+        else if (match(iterator, 'o', 1))
+        {
+            eat_bytes(iterator, 2);
+            lex_octal(iterator);
+        }
+        else if (match(iterator, 'b', 1))
+        {
+            eat_bytes(iterator, 2);
+            lex_binary(iterator);
+        }
+        else
+        {
+            lex_decimal(iterator);
+        }
+    }
+    else
+    {
+        lex_decimal(iterator);
+    }
 }
 
 
@@ -542,12 +768,12 @@ lex_unicode(TomlIterator &iterator, string &result, u64 count)
         }
         else if ((c >= 'a') && (c <= 'f'))
         {
-            // In ASCII: 'a' == 97 -> 10 == 'a' - 87
+            // In Unicode/ASCII: 'a' == 97 -> 10 == 'a' - 87
             c -= 87;
         }
         else if ((c >= 'A') && (c <= 'F'))
         {
-            // In ASCII: 'A' == 65 -> 10 == 'A' - 55
+            // In Unicode/ASCII: 'A' == 65 -> 10 == 'A' - 55
             c -= 55;
         }
         else
@@ -810,9 +1036,14 @@ lex_value(TomlIterator &iterator)
             add_token(iterator, TOKEN_STRING, move(value));
         }
     }
-    else if (match(iterator, '#'))
+    else if (is_decimal(c) || (c == '-') || (c == '+'))
+    {
+        lex_number(iterator);
+    }
+    else if (c == '#')
     {
         add_error(iterator, "Missing value");
+        add_token(iterator, TOKEN_ERROR);
     }
     else
     {
@@ -934,7 +1165,7 @@ lex_expression(TomlIterator &iterator)
 bool
 lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
 {
-    TomlIterator iterator = { toml, 0, toml.length(), 1, 1, 1, 1, tokens, errors };
+    TomlIterator iterator = { toml, toml.length(), 0, 1, 1, 0, 1, 1, tokens, errors };
 
     while (!end_of_file(iterator))
     {
