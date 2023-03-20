@@ -20,12 +20,18 @@ constexpr const char *TOKEN_NAMES[] = {
     "ERROR",
     "BINARY",
     "DECIMAL",
+    "EXPONENT",
+    "FALSE",
+    "FRACTION",
+    "INFINITY",
     "KEY",
     "HEXADECIMAL",
     "MINUS",
+    "NAN",
     "OCTAL",
     "PLUS",
     "STRING",
+    "TRUE",
 };
 
 
@@ -535,6 +541,113 @@ TEST(lex, integers)
         { TOKEN_KEY, "oct1", 16, 1 }, { TOKEN_OCTAL, "01234567", 16, 8 },
         { TOKEN_KEY, "oct2", 17, 1 }, { TOKEN_OCTAL, "755", 17, 8 },
         { TOKEN_KEY, "bin1", 20, 1 }, { TOKEN_BINARY, "11010110", 20, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, floats)
+{
+    const string toml =
+        "# fractional\n"
+        "flt1 = +1.0\n"
+        "flt2 = 3.1415\n"
+        "flt3 = -0.01\n"
+        "\n"
+        "# exponent\n"
+        "flt4 = 5e+22\n"
+        "flt5 = 1e06\n"
+        "flt6 = -2E-2\n"
+        "\n"
+        "# both\n"
+        "flt7 = 6.626e-34\n"
+        "\n"
+        "flt8 = 224_617.445_991_228\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "flt1", 2, 1 }, { TOKEN_PLUS, "+", 2, 8 }, { TOKEN_DECIMAL, "1", 2, 9 }, { TOKEN_FRACTION, "0", 2, 11},
+        { TOKEN_KEY, "flt2", 3, 1 }, { TOKEN_DECIMAL, "3", 3, 8 }, { TOKEN_FRACTION, "1415", 3, 10 },
+        { TOKEN_KEY, "flt3", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "0", 4, 9 }, { TOKEN_FRACTION, "01", 4, 11 },
+        { TOKEN_KEY, "flt4", 7, 1 }, { TOKEN_DECIMAL, "5", 7, 8 }, { TOKEN_PLUS, "+", 7, 10 }, { TOKEN_EXPONENT, "22", 7, 11 },
+        { TOKEN_KEY, "flt5", 8, 1 }, { TOKEN_DECIMAL, "1", 8, 8 }, { TOKEN_EXPONENT, "06", 8, 10 },
+        { TOKEN_KEY, "flt6", 9, 1 }, { TOKEN_MINUS, "-", 9, 8}, { TOKEN_DECIMAL, "2", 9, 9 }, { TOKEN_MINUS, "-", 9, 11}, { TOKEN_EXPONENT, "2", 9, 12 },
+        { TOKEN_KEY, "flt7", 12, 1 }, { TOKEN_DECIMAL, "6", 12, 8 }, { TOKEN_FRACTION, "626", 12, 10 }, { TOKEN_MINUS, "-", 12, 14 }, { TOKEN_EXPONENT, "34", 12, 15 },
+        { TOKEN_KEY, "flt8", 14, 1 }, { TOKEN_DECIMAL, "224617", 14, 8 }, { TOKEN_FRACTION, "445991228", 14, 16 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, invalid_floats)
+{
+    const string toml =
+        "# INVALID FLOATS\n"
+        "invalid_float_1 = .7\n"
+        "invalid_float_2 = 7.\n"
+        "invalid_float_3 = 3.e+20\n"
+        ;
+
+    const vector<Error> errors = {
+        { 2, 19, "Missing whole part of decimal number" },
+        { 3, 21, "Missing fractional part of decimal number" },
+        { 4, 21, "Missing fractional part of decimal number" },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(lex, infinity)
+{
+    const string toml =
+        "# infinity\n"
+        "sf1 = inf  # positive infinity\n"
+        "sf2 = +inf # positive infinity\n"
+        "sf3 = -inf # negative infinity\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "sf1", 2, 1 }, { TOKEN_INF, "", 2, 7 },
+        { TOKEN_KEY, "sf2", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_INF, "", 3, 8 },
+        { TOKEN_KEY, "sf3", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_INF, "", 4, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, nan)
+{
+    const string toml =
+        "# not a number\n"
+        "sf4 = nan  # actual sNaN/qNaN encoding is implementation-specific\n"
+        "sf5 = +nan # same as `nan`\n"
+        "sf6 = -nan # valid, actual encoding is implementation-specific\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "sf4", 2, 1 }, { TOKEN_NAN, "", 2, 7 },
+        { TOKEN_KEY, "sf5", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_NAN, "", 3, 8 },
+        { TOKEN_KEY, "sf6", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_NAN, "", 4, 8 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, booleans)
+{
+    const string toml =
+        "bool1 = true\n"
+        "bool2 = false\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "bool1", 1, 1}, { TOKEN_TRUE, "", 1, 9 },
+        { TOKEN_KEY, "bool2", 2, 1}, { TOKEN_FALSE, "", 2, 9 },
     };
 
     assert_lexed(toml, tokens);

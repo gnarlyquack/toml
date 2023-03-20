@@ -45,6 +45,16 @@ constexpr byte B01111111 = 0x7f;
 constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                               'A', 'B', 'C', 'D', 'E', 'F' };
 
+
+enum LexingContext
+{
+    LEX_FRACTION    = 1 << 0,
+    LEX_EXPONENT    = 1 << 1,
+    LEX_DATE        = 1 << 2,
+    LEX_TIME        = 1 << 3,
+};
+
+
 struct TomlIterator
 {
     const string &toml;
@@ -89,6 +99,15 @@ advance(TomlIterator &iterator)
     iterator.start_position = iterator.current_position;
     iterator.start_line = iterator.current_line;
     iterator.start_column = iterator.current_column;
+}
+
+
+void
+add_error(TomlIterator &iterator, string message)
+{
+    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    iterator.errors.push_back(move(error));
+    advance(iterator);
 }
 
 
@@ -302,6 +321,30 @@ eat_newline(TomlIterator &iterator)
 
 
 bool
+eat_string(TomlIterator &iterator, const string &expected)
+{
+    bool result = false;
+
+    string eaten;
+    while (!match_eol(iterator) && !match_whitespace(iterator))
+    {
+        eaten.push_back(eat_byte(iterator));
+    }
+
+    if (eaten == expected)
+    {
+        result = true;
+    }
+    else
+    {
+        add_error(iterator, "Invalid value: " + eaten);
+    }
+
+    return result;
+}
+
+
+bool
 eat_whitespace(TomlIterator &iterator)
 {
     bool result = false;
@@ -361,15 +404,6 @@ void
 format_unicode(ostream &o, u32 codepoint)
 {
     o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
-}
-
-
-void
-add_error(TomlIterator &iterator, string message)
-{
-    Error error = { iterator.start_line, iterator.start_column, move(message) };
-    iterator.errors.push_back(move(error));
-    advance(iterator);
 }
 
 
@@ -469,7 +503,7 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
 
     if (result.flags & result.INVALID_DIGIT)
     {
-        add_error(iterator, "Invalid value for " + type + " number: " + get_lexeme(iterator));
+        add_error(iterator, "Invalid " + type + " number: " + get_lexeme(iterator));
     }
     else if (result.flags & result.INVALID_UNDERSCORE)
     {
@@ -477,27 +511,29 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing value for " + type + " number");
+        add_error(iterator, "Missing " + type + " number");
     }
 }
 
 
 LexDigitResult
-lex_digits(TomlIterator &iterator, IsDigit is_digit)
+lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context = 0)
 {
     LexDigitResult result = {};
     bool underscore_allowed = false;
-
-    while (!match_eol(iterator) && !match_whitespace(iterator))
+    bool lexing = true;
+    while (lexing && !match_eol(iterator) && !match_whitespace(iterator))
     {
-        byte c = eat_byte(iterator);
+        byte c = get_byte(iterator);
         if (is_digit(c))
         {
+            eat_byte(iterator);
             result.digits.push_back(c);
             underscore_allowed = true;
         }
         else if (c == '_')
         {
+            eat_byte(iterator);
             result.flags |= result.HAS_UNDERSCORE;
             if (underscore_allowed)
             {
@@ -508,8 +544,17 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit)
                 result.flags |= result.INVALID_UNDERSCORE;
             }
         }
+        else if (
+            ((context & LEX_FRACTION) && (c == '.'))
+            || ((context & LEX_EXPONENT) && ((c == 'e') || (c == 'E')))
+            || ((context & LEX_DATE) && (c == '-'))
+            || ((context & LEX_TIME) && (c == ':')))
+        {
+            lexing = false;
+        }
         else
         {
+            eat_byte(iterator);
             result.flags |= result.INVALID_DIGIT;
         }
     }
@@ -524,11 +569,80 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit)
 
 
 void
+lex_minus(TomlIterator &iterator)
+{
+    eat_byte(iterator, '-');
+    add_token(iterator, TOKEN_MINUS, "-");
+}
+
+void
+lex_plus(TomlIterator &iterator)
+{
+    eat_byte(iterator, '+');
+    add_token(iterator, TOKEN_PLUS, "+");
+}
+
+
+void
+lex_exponent(TomlIterator &iterator)
+{
+    advance(iterator);
+
+    if (match(iterator, '-'))
+    {
+        lex_minus(iterator);
+    }
+    else if (match(iterator, '+'))
+    {
+        lex_plus(iterator);
+    }
+
+    LexDigitResult exponent = lex_digits(iterator, is_decimal);
+    validate_digits(iterator, exponent, "exponential part of decimal");
+    add_token(iterator, TOKEN_EXPONENT, exponent.digits);
+}
+
+
+void
+lex_fraction(TomlIterator &iterator)
+{
+    advance(iterator);
+    LexDigitResult fraction = lex_digits(iterator, is_decimal, LEX_EXPONENT);
+    validate_digits(iterator, fraction, "fractional part of decimal");
+    add_token(iterator, TOKEN_FRACTION, fraction.digits);
+
+    if (match(iterator, 'e') || match(iterator, 'E'))
+    {
+        eat_byte(iterator);
+        lex_exponent(iterator);
+    }
+}
+
+
+void
 lex_decimal(TomlIterator &iterator)
 {
-    LexDigitResult result = lex_digits(iterator, is_decimal);
-    validate_digits(iterator, result, "decimal");
-    add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+    LexDigitResult result = lex_digits(iterator, is_decimal, LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
+
+    if (match(iterator, '.'))
+    {
+        validate_digits(iterator, result, "whole part of decimal");
+        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+        eat_byte(iterator);
+        lex_fraction(iterator);
+    }
+    else if (match(iterator, 'e') || match(iterator, 'E'))
+    {
+        validate_digits(iterator, result, "whole part of decimal");
+        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+        eat_byte(iterator);
+        lex_exponent(iterator);
+    }
+    else
+    {
+        validate_digits(iterator, result, "decimal");
+        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+    }
 }
 
 
@@ -560,31 +674,8 @@ lex_binary(TomlIterator &iterator)
 
 
 void
-lex_sign(TomlIterator &iterator)
-{
-    assert(!end_of_file(iterator));
-    switch (get_byte(iterator))
-    {
-        case '-':
-        {
-            eat_byte(iterator);
-            add_token(iterator, TOKEN_MINUS, "-");
-        } break;
-
-        case '+':
-        {
-            eat_byte(iterator);
-            add_token(iterator, TOKEN_PLUS, "+");
-        } break;
-    }
-}
-
-
-void
 lex_number(TomlIterator &iterator)
 {
-    lex_sign(iterator);
-
     if (match(iterator, '0'))
     {
         if (match(iterator, 'x', 1))
@@ -1023,31 +1114,110 @@ lex_value(TomlIterator &iterator)
     advance(iterator);
 
     byte c = get_byte(iterator);
-    if ((c == '"') || (c == '\''))
-    {
-        if (match(iterator, c, 1) && match(iterator, c, 2))
-        {
-            string value = lex_multiline_string(iterator, c);
-            add_token(iterator, TOKEN_STRING, move(value));
-        }
-        else
-        {
-            string value = lex_string(iterator, c);
-            add_token(iterator, TOKEN_STRING, move(value));
-        }
-    }
-    else if (is_decimal(c) || (c == '-') || (c == '+'))
+
+    if (is_decimal(c))
     {
         lex_number(iterator);
     }
-    else if (c == '#')
-    {
-        add_error(iterator, "Missing value");
-        add_token(iterator, TOKEN_ERROR);
-    }
     else
     {
-        resynchronize(iterator, "Invalid value: ");
+        switch (c)
+        {
+            case '"':
+            case '\'':
+            {
+                if (match(iterator, c, 1) && match(iterator, c, 2))
+                {
+                    string value = lex_multiline_string(iterator, c);
+                    add_token(iterator, TOKEN_STRING, move(value));
+                }
+                else
+                {
+                    string value = lex_string(iterator, c);
+                    add_token(iterator, TOKEN_STRING, move(value));
+                }
+            } break;
+
+            case '-':
+            {
+                lex_minus(iterator);
+                if (match(iterator, 'i'))
+                {
+                    eat_string(iterator, "inf");
+                    add_token(iterator, TOKEN_INF);
+                }
+                else if (match(iterator, 'n'))
+                {
+                    eat_string(iterator, "nan");
+                    add_token(iterator, TOKEN_NAN);
+                }
+                else
+                {
+                    lex_number(iterator);
+                }
+            } break;
+
+            case '+':
+            {
+                lex_plus(iterator);
+                if (match(iterator, 'i'))
+                {
+                    eat_string(iterator, "inf");
+                    add_token(iterator, TOKEN_INF);
+                }
+                else if (match(iterator, 'n'))
+                {
+                    eat_string(iterator, "nan");
+                    add_token(iterator, TOKEN_NAN);
+                }
+                else
+                {
+                    lex_number(iterator);
+                }
+            } break;
+
+            case 'i':
+            {
+                eat_string(iterator, "inf");
+                add_token(iterator, TOKEN_INF);
+            } break;
+
+            case 'n':
+            {
+                eat_string(iterator, "nan");
+                add_token(iterator, TOKEN_NAN);
+            } break;
+
+
+            case 't':
+            {
+                eat_string(iterator, "true");
+                add_token(iterator, TOKEN_TRUE);
+            } break;
+
+            case 'f':
+            {
+                eat_string(iterator, "false");
+                add_token(iterator, TOKEN_FALSE);
+            } break;
+
+            // special handling for invalid cases
+            case '.':
+            {
+                lex_number(iterator);
+            } break;
+
+            case '#':
+            {
+                add_error(iterator, "Missing value");
+                add_token(iterator, TOKEN_ERROR);
+            } break;
+
+            default:
+            {
+                resynchronize(iterator, "Invalid value: ");
+            } break;
+        }
     }
 }
 
