@@ -19,6 +19,7 @@ namespace toml
 constexpr const char *TOKEN_NAMES[] = {
     "ERROR",
     "BINARY",
+    "DAY",
     "DECIMAL",
     "EXPONENT",
     "FALSE",
@@ -26,12 +27,17 @@ constexpr const char *TOKEN_NAMES[] = {
     "INFINITY",
     "KEY",
     "HEXADECIMAL",
+    "HOUR",
     "MINUS",
+    "MINUTE",
+    "MONTH",
     "NAN",
     "OCTAL",
     "PLUS",
+    "SECOND",
     "STRING",
     "TRUE",
+    "YEAR",
 };
 
 
@@ -648,6 +654,70 @@ TEST(lex, booleans)
     const vector<Token> tokens = {
         { TOKEN_KEY, "bool1", 1, 1}, { TOKEN_TRUE, "", 1, 9 },
         { TOKEN_KEY, "bool2", 2, 1}, { TOKEN_FALSE, "", 2, 9 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, local_times)
+{
+    const string toml =
+        "lt1 = 07:32:00\n"
+        "lt2 = 00:32:00.999999\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "lt1", 1, 1 }, { TOKEN_HOUR, "07", 1, 7 }, { TOKEN_MINUTE, "32", 1, 10 }, { TOKEN_SECOND, "00", 1, 13 },
+        { TOKEN_KEY, "lt2", 2, 1 }, { TOKEN_HOUR, "00", 2, 7 }, { TOKEN_MINUTE, "32", 2, 10 }, { TOKEN_SECOND, "00", 2, 13 }, { TOKEN_FRACTION, "999999", 2, 16 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, local_dates)
+{
+    const string toml = "ld1 = 1979-05-27";
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "ld1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 7 }, { TOKEN_MONTH, "05", 1, 12 }, { TOKEN_DAY, "27", 1, 15 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, local_datetimes)
+{
+    const string toml =
+        "ldt1 = 1979-05-27T07:32:00\n"
+        "ldt2 = 1979-05-27T00:32:00.999999\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "ldt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 },
+        { TOKEN_KEY, "ldt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_FRACTION, "999999", 2, 28 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, offset_datetimes)
+{
+    const string toml =
+        "odt1 = 1979-05-27T07:32:00Z\n"
+        "odt2 = 1979-05-27T00:32:00-07:00\n"
+        "odt3 = 1979-05-27T00:32:00.999999-07:00\n"
+        "odt4 = 1979-05-27 07:32:00Z\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "odt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 }, { TOKEN_PLUS, "+", 1, 27 }, { TOKEN_HOUR, "00", 1, 28 }, { TOKEN_MINUTE, "00", 1, 28 },
+        { TOKEN_KEY, "odt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_MINUS, "-", 2, 27 }, { TOKEN_HOUR, "07", 2, 28 }, { TOKEN_MINUTE, "00", 2, 31 },
+        { TOKEN_KEY, "odt3", 3, 1 }, { TOKEN_YEAR, "1979", 3, 8}, { TOKEN_MONTH, "05", 3, 13 }, { TOKEN_DAY, "27", 3, 16 }, { TOKEN_HOUR, "00", 3, 19}, { TOKEN_MINUTE, "32", 3, 22 }, { TOKEN_SECOND, "00", 3, 25 }, { TOKEN_FRACTION, "999999", 3, 28 }, { TOKEN_MINUS, "-", 3, 34 }, { TOKEN_HOUR, "07", 3, 35 }, { TOKEN_MINUTE, "00", 3, 38 },
+        { TOKEN_KEY, "odt4", 4, 1 }, { TOKEN_YEAR, "1979", 4, 8}, { TOKEN_MONTH, "05", 4, 13 }, { TOKEN_DAY, "27", 4, 16 }, { TOKEN_HOUR, "07", 4, 19}, { TOKEN_MINUTE, "32", 4, 22 }, { TOKEN_SECOND, "00", 4, 25 }, { TOKEN_PLUS, "+", 4, 27 }, { TOKEN_HOUR, "00", 4, 28 }, { TOKEN_MINUTE, "00", 4, 28 },
     };
 
     assert_lexed(toml, tokens);

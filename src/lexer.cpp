@@ -52,6 +52,8 @@ enum LexingContext
     LEX_EXPONENT    = 1 << 1,
     LEX_DATE        = 1 << 2,
     LEX_TIME        = 1 << 3,
+    LEX_DATETIME    = 1 << 4,
+    LEX_TIMEZONE    = 1 << 5,
 };
 
 
@@ -228,15 +230,15 @@ match(const TomlIterator &iterator, byte value, string::size_type ahead = 0)
 
 
 bool
-match_eol(const TomlIterator &iterator)
+match_eol(const TomlIterator &iterator, u32 ahead = 0)
 {
     bool result = false;
 
-    if (end_of_file(iterator) || match(iterator, '\n'))
+    if (end_of_file(iterator, ahead) || match(iterator, '\n', ahead))
     {
         result = true;
     }
-    else if (match(iterator, '\r') && match(iterator, '\n', 1))
+    else if (match(iterator, '\r', ahead) && match(iterator, '\n', ahead + 1))
     {
         result = true;
     }
@@ -516,6 +518,154 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
 }
 
 
+void
+validate_hour(TomlIterator &iterator, const LexDigitResult &result, bool no_sign = true)
+{
+    if (no_sign && (prev_token(iterator.tokens, TOKEN_MINUS) || prev_token(iterator.tokens, TOKEN_PLUS)))
+    {
+        const Token &token = iterator.tokens.back();
+        Error error = { token.line, token.column, "'" + token.lexeme + "' sign not allowed for time" };
+        iterator.errors.push_back(move(error));
+    }
+
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid hour: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing hour");
+    }
+    else if (result.digits.length() > 2)
+    {
+        add_error(iterator, "Hour must be two digits");
+    }
+    else if ((result.digits[0] > '2') || ((result.digits[0] == '2') && (result.digits[2] > '3')))
+    {
+        add_error(iterator, "Hour must be between 00 and 23 inclusive");
+    }
+}
+
+
+void
+validate_minute(TomlIterator &iterator, const LexDigitResult &result)
+{
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid minute: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing minute");
+    }
+    else if (result.digits.length() > 2)
+    {
+        add_error(iterator, "Minute must be two digits");
+    }
+    else if (result.digits[0] > '5')
+    {
+        add_error(iterator, "Minute must be between 00 and 59 inclusive");
+    }
+}
+
+
+void
+validate_second(TomlIterator &iterator, const LexDigitResult &result)
+{
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid second: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing second");
+    }
+    else if (result.digits.length() > 2)
+    {
+        add_error(iterator, "Second must be two digits");
+    }
+    else if (result.digits[0] > '5')
+    {
+        // TODO support leap seconds?
+        add_error(iterator, "Second must be between 00 and 59 inclusive");
+    }
+}
+
+
+void
+validate_year(TomlIterator &iterator, const LexDigitResult &result)
+{
+    if (prev_token(iterator.tokens, TOKEN_MINUS) || prev_token(iterator.tokens, TOKEN_PLUS))
+    {
+        const Token &token = iterator.tokens.back();
+        Error error = { token.line, token.column, "'" + token.lexeme + "' sign not allowed for date" };
+        iterator.errors.push_back(move(error));
+    }
+
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid year: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() > 4)
+    {
+        add_error(iterator, "Year must be four digits");
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing year");
+    }
+}
+
+
+void
+validate_month(TomlIterator &iterator, const LexDigitResult &result)
+{
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid month: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() > 2)
+    {
+        add_error(iterator, "Month must be two digits");
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing month");
+    }
+    else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
+            || ((result.digits[0] == '1') && (result.digits[1] > '2'))
+            || (result.digits[0] > '1'))
+    {
+        add_error(iterator, "Month must be between 01 and 12 inclusive");
+    }
+}
+
+
+void
+validate_day(TomlIterator &iterator, const LexDigitResult &result)
+{
+    if (result.flags)
+    {
+        add_error(iterator, "Invalid day: " + get_lexeme(iterator));
+    }
+    else if (result.digits.length() > 2)
+    {
+        add_error(iterator, "Day must be two digits");
+    }
+    else if (result.digits.length() == 0)
+    {
+        add_error(iterator, "Missing day");
+    }
+    else if (((result.digits[0] == '0') && (result.digits[0] == '0'))
+            || ((result.digits[0] == '3') && (result.digits[1] > '1'))
+            || (result.digits[0] > '3'))
+    {
+        // TODO Validate day based on month and year while lexing?
+        add_error(iterator, "Day must be between 01 and 31 inclusive");
+    }
+}
+
+
 LexDigitResult
 lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context = 0)
 {
@@ -545,10 +695,12 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context = 0)
             }
         }
         else if (
-            ((context & LEX_FRACTION) && (c == '.'))
-            || ((context & LEX_EXPONENT) && ((c == 'e') || (c == 'E')))
-            || ((context & LEX_DATE) && (c == '-'))
-            || ((context & LEX_TIME) && (c == ':')))
+            ((c == '.') && (context & LEX_FRACTION))
+            || (((c == 'e') || (c == 'E')) && (context & LEX_EXPONENT))
+            || ((c == '-') && ((context & LEX_DATE) || (context & LEX_TIMEZONE)))
+            || ((c == ':') && (context & LEX_TIME))
+            || (((c == 'T') || (c == 't')) && (context & LEX_DATETIME))
+            || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE)))
         {
             lexing = false;
         }
@@ -574,6 +726,7 @@ lex_minus(TomlIterator &iterator)
     eat_byte(iterator, '-');
     add_token(iterator, TOKEN_MINUS, "-");
 }
+
 
 void
 lex_plus(TomlIterator &iterator)
@@ -620,6 +773,108 @@ lex_fraction(TomlIterator &iterator)
 
 
 void
+lex_time(TomlIterator &iterator, u32 context = 0)
+{
+    advance(iterator);
+    LexDigitResult minute = lex_digits(iterator, is_decimal, context | LEX_TIME | LEX_FRACTION);
+    validate_minute(iterator, minute);
+    add_token(iterator, TOKEN_MINUTE, move(minute.digits));
+
+    eat_byte(iterator, ':');
+    advance(iterator);
+    LexDigitResult second = lex_digits(iterator, is_decimal, context | LEX_FRACTION);
+    validate_second(iterator, second);
+    add_token(iterator, TOKEN_SECOND, move(second.digits));
+
+    if (match(iterator, '.'))
+    {
+        eat_byte(iterator);
+        advance(iterator);
+        LexDigitResult fraction = lex_digits(iterator, is_decimal, context);
+        if (fraction.flags)
+        {
+            add_error(iterator, "Invalid value for fraction seconds: " + get_lexeme(iterator));
+        }
+        else if (fraction.digits.length() == 0)
+        {
+            add_error(iterator, "Missing fractional seconds");
+        }
+        add_token(iterator, TOKEN_FRACTION, fraction.digits);
+    }
+}
+
+
+void
+lex_hour(TomlIterator &iterator, u32 context)
+{
+    advance(iterator);
+    LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_TIME | LEX_FRACTION);
+    validate_hour(iterator, result);
+    add_token(iterator, TOKEN_HOUR, move(result.digits));
+
+    eat_byte(iterator, ':');
+    lex_time(iterator, context);
+}
+
+
+void
+lex_timezone(TomlIterator &iterator)
+{
+    LexDigitResult hour = lex_digits(iterator, is_decimal, LEX_TIME);
+    validate_hour(iterator, hour, false);
+    add_token(iterator, TOKEN_HOUR, hour.digits);
+
+    eat_byte(iterator, ':');
+    advance(iterator);
+
+    LexDigitResult minute = lex_digits(iterator, is_decimal);
+    validate_hour(iterator, minute);
+    add_token(iterator, TOKEN_MINUTE, minute.digits);
+}
+
+
+void
+lex_date(TomlIterator &iterator)
+{
+    advance(iterator);
+    LexDigitResult month = lex_digits(iterator, is_decimal, LEX_DATE | LEX_DATETIME);
+    validate_month(iterator, month);
+    add_token(iterator, TOKEN_MONTH, month.digits);
+
+    eat_byte(iterator, '-');
+    advance(iterator);
+    LexDigitResult day = lex_digits(iterator, is_decimal, LEX_DATETIME);
+    validate_day(iterator, day);
+    add_token(iterator, TOKEN_DAY, day.digits);
+
+    if (match(iterator, 'T') || match(iterator, 't')
+        || (match(iterator, ' ') && !match_eol(iterator, 1) && is_decimal(get_byte(iterator, 1))))
+    {
+        eat_byte(iterator);
+        lex_hour(iterator, LEX_TIMEZONE);
+
+        if (match(iterator, 'Z') ||match(iterator, 'z'))
+        {
+            eat_byte(iterator);
+            add_token(iterator, TOKEN_PLUS, "+");
+            add_token(iterator, TOKEN_HOUR, "00");
+            add_token(iterator, TOKEN_MINUTE, "00");
+        }
+        else if (match(iterator, '+'))
+        {
+            lex_plus(iterator);
+            lex_timezone(iterator);
+        }
+        else if (match(iterator, '-'))
+        {
+            lex_minus(iterator);
+            lex_timezone(iterator);
+        }
+    }
+}
+
+
+void
 lex_decimal(TomlIterator &iterator)
 {
     LexDigitResult result = lex_digits(iterator, is_decimal, LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
@@ -637,6 +892,20 @@ lex_decimal(TomlIterator &iterator)
         add_token(iterator, TOKEN_DECIMAL, move(result.digits));
         eat_byte(iterator);
         lex_exponent(iterator);
+    }
+    else if (match(iterator, '-'))
+    {
+        validate_year(iterator, result);
+        add_token(iterator, TOKEN_YEAR, result.digits);
+        eat_byte(iterator);
+        lex_date(iterator);
+    }
+    else if (match(iterator, ':'))
+    {
+        validate_hour(iterator, result);
+        add_token(iterator, TOKEN_HOUR, move(result.digits));
+        eat_byte(iterator);
+        lex_time(iterator);
     }
     else
     {
