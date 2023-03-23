@@ -19,6 +19,7 @@ namespace toml
 constexpr const char *TOKEN_NAMES[] = {
     "ERROR",
     "BINARY",
+    "COMMA",
     "DAY",
     "DECIMAL",
     "EXPONENT",
@@ -28,12 +29,15 @@ constexpr const char *TOKEN_NAMES[] = {
     "KEY",
     "HEXADECIMAL",
     "HOUR",
+    "LBRACKET",
     "MINUS",
     "MINUTE",
     "MONTH",
     "NAN",
+    "NEWLINE",
     "OCTAL",
     "PLUS",
+    "RBRACKET",
     "SECOND",
     "STRING",
     "TRUE",
@@ -247,7 +251,7 @@ TEST(lex, dotted_keys)
         "name = \"Orange\"\n"
         "physical.color = \"orange\"\n"
         "physical.shape = \"round\"\n"
-        "site.\"google.com\" = \"true\"\n"
+        "site.\"google.com\" = true\n"
         "fruit.name = \"banana\"     # this is best practice\n"
         "fruit. color = \"yellow\"    # same as fruit.color\n"
         "fruit . flavor = \"banana\"   # same as fruit.flavor\n"
@@ -258,7 +262,7 @@ TEST(lex, dotted_keys)
         { TOKEN_KEY, "name", 1, 1 }, { TOKEN_STRING, "Orange", 1, 8 },
         { TOKEN_KEY, "physical", 2, 1 }, { TOKEN_KEY, "color", 2, 10 }, { TOKEN_STRING, "orange", 2, 18 },
         { TOKEN_KEY, "physical", 3, 1 }, { TOKEN_KEY, "shape", 3, 10 }, { TOKEN_STRING, "round", 3, 18 },
-        { TOKEN_KEY, "site", 4, 1 }, { TOKEN_KEY, "google.com", 4, 6 }, { TOKEN_STRING, "true", 4, 21 },
+        { TOKEN_KEY, "site", 4, 1 }, { TOKEN_KEY, "google.com", 4, 6 }, { TOKEN_TRUE, "", 4, 21 },
         { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "name", 5, 7 }, { TOKEN_STRING, "banana", 5, 14 },
         { TOKEN_KEY, "fruit", 6, 1 }, { TOKEN_KEY, "color", 6, 8 }, { TOKEN_STRING, "yellow", 6, 16 },
         { TOKEN_KEY, "fruit", 7, 1 }, { TOKEN_KEY, "flavor", 7, 9 }, { TOKEN_STRING, "banana", 7, 18 },
@@ -295,15 +299,15 @@ TEST(lex, extend_implicit_key)
 {
     const string toml =
         "# This makes the key \"fruit\" into a table.\n"
-        "fruit.apple.smooth = \"true\"\n"
+        "fruit.apple.smooth = true\n"
         "\n"
         "# So then you can add to the table \"fruit\" like so:\n"
-        "fruit.orange = \"2\"\n"
+        "fruit.orange = 2\n"
         ;
 
     const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 2, 1 }, { TOKEN_KEY, "apple", 2, 7 }, { TOKEN_KEY, "smooth", 2, 13 }, { TOKEN_STRING, "true", 2, 22 },
-        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "orange", 5, 7 }, { TOKEN_STRING, "2", 5, 16 },
+        { TOKEN_KEY, "fruit", 2, 1 }, { TOKEN_KEY, "apple", 2, 7 }, { TOKEN_KEY, "smooth", 2, 13 }, { TOKEN_TRUE, "", 2, 22 },
+        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "orange", 5, 7 }, { TOKEN_DECIMAL, "2", 5, 16 },
     };
 
     assert_lexed(toml, tokens);
@@ -316,16 +320,16 @@ TEST(lex, key_redefinition)
         "# THE FOLLOWING IS INVALID\n"
         "\n"
         "# This defines the value of fruit.apple to be an integer.\n"
-        "fruit.apple = \"1\"\n"
+        "fruit.apple = 1\n"
         "\n"
         "# But then this treats fruit.apple like it's a table.\n"
         "# You can't turn an integer into a table.\n"
-        "fruit.apple.smooth = \"true\"\n"
+        "fruit.apple.smooth = true\n"
         ;
 
     const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 4, 1 }, { TOKEN_KEY, "apple", 4, 7 }, { TOKEN_STRING, "1", 4, 15 },
-        { TOKEN_KEY, "fruit", 8, 1 }, { TOKEN_KEY, "apple", 8, 7 }, { TOKEN_KEY, "smooth", 8, 13 }, { TOKEN_STRING, "true", 8, 22 },
+        { TOKEN_KEY, "fruit", 4, 1 }, { TOKEN_KEY, "apple", 4, 7 }, { TOKEN_DECIMAL, "1", 4, 15 },
+        { TOKEN_KEY, "fruit", 8, 1 }, { TOKEN_KEY, "apple", 8, 7 }, { TOKEN_KEY, "smooth", 8, 13 }, { TOKEN_TRUE, "", 8, 22 },
     };
 
     assert_lexed(toml, tokens);
@@ -718,6 +722,75 @@ TEST(lex, offset_datetimes)
         { TOKEN_KEY, "odt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_MINUS, "-", 2, 27 }, { TOKEN_HOUR, "07", 2, 28 }, { TOKEN_MINUTE, "00", 2, 31 },
         { TOKEN_KEY, "odt3", 3, 1 }, { TOKEN_YEAR, "1979", 3, 8}, { TOKEN_MONTH, "05", 3, 13 }, { TOKEN_DAY, "27", 3, 16 }, { TOKEN_HOUR, "00", 3, 19}, { TOKEN_MINUTE, "32", 3, 22 }, { TOKEN_SECOND, "00", 3, 25 }, { TOKEN_FRACTION, "999999", 3, 28 }, { TOKEN_MINUS, "-", 3, 34 }, { TOKEN_HOUR, "07", 3, 35 }, { TOKEN_MINUTE, "00", 3, 38 },
         { TOKEN_KEY, "odt4", 4, 1 }, { TOKEN_YEAR, "1979", 4, 8}, { TOKEN_MONTH, "05", 4, 13 }, { TOKEN_DAY, "27", 4, 16 }, { TOKEN_HOUR, "07", 4, 19}, { TOKEN_MINUTE, "32", 4, 22 }, { TOKEN_SECOND, "00", 4, 25 }, { TOKEN_PLUS, "+", 4, 27 }, { TOKEN_HOUR, "00", 4, 28 }, { TOKEN_MINUTE, "00", 4, 28 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, arrays)
+{
+    const string toml =
+        "integers = [ 1, 2, 3 ]\n"
+        "colors = [ \"red\", \"yellow\", \"green\" ]\n"
+        "nested_arrays_of_ints = [ [ 1, 2 ], [3, 4, 5] ]\n"
+        "nested_mixed_array = [ [ 1, 2 ], [\"a\", \"b\", \"c\"] ]\n"
+        "string_array = [ \"all\", 'strings', \"\"\"are the same\"\"\", '''type''' ]\n"
+        "\n"
+        "# Mixed-type arrays are allowed\n"
+        "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\n"
+        "contributors = [\n"
+        "  \"Foo Bar <foo@example.com>\",\n"
+        "#  { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }\n"
+        "]\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "integers", 1, 1 }, { TOKEN_LBRACKET, "", 1, 12 },
+            { TOKEN_DECIMAL, "1", 1, 14 }, { TOKEN_COMMA, "", 1, 15 },
+            { TOKEN_DECIMAL, "2", 1, 17 }, { TOKEN_COMMA, "", 1, 18 },
+            { TOKEN_DECIMAL, "3", 1, 20 }, { TOKEN_RBRACKET, "", 1, 22 },
+        { TOKEN_KEY, "colors", 2, 1 }, { TOKEN_LBRACKET, "", 2, 10 },
+            { TOKEN_STRING, "red", 2, 12 }, { TOKEN_COMMA, "", 2, 17 },
+            { TOKEN_STRING, "yellow", 2, 19 }, { TOKEN_COMMA, "", 2, 27 },
+            { TOKEN_STRING, "green", 2, 29 }, { TOKEN_RBRACKET, "", 2, 37 },
+        { TOKEN_KEY, "nested_arrays_of_ints", 3, 1 }, { TOKEN_LBRACKET, "", 3, 25 },
+            { TOKEN_LBRACKET, "", 3, 27 },
+                { TOKEN_DECIMAL, "1", 3, 29 }, { TOKEN_COMMA, "", 3, 30 },
+                { TOKEN_DECIMAL, "2", 3, 32 },
+            { TOKEN_RBRACKET, "", 3, 34 }, { TOKEN_COMMA, "", 3, 35 },
+            { TOKEN_LBRACKET, "", 3, 37 },
+                { TOKEN_DECIMAL, "3", 3, 38 }, { TOKEN_COMMA, "", 3, 39 },
+                { TOKEN_DECIMAL, "4", 3, 41 }, { TOKEN_COMMA, "", 3, 42 },
+                { TOKEN_DECIMAL, "5", 3, 44 },
+            { TOKEN_RBRACKET, "", 3, 45 },
+        { TOKEN_RBRACKET, "", 3, 47 },
+        { TOKEN_KEY, "nested_mixed_array", 4, 1 }, { TOKEN_LBRACKET, "", 4, 22 },
+            { TOKEN_LBRACKET, "", 4, 24 },
+                { TOKEN_DECIMAL, "1", 4, 26 }, { TOKEN_COMMA, "", 4, 27 },
+                { TOKEN_DECIMAL, "2", 4, 29 },
+            { TOKEN_RBRACKET, "", 4, 31 }, { TOKEN_COMMA, "", 4, 32 },
+            { TOKEN_LBRACKET, "", 4, 34 },
+                { TOKEN_STRING, "a", 4, 35 }, { TOKEN_COMMA, "", 4, 38 },
+                { TOKEN_STRING, "b", 4, 40 }, { TOKEN_COMMA, "", 4, 43 },
+                { TOKEN_STRING, "c", 4, 45 },
+            { TOKEN_RBRACKET, "", 4, 48 },
+        { TOKEN_RBRACKET, "", 4, 50 },
+        { TOKEN_KEY, "string_array", 5, 1 }, { TOKEN_LBRACKET, "", 5, 16 },
+            { TOKEN_STRING, "all", 5, 18 }, { TOKEN_COMMA, "", 5, 23 },
+            { TOKEN_STRING, "strings", 5, 25 }, { TOKEN_COMMA, "", 5, 34 },
+            { TOKEN_STRING, "are the same", 5, 36 }, { TOKEN_COMMA, "", 5, 54 },
+            { TOKEN_STRING, "type", 5, 56 }, { TOKEN_RBRACKET, "", 5, 67 },
+        { TOKEN_KEY, "numbers", 8, 1 }, { TOKEN_LBRACKET, "", 8, 11 },
+            { TOKEN_DECIMAL, "0", 8, 13 }, { TOKEN_FRACTION, "1", 8, 15 }, { TOKEN_COMMA, "", 8, 16 },
+            { TOKEN_DECIMAL, "0", 8, 18 }, { TOKEN_FRACTION, "2", 8, 20 }, { TOKEN_COMMA, "", 8, 21 },
+            { TOKEN_DECIMAL, "0", 8, 23 }, { TOKEN_FRACTION, "5", 8, 25 }, { TOKEN_COMMA, "", 8, 26 },
+            { TOKEN_DECIMAL, "1", 8, 28 }, { TOKEN_COMMA, "", 8, 29 },
+            { TOKEN_DECIMAL, "2", 8, 31 }, { TOKEN_COMMA, "", 8, 32 },
+            { TOKEN_DECIMAL, "5", 8, 34 }, { TOKEN_RBRACKET, "", 8, 36 },
+        { TOKEN_KEY, "contributors", 9, 1 }, { TOKEN_LBRACKET, "", 9, 16 },
+            { TOKEN_STRING, "Foo Bar <foo@example.com>", 10, 3 }, { TOKEN_COMMA, "", 10, 30 },
+            { TOKEN_RBRACKET, "", 12, 1 },
     };
 
     assert_lexed(toml, tokens);

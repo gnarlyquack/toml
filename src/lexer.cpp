@@ -48,12 +48,22 @@ constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 
 enum LexingContext
 {
+    LEX_EOL         =      0,
     LEX_FRACTION    = 1 << 0,
     LEX_EXPONENT    = 1 << 1,
     LEX_DATE        = 1 << 2,
     LEX_TIME        = 1 << 3,
     LEX_DATETIME    = 1 << 4,
     LEX_TIMEZONE    = 1 << 5,
+    LEX_ARRAY       = 1 << 6,
+};
+
+
+enum ContainerState
+{
+    CONTAINER_START,
+    CONTAINER_VALUE,
+    CONTAINER_SEPARATOR,
 };
 
 
@@ -85,6 +95,18 @@ struct LexDigitResult
     u32 flags;
 };
 
+
+//
+// Predeclarations
+//
+
+void
+lex_value(TomlIterator &iterator, u32 context);
+
+
+//
+// Implementation
+//
 
 void
 byte_to_hex(byte value, string &out)
@@ -667,7 +689,7 @@ validate_day(TomlIterator &iterator, const LexDigitResult &result)
 
 
 LexDigitResult
-lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context = 0)
+lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
 {
     LexDigitResult result = {};
     bool underscore_allowed = false;
@@ -700,7 +722,9 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context = 0)
             || ((c == '-') && ((context & LEX_DATE) || (context & LEX_TIMEZONE)))
             || ((c == ':') && (context & LEX_TIME))
             || (((c == 'T') || (c == 't')) && (context & LEX_DATETIME))
-            || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE)))
+            || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE))
+            || ((c == ',') && (context & LEX_ARRAY))
+            || ((c == ']') && (context & LEX_ARRAY)))
         {
             lexing = false;
         }
@@ -737,7 +761,7 @@ lex_plus(TomlIterator &iterator)
 
 
 void
-lex_exponent(TomlIterator &iterator)
+lex_exponent(TomlIterator &iterator, u32 context)
 {
     advance(iterator);
 
@@ -750,30 +774,30 @@ lex_exponent(TomlIterator &iterator)
         lex_plus(iterator);
     }
 
-    LexDigitResult exponent = lex_digits(iterator, is_decimal);
+    LexDigitResult exponent = lex_digits(iterator, is_decimal, context);
     validate_digits(iterator, exponent, "exponential part of decimal");
     add_token(iterator, TOKEN_EXPONENT, exponent.digits);
 }
 
 
 void
-lex_fraction(TomlIterator &iterator)
+lex_fraction(TomlIterator &iterator, u32 context)
 {
     advance(iterator);
-    LexDigitResult fraction = lex_digits(iterator, is_decimal, LEX_EXPONENT);
+    LexDigitResult fraction = lex_digits(iterator, is_decimal, context | LEX_EXPONENT);
     validate_digits(iterator, fraction, "fractional part of decimal");
     add_token(iterator, TOKEN_FRACTION, fraction.digits);
 
     if (match(iterator, 'e') || match(iterator, 'E'))
     {
         eat_byte(iterator);
-        lex_exponent(iterator);
+        lex_exponent(iterator, context);
     }
 }
 
 
 void
-lex_time(TomlIterator &iterator, u32 context = 0)
+lex_time(TomlIterator &iterator, u32 context)
 {
     advance(iterator);
     LexDigitResult minute = lex_digits(iterator, is_decimal, context | LEX_TIME | LEX_FRACTION);
@@ -818,32 +842,32 @@ lex_hour(TomlIterator &iterator, u32 context)
 
 
 void
-lex_timezone(TomlIterator &iterator)
+lex_timezone(TomlIterator &iterator, u32 context)
 {
-    LexDigitResult hour = lex_digits(iterator, is_decimal, LEX_TIME);
+    LexDigitResult hour = lex_digits(iterator, is_decimal, context | LEX_TIME);
     validate_hour(iterator, hour, false);
     add_token(iterator, TOKEN_HOUR, hour.digits);
 
     eat_byte(iterator, ':');
     advance(iterator);
 
-    LexDigitResult minute = lex_digits(iterator, is_decimal);
+    LexDigitResult minute = lex_digits(iterator, is_decimal, context);
     validate_hour(iterator, minute);
     add_token(iterator, TOKEN_MINUTE, minute.digits);
 }
 
 
 void
-lex_date(TomlIterator &iterator)
+lex_date(TomlIterator &iterator, u32 context)
 {
     advance(iterator);
-    LexDigitResult month = lex_digits(iterator, is_decimal, LEX_DATE | LEX_DATETIME);
+    LexDigitResult month = lex_digits(iterator, is_decimal, context | LEX_DATE | LEX_DATETIME);
     validate_month(iterator, month);
     add_token(iterator, TOKEN_MONTH, month.digits);
 
     eat_byte(iterator, '-');
     advance(iterator);
-    LexDigitResult day = lex_digits(iterator, is_decimal, LEX_DATETIME);
+    LexDigitResult day = lex_digits(iterator, is_decimal, context | LEX_DATETIME);
     validate_day(iterator, day);
     add_token(iterator, TOKEN_DAY, day.digits);
 
@@ -863,49 +887,49 @@ lex_date(TomlIterator &iterator)
         else if (match(iterator, '+'))
         {
             lex_plus(iterator);
-            lex_timezone(iterator);
+            lex_timezone(iterator, context);
         }
         else if (match(iterator, '-'))
         {
             lex_minus(iterator);
-            lex_timezone(iterator);
+            lex_timezone(iterator, context);
         }
     }
 }
 
 
 void
-lex_decimal(TomlIterator &iterator)
+lex_decimal(TomlIterator &iterator, u32 context)
 {
-    LexDigitResult result = lex_digits(iterator, is_decimal, LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
+    LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
     if (match(iterator, '.'))
     {
         validate_digits(iterator, result, "whole part of decimal");
         add_token(iterator, TOKEN_DECIMAL, move(result.digits));
         eat_byte(iterator);
-        lex_fraction(iterator);
+        lex_fraction(iterator, context);
     }
     else if (match(iterator, 'e') || match(iterator, 'E'))
     {
         validate_digits(iterator, result, "whole part of decimal");
         add_token(iterator, TOKEN_DECIMAL, move(result.digits));
         eat_byte(iterator);
-        lex_exponent(iterator);
+        lex_exponent(iterator, context);
     }
     else if (match(iterator, '-'))
     {
         validate_year(iterator, result);
         add_token(iterator, TOKEN_YEAR, result.digits);
         eat_byte(iterator);
-        lex_date(iterator);
+        lex_date(iterator, context);
     }
     else if (match(iterator, ':'))
     {
         validate_hour(iterator, result);
         add_token(iterator, TOKEN_HOUR, move(result.digits));
         eat_byte(iterator);
-        lex_time(iterator);
+        lex_time(iterator, context);
     }
     else
     {
@@ -916,60 +940,60 @@ lex_decimal(TomlIterator &iterator)
 
 
 void
-lex_hexadecimal(TomlIterator &iterator)
+lex_hexadecimal(TomlIterator &iterator, u32 context)
 {
-    LexDigitResult result = lex_digits(iterator, is_hexadecimal);
+    LexDigitResult result = lex_digits(iterator, is_hexadecimal, context);
     validate_digits(iterator, result, "hexadecimal", true);
     add_token(iterator, TOKEN_HEXADECIMAL, move(result.digits));
 }
 
 
 void
-lex_octal(TomlIterator &iterator)
+lex_octal(TomlIterator &iterator, u32 context)
 {
-    LexDigitResult result = lex_digits(iterator, is_octal);
+    LexDigitResult result = lex_digits(iterator, is_octal, context);
     validate_digits(iterator, result, "octal", true);
     add_token(iterator, TOKEN_OCTAL, move(result.digits));
 }
 
 
 void
-lex_binary(TomlIterator &iterator)
+lex_binary(TomlIterator &iterator, u32 context)
 {
-    LexDigitResult result = lex_digits(iterator, is_binary);
+    LexDigitResult result = lex_digits(iterator, is_binary, context);
     validate_digits(iterator, result, "binary", true);
     add_token(iterator, TOKEN_BINARY, move(result.digits));
 }
 
 
 void
-lex_number(TomlIterator &iterator)
+lex_number(TomlIterator &iterator, u32 context)
 {
     if (match(iterator, '0'))
     {
         if (match(iterator, 'x', 1))
         {
             eat_bytes(iterator, 2);
-            lex_hexadecimal(iterator);
+            lex_hexadecimal(iterator, context);
         }
         else if (match(iterator, 'o', 1))
         {
             eat_bytes(iterator, 2);
-            lex_octal(iterator);
+            lex_octal(iterator, context);
         }
         else if (match(iterator, 'b', 1))
         {
             eat_bytes(iterator, 2);
-            lex_binary(iterator);
+            lex_binary(iterator, context);
         }
         else
         {
-            lex_decimal(iterator);
+            lex_decimal(iterator, context);
         }
     }
     else
     {
-        lex_decimal(iterator);
+        lex_decimal(iterator, context);
     }
 }
 
@@ -1377,7 +1401,72 @@ lex_string(TomlIterator &iterator, byte delimiter)
 
 
 void
-lex_value(TomlIterator &iterator)
+lex_array(TomlIterator &iterator)
+{
+    eat_byte(iterator, '[');
+    add_token(iterator, TOKEN_LBRACKET);
+
+    ContainerState state = CONTAINER_START;
+    bool lexing = true;
+    while (lexing)
+    {
+        eat_whitespace(iterator);
+        if (end_of_file(iterator))
+        {
+            add_error(iterator, "Unterminated array");
+        }
+        else if (match_eol(iterator))
+        {
+            eat_newline(iterator);
+        }
+        else
+        {
+            switch (get_byte(iterator))
+            {
+                case ']':
+                {
+                    advance(iterator);
+                    eat_byte(iterator);
+                    add_token(iterator, TOKEN_RBRACKET);
+                    lexing = false;
+                } break;
+
+                case ',':
+                {
+                    if (state != CONTAINER_VALUE)
+                    {
+                        add_error(iterator, "Missing value for array");
+                    }
+
+                    advance(iterator);
+                    eat_byte(iterator);
+                    add_token(iterator, TOKEN_COMMA);
+                    state = CONTAINER_SEPARATOR;
+                } break;
+
+                case '#':
+                {
+                    eat_comment(iterator);
+                    eat_newline(iterator);
+                } break;
+
+                default:
+                {
+                    if (state == CONTAINER_VALUE)
+                    {
+                        add_error(iterator, "Missing ',' between array values");
+                    }
+                    lex_value(iterator, LEX_ARRAY);
+                    state = CONTAINER_VALUE;
+                }
+            }
+        }
+    }
+}
+
+
+void
+lex_value(TomlIterator &iterator, u32 context)
 {
     assert(!match_whitespace(iterator) && !match_eol(iterator));
     advance(iterator);
@@ -1386,7 +1475,7 @@ lex_value(TomlIterator &iterator)
 
     if (is_decimal(c))
     {
-        lex_number(iterator);
+        lex_number(iterator, context);
     }
     else
     {
@@ -1422,7 +1511,7 @@ lex_value(TomlIterator &iterator)
                 }
                 else
                 {
-                    lex_number(iterator);
+                    lex_number(iterator, context);
                 }
             } break;
 
@@ -1441,7 +1530,7 @@ lex_value(TomlIterator &iterator)
                 }
                 else
                 {
-                    lex_number(iterator);
+                    lex_number(iterator, context);
                 }
             } break;
 
@@ -1470,10 +1559,16 @@ lex_value(TomlIterator &iterator)
                 add_token(iterator, TOKEN_FALSE);
             } break;
 
+
+            case '[':
+            {
+                lex_array(iterator);
+            } break;
+
             // special handling for invalid cases
             case '.':
             {
-                lex_number(iterator);
+                lex_number(iterator, context);
             } break;
 
             case '#':
@@ -1567,7 +1662,7 @@ lex_keyval(TomlIterator &iterator)
     eat_byte(iterator, '=');
     eat_whitespace(iterator);
 
-    lex_value(iterator);
+    lex_value(iterator, LEX_EOL);
 }
 
 
