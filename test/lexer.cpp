@@ -22,6 +22,8 @@ constexpr const char *TOKEN_NAMES[] = {
     "COMMA",
     "DAY",
     "DECIMAL",
+    "DOUBLE LBRACKET",
+    "DOUBLE RBRACKET",
     "EXPONENT",
     "FALSE",
     "FRACTION",
@@ -803,6 +805,34 @@ TEST(lex, arrays)
 }
 
 
+TEST(lex, multiline_arrays)
+{
+    const string toml =
+        "integers2 = [\n"
+        "  1, 2, 3\n"
+        "]\n"
+        "\n"
+        "integers3 = [\n"
+        "  1,\n"
+        "  2, # this is ok\n"
+        "]\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "integers2", 1, 1 }, { TOKEN_LBRACKET, "", 1, 13 },
+            { TOKEN_DECIMAL, "1", 2, 3 }, { TOKEN_COMMA, "", 2, 4 },
+            { TOKEN_DECIMAL, "2", 2, 6 }, { TOKEN_COMMA, "", 2, 7 },
+            { TOKEN_DECIMAL, "3", 2, 9 }, { TOKEN_RBRACKET, "", 3, 1 },
+        { TOKEN_KEY, "integers3", 5, 1 }, { TOKEN_LBRACKET, "", 5, 13 },
+            { TOKEN_DECIMAL, "1", 6, 3 }, { TOKEN_COMMA, "", 6, 4 },
+            { TOKEN_DECIMAL, "2", 7, 3 }, { TOKEN_COMMA, "", 7, 4 },
+            { TOKEN_RBRACKET, "", 8, 1 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
 TEST(lex, inline_tables)
 {
     const string toml =
@@ -821,6 +851,110 @@ TEST(lex, inline_tables)
         { TOKEN_KEY, "animal", 3, 1 }, { TOKEN_LBRACE, "", 3, 10},
             { TOKEN_KEY, "type", 3, 12 }, { TOKEN_KEY, "name", 3, 17 }, { TOKEN_STRING, "pug", 3, 24 },
             { TOKEN_RBRACE, "", 3, 30 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, tables)
+{
+    const string toml =
+        "[table]\n"
+        "\n"
+        "[table-1]\n"
+        "key1 = \"some string\"\n"
+        "key2 = 123\n"
+        "\n"
+        "[table-2]\n"
+        "key1 = \"another string\"\n"
+        "key2 = 456\n"
+        "\n"
+        "[dog.\"tater.man\"]\n"
+        "type.name = \"pug\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "table", 1, 2 }, { TOKEN_RBRACKET, "", 1, 7 },
+        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "table-1", 3, 2 }, { TOKEN_RBRACKET, "", 3, 9 },
+        { TOKEN_KEY, "key1", 4, 1 }, { TOKEN_STRING, "some string", 4, 8 },
+        { TOKEN_KEY, "key2", 5, 1 }, { TOKEN_DECIMAL, "123", 5, 8 },
+        { TOKEN_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "table-2", 7, 2 }, { TOKEN_RBRACKET, "", 7, 9 },
+        { TOKEN_KEY, "key1", 8, 1 }, { TOKEN_STRING, "another string", 8, 8 },
+        { TOKEN_KEY, "key2", 9, 1 }, { TOKEN_DECIMAL, "456", 9, 8 },
+        { TOKEN_LBRACKET, "", 11, 1 }, { TOKEN_KEY, "dog", 11, 2 }, { TOKEN_KEY, "tater.man", 11, 6 }, { TOKEN_RBRACKET, "", 11, 17 },
+        { TOKEN_KEY, "type", 12, 1 }, {TOKEN_KEY, "name", 12, 6 }, { TOKEN_STRING, "pug", 12, 13 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, spaces_in_table_headers)
+{
+    const string toml =
+        "[a.b.c]            # this is best practice\n"
+        "[ d.e.f ]          # same as [d.e.f]\n"
+        "[ g .  h  . i ]    # same as [g.h.i]\n"
+        "[ j . \"ʞ\" . 'l' ]  # same as [j.\"ʞ\".'l']\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "a", 1, 2 }, { TOKEN_KEY, "b", 1, 4 }, { TOKEN_KEY, "c", 1, 6 }, { TOKEN_RBRACKET, "", 1, 7 },
+        { TOKEN_LBRACKET, "", 2, 1 }, { TOKEN_KEY, "d", 2, 3 }, { TOKEN_KEY, "e", 2, 5 }, { TOKEN_KEY, "f", 2, 7 }, { TOKEN_RBRACKET, "", 2, 9 },
+        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "g", 3, 3 }, { TOKEN_KEY, "h", 3, 8 }, { TOKEN_KEY, "i", 3, 13 }, { TOKEN_RBRACKET, "", 3, 15 },
+        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "j", 4, 3 }, { TOKEN_KEY, "ʞ", 4, 7 }, { TOKEN_KEY, "l", 4, 13 }, { TOKEN_RBRACKET, "", 4, 17 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, implicit_super_tables)
+{
+    const string toml =
+        "# [x] you\n"
+        "# [x.y] don't\n"
+        "# [x.y.z] need these\n"
+        "[x.y.z.w] # for this to work\n"
+        "\n"
+        "[x] # defining a super-table afterward is ok\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "x", 4, 2 }, { TOKEN_KEY, "y", 4, 4 }, { TOKEN_KEY, "z", 4, 6 }, { TOKEN_KEY, "w", 4, 8 }, { TOKEN_RBRACKET, "", 4, 9 },
+        { TOKEN_LBRACKET, "", 6, 1 }, { TOKEN_KEY, "x", 6, 2 }, { TOKEN_RBRACKET, "", 6, 3 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, table_arrays)
+{
+    const string toml =
+        "[[products]]\n"
+        "name = \"Hammer\"\n"
+        "sku = 738594937\n"
+        "\n"
+        "[[products]]  # empty table within the array\n"
+        "\n"
+        "[[products]]\n"
+        "name = \"Nail\"\n"
+        "sku = 284758393\n"
+        "\n"
+        "color = \"gray\"\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_DOUBLE_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "products", 1, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 1, 11 },
+        { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Hammer", 2, 8 },
+        { TOKEN_KEY, "sku", 3, 1 }, { TOKEN_DECIMAL, "738594937", 3, 7 },
+        { TOKEN_DOUBLE_LBRACKET, "", 5, 1 }, { TOKEN_KEY, "products", 5, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 5, 11 },
+        { TOKEN_DOUBLE_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "products", 7, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 7, 11 },
+        { TOKEN_KEY, "name", 8, 1 }, { TOKEN_STRING, "Nail", 8, 8 },
+        { TOKEN_KEY, "sku", 9, 1 }, { TOKEN_DECIMAL, "284758393", 9, 7 },
+        { TOKEN_KEY, "color", 11, 1 }, { TOKEN_STRING, "gray", 11, 9 },
     };
 
     assert_lexed(toml, tokens);

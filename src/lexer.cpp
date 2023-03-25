@@ -1738,10 +1738,39 @@ lex_keyval(TomlIterator &iterator, u32 context)
 
 
 void
-lex_table(TomlIterator &)
+lex_table(TomlIterator &iterator)
 {
-    fputs("Implement lex_table", stderr);
-    assert(false);
+    advance(iterator);
+
+    eat_byte(iterator, '[');
+    bool table_array = false;
+
+    if (match(iterator, '['))
+    {
+        eat_byte(iterator);
+        table_array = true;
+        add_token(iterator, TOKEN_DOUBLE_LBRACKET);
+    }
+    else
+    {
+        add_token(iterator, TOKEN_LBRACKET);
+        eat_whitespace(iterator);
+    }
+
+    lex_key(iterator);
+
+    assert(!match_whitespace(iterator));
+    advance(iterator);
+    eat_byte(iterator, ']');
+    if (table_array)
+    {
+        eat_byte(iterator, ']');
+        add_token(iterator, TOKEN_DOUBLE_RBRACKET);
+    }
+    else
+    {
+        add_token(iterator, TOKEN_RBRACKET);
+    }
 }
 
 
