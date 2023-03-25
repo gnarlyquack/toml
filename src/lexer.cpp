@@ -56,6 +56,7 @@ enum LexingContext
     LEX_DATETIME    = 1 << 4,
     LEX_TIMEZONE    = 1 << 5,
     LEX_ARRAY       = 1 << 6,
+    LEX_TABLE       = 1 << 7,
 };
 
 
@@ -99,6 +100,9 @@ struct LexDigitResult
 //
 // Predeclarations
 //
+
+void
+lex_keyval(TomlIterator &iterator, u32 context);
 
 void
 lex_value(TomlIterator &iterator, u32 context);
@@ -164,8 +168,11 @@ end_of_file(const TomlIterator &iterator, u64 ahead = 0)
 byte
 get_byte(const TomlIterator &iterator, u64 ahead = 0)
 {
-    assert(!end_of_file(iterator, ahead));
-    byte result = iterator.toml[iterator.current_position + ahead];
+    byte result = INVALID_BYTE;
+    if (!end_of_file(iterator, ahead))
+    {
+        result = iterator.toml[iterator.current_position + ahead];
+    }
     return result;
 }
 
@@ -723,8 +730,9 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
             || ((c == ':') && (context & LEX_TIME))
             || (((c == 'T') || (c == 't')) && (context & LEX_DATETIME))
             || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE))
-            || ((c == ',') && (context & LEX_ARRAY))
-            || ((c == ']') && (context & LEX_ARRAY)))
+            || ((c == ',') && ((context & LEX_ARRAY) || (context & LEX_TABLE)))
+            || ((c == ']') && (context & LEX_ARRAY))
+            || ((c == '}') && (context & LEX_TABLE)))
         {
             lexing = false;
         }
@@ -1466,6 +1474,65 @@ lex_array(TomlIterator &iterator)
 
 
 void
+lex_inline_table(TomlIterator &iterator)
+{
+    eat_byte(iterator, '{');
+    add_token(iterator, TOKEN_LBRACE);
+
+    ContainerState state = CONTAINER_START;
+    bool lexing = true;
+    while (lexing)
+    {
+        eat_whitespace(iterator);
+        switch (get_byte(iterator))
+        {
+            case '}':
+            {
+                advance(iterator);
+                if (state == CONTAINER_SEPARATOR)
+                {
+                    add_error(iterator, "Trailing ',' is not allowed for an inline table");
+                }
+                eat_byte(iterator);
+                add_token(iterator, TOKEN_RBRACE);
+                lexing = false;
+            } break;
+
+            case ',':
+            {
+                advance(iterator);
+                if (state != CONTAINER_VALUE)
+                {
+                    add_error(iterator, "Missing value for inline table");
+                }
+                eat_byte(iterator);
+                add_token(iterator, TOKEN_COMMA);
+                state = CONTAINER_SEPARATOR;
+            } break;
+
+            default:
+            {
+                if (match_eol(iterator))
+                {
+                    add_error(iterator, "Unterminated inline table");
+                    lexing = false;
+                }
+                else
+                {
+                    if (state == CONTAINER_VALUE)
+                    {
+                        add_error(iterator, "Missing ',' between inline table values");
+                    }
+                    lex_keyval(iterator, LEX_TABLE);
+                    state = CONTAINER_VALUE;
+                }
+            }
+        }
+    }
+}
+
+
+void
 lex_value(TomlIterator &iterator, u32 context)
 {
     assert(!match_whitespace(iterator) && !match_eol(iterator));
@@ -1559,10 +1626,14 @@ lex_value(TomlIterator &iterator, u32 context)
                 add_token(iterator, TOKEN_FALSE);
             } break;
 
-
             case '[':
             {
                 lex_array(iterator);
+            } break;
+
+            case '{':
+            {
+                lex_inline_table(iterator);
             } break;
 
             // special handling for invalid cases
@@ -1654,7 +1725,7 @@ lex_key(TomlIterator &iterator)
 
 
 void
-lex_keyval(TomlIterator &iterator)
+lex_keyval(TomlIterator &iterator, u32 context)
 {
     lex_key(iterator);
 
@@ -1662,7 +1733,7 @@ lex_keyval(TomlIterator &iterator)
     eat_byte(iterator, '=');
     eat_whitespace(iterator);
 
-    lex_value(iterator, LEX_EOL);
+    lex_value(iterator, context);
 }
 
 
@@ -1685,7 +1756,7 @@ lex_expression(TomlIterator &iterator)
     }
     else if (!match_eol(iterator) && !match(iterator, '#'))
     {
-        lex_keyval(iterator);
+        lex_keyval(iterator, LEX_EOL);
     }
 
     eat_whitespace(iterator);

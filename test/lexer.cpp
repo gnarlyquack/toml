@@ -29,6 +29,7 @@ constexpr const char *TOKEN_NAMES[] = {
     "KEY",
     "HEXADECIMAL",
     "HOUR",
+    "LBRACE",
     "LBRACKET",
     "MINUS",
     "MINUTE",
@@ -37,6 +38,7 @@ constexpr const char *TOKEN_NAMES[] = {
     "NEWLINE",
     "OCTAL",
     "PLUS",
+    "RBRACE",
     "RBRACKET",
     "SECOND",
     "STRING",
@@ -741,7 +743,7 @@ TEST(lex, arrays)
         "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\n"
         "contributors = [\n"
         "  \"Foo Bar <foo@example.com>\",\n"
-        "#  { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }\n"
+        "  { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }\n"
         "]\n"
         ;
 
@@ -790,7 +792,35 @@ TEST(lex, arrays)
             { TOKEN_DECIMAL, "5", 8, 34 }, { TOKEN_RBRACKET, "", 8, 36 },
         { TOKEN_KEY, "contributors", 9, 1 }, { TOKEN_LBRACKET, "", 9, 16 },
             { TOKEN_STRING, "Foo Bar <foo@example.com>", 10, 3 }, { TOKEN_COMMA, "", 10, 30 },
+            { TOKEN_LBRACE, "", 11, 3 },
+                { TOKEN_KEY, "name", 11, 5 }, { TOKEN_STRING, "Baz Qux", 11, 12 }, { TOKEN_COMMA, "", 11, 21},
+                { TOKEN_KEY, "email", 11, 23 }, { TOKEN_STRING, "bazqux@example.com", 11, 31 }, { TOKEN_COMMA, "", 11, 51},
+                { TOKEN_KEY, "url", 11, 53 }, { TOKEN_STRING, "https://example.com/bazqux", 11, 59 }, { TOKEN_RBRACE, "", 11, 88},
             { TOKEN_RBRACKET, "", 12, 1 },
+    };
+
+    assert_lexed(toml, tokens);
+}
+
+
+TEST(lex, inline_tables)
+{
+    const string toml =
+        "name = { first = \"Tom\", last = \"Preston-Werner\" }\n"
+        "point = { x = 1, y = 2 }\n"
+        "animal = { type.name = \"pug\" }\n"
+        ;
+
+    const vector<Token> tokens = {
+        { TOKEN_KEY, "name", 1, 1 }, { TOKEN_LBRACE, "", 1, 8},
+            { TOKEN_KEY, "first", 1, 10 }, { TOKEN_STRING, "Tom", 1, 18 }, { TOKEN_COMMA, "", 1, 23 },
+            { TOKEN_KEY, "last", 1, 25 }, { TOKEN_STRING, "Preston-Werner", 1, 32 }, { TOKEN_RBRACE, "", 1, 49 },
+        { TOKEN_KEY, "point", 2, 1 }, { TOKEN_LBRACE, "", 2, 9},
+            { TOKEN_KEY, "x", 2, 11 }, { TOKEN_DECIMAL, "1", 2, 15 }, { TOKEN_COMMA, "", 2, 16 },
+            { TOKEN_KEY, "y", 2, 18 }, { TOKEN_DECIMAL, "2", 2, 22 }, { TOKEN_RBRACE, "", 2, 24 },
+        { TOKEN_KEY, "animal", 3, 1 }, { TOKEN_LBRACE, "", 3, 10},
+            { TOKEN_KEY, "type", 3, 12 }, { TOKEN_KEY, "name", 3, 17 }, { TOKEN_STRING, "pug", 3, 24 },
+            { TOKEN_RBRACE, "", 3, 30 },
     };
 
     assert_lexed(toml, tokens);
