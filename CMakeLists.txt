@@ -24,6 +24,7 @@ target_compile_options(cxxflags INTERFACE
 
 add_library(toml
     src/lexer.cpp
+    src/parser.cpp
     )
 target_link_libraries(toml PRIVATE cxxflags)
 
@@ -44,6 +45,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(test_toml
     test/lexer.cpp
+    test/parser.cpp
     )
 target_include_directories(test_toml PRIVATE src)
 target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)

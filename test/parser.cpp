@@ -3,9 +3,11 @@
 //  of this project, including this file, may be copied, modified, propagated,
 //  or distributed except according to the terms contained in the LICENSE file.
 
+#include <unordered_map>
+
 #include <gtest/gtest.h>
 
-#include "lexer.hpp"
+#include "parser.hpp"
 
 #include "test_common.hpp"
 
@@ -18,66 +20,135 @@ namespace toml
 {
 
 
-constexpr const char *TOKEN_NAMES[] = {
-    "ERROR",
-    "BINARY",
-    "COMMA",
-    "DAY",
-    "DECIMAL",
-    "DOUBLE LBRACKET",
-    "DOUBLE RBRACKET",
-    "EOF",
-    "EXPONENT",
-    "FALSE",
-    "FRACTION",
-    "INFINITY",
-    "KEY",
-    "HEXADECIMAL",
-    "HOUR",
-    "LBRACE",
-    "LBRACKET",
-    "MINUS",
-    "MINUTE",
-    "MONTH",
-    "NAN",
-    "NEWLINE",
-    "OCTAL",
-    "PLUS",
-    "RBRACE",
-    "RBRACKET",
-    "SECOND",
-    "STRING",
-    "TRUE",
-    "YEAR",
-};
+inline bool
+operator==(const Table &left, const Table &right);
 
 
 inline bool
-operator==(const Token &left, const Token &right)
+operator==(const Value &left, const Value &right)
 {
-    bool result =
-        (left.type == right.type)
-        && (left.line == right.line)
-        && (left.column == right.column)
-        && (left.lexeme == right.lexeme);
+    bool result = false;
+    if (left.type == right.type)
+    {
+        switch (left.type)
+        {
+            case TYPE_BOOL:
+            {
+                result = static_cast<const BooleanValue &>(left).value
+                    == static_cast<const BooleanValue &>(right).value;
+            } break;
+
+            case TYPE_INTEGER:
+            {
+                result = static_cast<const IntegerValue &>(left).value
+                    == static_cast<const IntegerValue &>(right).value;
+            } break;
+
+            case TYPE_STRING:
+            {
+                result = static_cast<const StringValue &>(left).value
+                    == static_cast<const StringValue &>(right).value;
+            } break;
+
+            case TYPE_TABLE:
+            {
+                result = static_cast<const TableValue &>(left).value
+                    == static_cast<const TableValue &>(right).value;
+            } break;
+
+            case TYPE_INVALID:
+            {
+                assert(false);
+            } break;
+        }
+    }
     return result;
 }
 
 
-inline std::ostream& operator<<(std::ostream &os, const Token &token)
+inline bool
+operator==(const Table &left, const Table &right)
 {
-    os << "Token("
-        << TOKEN_NAMES[token.type] << ", \""
-        << token.lexeme << "\", "
-        << token.line << ", "
-        << token.column  << ")";
+    bool result = left.size() == right.size();
+    if (result)
+    {
+        for (auto i : left)
+        {
+            result = (right.find(i.first) != right.end())
+                && (*i.second == *right.at(i.first));
+            if (!result)
+            {
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
+
+inline ostream &
+operator<<(ostream &os, const Table &value);
+
+
+inline ostream &
+operator<<(ostream &os, const Value &value)
+{
+    switch (value.type)
+    {
+        case TYPE_BOOL:
+        {
+            os << "Boolean(" << boolalpha << static_cast<const BooleanValue &>(value).value << ')';
+        } break;
+
+        case TYPE_INTEGER:
+        {
+            os << "Integer(" << static_cast<const IntegerValue &>(value).value << ')';
+        } break;
+
+        case TYPE_STRING:
+        {
+            os << "String(" << static_cast<const StringValue &>(value).value << ')';
+        } break;
+
+        case TYPE_TABLE:
+        {
+            os << "Table(" << static_cast<const TableValue &>(value).value << ')';
+        } break;
+
+        case TYPE_INVALID:
+        {
+            assert(false);
+        } break;
+    }
+
+    os << ")";
     return os;
 }
 
 
-inline std::ostream& operator<<(std::ostream &os, const Error &error)
+inline ostream &
+operator<<(ostream &os, const Value *value)
 {
-    os << "Error(" << error.line << ", " << error.column << ", \"" << error.message << "\")";
+    os << *value;
+    return os;
+}
+
+
+inline ostream &
+operator<<(ostream &os, const Table &value)
+{
+    os << "{ ";
+    uint64_t count = 0;
+    for (auto i : value)
+    {
+        if (count++)
+        {
+            os << ", ";
+        }
+        os << "(\"" << i.first << "\", " << *i.second << ')';
+    }
+    os << " }";
     return os;
 }
 
@@ -90,11 +161,11 @@ namespace
 
 
 void
-assert_lexed(const string &toml, const vector<Token> &expected)
+assert_parsed(const string &toml, const Table &expected)
 {
-    vector<Token> actual;
+    Table actual;
     vector<Error> errors;
-    bool result = lex_toml(toml, actual, errors);
+    bool result = parse_toml(toml, actual, errors);
 
     EXPECT_TRUE(result);
     EXPECT_EQ(actual, expected);
@@ -105,9 +176,9 @@ assert_lexed(const string &toml, const vector<Token> &expected)
 void
 assert_errors(const string &toml, const vector<Error> &expected)
 {
-    vector<Token> tokens;
+    Table table;
     vector<Error> actual;
-    bool result = lex_toml(toml, tokens, actual);
+    bool result = parse_toml(toml, table, actual);
 
     ASSERT_FALSE(result);
     ASSERT_EQ(actual, expected);
@@ -118,7 +189,7 @@ assert_errors(const string &toml, const vector<Error> &expected)
 
 
 
-TEST(lex, comments)
+TEST(parse, comments)
 {
     const string toml =
         "# This is a full-line comment\n"
@@ -126,30 +197,28 @@ TEST(lex, comments)
         "another = \"# This is not a comment\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 2, 1 }, { TOKEN_STRING, "value", 2, 7 },
-        { TOKEN_KEY, "another", 3, 1 }, { TOKEN_STRING, "# This is not a comment", 3, 11 } ,
-        { TOKEN_EOF, "", 4, 1 },
+    const Table expected = {
+        { "key", new StringValue("value") },
+        { "another", new StringValue("# This is not a comment") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, expected);
 }
 
 
-TEST(lex, keyvals)
+TEST(parse, keyvals)
 {
     const string toml = "key = \"value\"";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
-        { TOKEN_EOF, "", 1, 14 },
+    const Table result = {
+        { "key", new StringValue("value") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, invalid_keyvals)
+TEST(parse, invalid_keyvals)
 {
     const string toml =
         "key = # INVALID\n"
@@ -165,7 +234,7 @@ TEST(lex, invalid_keyvals)
 }
 
 
-TEST(lex, bare_keys)
+TEST(parse, bare_keys)
 {
     const string toml =
         "key = \"value\"\n"
@@ -174,19 +243,18 @@ TEST(lex, bare_keys)
         "1234 = \"value\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
-        { TOKEN_KEY, "bare_key", 2, 1 }, { TOKEN_STRING, "value", 2, 12 },
-        { TOKEN_KEY, "bare-key", 3, 1 }, { TOKEN_STRING, "value", 3, 12 },
-        { TOKEN_KEY, "1234", 4, 1 }, { TOKEN_STRING, "value", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
+    const Table result = {
+        { "key", new StringValue("value") },
+        { "bare_key", new StringValue("value") },
+        { "bare-key", new StringValue("value") },
+        { "1234", new StringValue("value") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, quoted_keys)
+TEST(parse, quoted_keys)
 {
     const string toml =
         "\"127.0.0.1\" = \"value\"\n"
@@ -196,20 +264,19 @@ TEST(lex, quoted_keys)
         "'quoted \"value\"' = \"value\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "127.0.0.1", 1, 1 }, { TOKEN_STRING, "value", 1, 15 },
-        { TOKEN_KEY, "character encoding", 2, 1 }, { TOKEN_STRING, "value", 2, 24 },
-        { TOKEN_KEY, "ʎǝʞ", 3, 1 }, { TOKEN_STRING, "value", 3, 9 },
-        { TOKEN_KEY, "key2", 4, 1 }, { TOKEN_STRING, "value", 4, 10 },
-        { TOKEN_KEY, "quoted \"value\"", 5, 1 }, { TOKEN_STRING, "value", 5, 20 },
-        { TOKEN_EOF, "", 6, 1 },
+    const Table result = {
+        { "127.0.0.1", new StringValue("value") },
+        { "character encoding", new StringValue("value") },
+        { "ʎǝʞ", new StringValue("value") },
+        { "key2", new StringValue("value") },
+        { "quoted \"value\"", new StringValue("value") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, empty_unqoted_key)
+TEST(parse, empty_unqoted_key)
 {
     const string toml = "= \"no key name\"  # INVALID";
 
@@ -221,33 +288,31 @@ TEST(lex, empty_unqoted_key)
 }
 
 
-TEST(lex, empty_string_key)
+TEST(parse, empty_string_key)
 {
     const string toml = "\"\" = \"blank\"     # VALID but discouraged";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "", 1, 1 }, { TOKEN_STRING, "blank", 1, 6 },
-        { TOKEN_EOF, "", 1, 41 },
+    const Table result = {
+        { "", new StringValue("blank") } ,
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, empty_literal_key)
+TEST(parse, empty_literal_key)
 {
     const string toml = "'' = 'blank'     # VALID but discouraged";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "", 1, 1 }, { TOKEN_STRING, "blank", 1, 6 },
-        { TOKEN_EOF, "", 1, 41 },
+    const Table result = {
+        { "", new StringValue("blank") } ,
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, dotted_keys)
+TEST(parse, dotted_keys)
 {
     const string toml =
         "name = \"Orange\"\n"
@@ -260,23 +325,26 @@ TEST(lex, dotted_keys)
         "3.14159 = \"pi\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "name", 1, 1 }, { TOKEN_STRING, "Orange", 1, 8 },
-        { TOKEN_KEY, "physical", 2, 1 }, { TOKEN_KEY, "color", 2, 10 }, { TOKEN_STRING, "orange", 2, 18 },
-        { TOKEN_KEY, "physical", 3, 1 }, { TOKEN_KEY, "shape", 3, 10 }, { TOKEN_STRING, "round", 3, 18 },
-        { TOKEN_KEY, "site", 4, 1 }, { TOKEN_KEY, "google.com", 4, 6 }, { TOKEN_TRUE, "", 4, 21 },
-        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "name", 5, 7 }, { TOKEN_STRING, "banana", 5, 14 },
-        { TOKEN_KEY, "fruit", 6, 1 }, { TOKEN_KEY, "color", 6, 8 }, { TOKEN_STRING, "yellow", 6, 16 },
-        { TOKEN_KEY, "fruit", 7, 1 }, { TOKEN_KEY, "flavor", 7, 9 }, { TOKEN_STRING, "banana", 7, 18 },
-        { TOKEN_KEY, "3", 8, 1 }, { TOKEN_KEY, "14159", 8, 3 }, { TOKEN_STRING, "pi", 8, 11 },
-        { TOKEN_EOF, "", 9, 1 },
+    const Table result = {
+        { "name", new StringValue("Orange") },
+        { "physical", new TableValue({
+                    { "color", new StringValue("orange") },
+                    { "shape", new StringValue("round") } }) },
+        { "site", new TableValue({
+                    { "google.com", new BooleanValue(true) } }) },
+        { "fruit", new TableValue({
+                    { "name", new StringValue("banana") },
+                    { "color", new StringValue("yellow") },
+                    { "flavor", new StringValue("banana") } }) },
+        { "3", new TableValue({
+                    { "14159", new StringValue("pi") } }) },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, multiple_keys)
+TEST(parse, multiple_keys)
 {
     const string toml =
         "# DO NOT DO THIS\n"
@@ -287,19 +355,16 @@ TEST(lex, multiple_keys)
         "\"spelling\" = \"favourite\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Tom", 2, 8 },
-        { TOKEN_KEY, "name", 3, 1 }, { TOKEN_STRING, "Pradyun", 3, 8 },
-        { TOKEN_KEY, "spelling", 5, 1 }, { TOKEN_STRING, "favorite", 5, 12 },
-        { TOKEN_KEY, "spelling", 6, 1 }, { TOKEN_STRING, "favourite", 6, 14 },
-        { TOKEN_EOF, "", 7, 1 },
+    const vector<Error> errors = {
+        { 3, 1, "Key \"name\" has already been defined." },
+        { 6, 1, "Key \"spelling\" has already been defined." },
     };
 
-    assert_lexed(toml, tokens);
+    assert_errors(toml, errors);
 }
 
 
-TEST(lex, extend_implicit_key)
+TEST(parse, extend_implicit_key)
 {
     const string toml =
         "# This makes the key \"fruit\" into a table.\n"
@@ -309,17 +374,18 @@ TEST(lex, extend_implicit_key)
         "fruit.orange = 2\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 2, 1 }, { TOKEN_KEY, "apple", 2, 7 }, { TOKEN_KEY, "smooth", 2, 13 }, { TOKEN_TRUE, "", 2, 22 },
-        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "orange", 5, 7 }, { TOKEN_DECIMAL, "2", 5, 16 },
-        { TOKEN_EOF, "", 6, 1 },
+    const Table result = {
+        { "fruit", new TableValue({
+                    { "apple", new TableValue({
+                                { "smooth", new BooleanValue(true) } }) },
+                    { "orange", new IntegerValue(2) } }) },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, key_redefinition)
+TEST(parse, key_redefinition)
 {
     const string toml =
         "# THE FOLLOWING IS INVALID\n"
@@ -332,17 +398,15 @@ TEST(lex, key_redefinition)
         "fruit.apple.smooth = true\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 4, 1 }, { TOKEN_KEY, "apple", 4, 7 }, { TOKEN_DECIMAL, "1", 4, 15 },
-        { TOKEN_KEY, "fruit", 8, 1 }, { TOKEN_KEY, "apple", 8, 7 }, { TOKEN_KEY, "smooth", 8, 13 }, { TOKEN_TRUE, "", 8, 22 },
-        { TOKEN_EOF, "", 9, 1 },
+    const vector<Error> errors = {
+        { 8, 7, "Key \"apple\" has already been defined." },
     };
 
-    assert_lexed(toml, tokens);
+    assert_errors(toml, errors);
 }
 
 
-TEST(lex, out_of_order_keys)
+TEST(parse, out_of_order_keys)
 {
     const string toml =
         "# VALID BUT DISCOURAGED\n"
@@ -357,36 +421,36 @@ TEST(lex, out_of_order_keys)
         "orange.color = \"orange\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "apple", 3, 1 }, { TOKEN_KEY, "type", 3, 7 }, { TOKEN_STRING, "fruit", 3, 14 },
-        { TOKEN_KEY, "orange", 4, 1 }, { TOKEN_KEY, "type", 4, 8 }, { TOKEN_STRING, "fruit", 4, 15 },
-        { TOKEN_KEY, "apple", 6, 1 }, { TOKEN_KEY, "skin", 6, 7 }, { TOKEN_STRING, "thin", 6, 14 },
-        { TOKEN_KEY, "orange", 7, 1 }, { TOKEN_KEY, "skin", 7, 8 }, { TOKEN_STRING, "thick", 7, 15 },
-        { TOKEN_KEY, "apple", 9, 1 }, { TOKEN_KEY, "color", 9, 7 }, { TOKEN_STRING, "red", 9, 15 },
-        { TOKEN_KEY, "orange", 10, 1 }, { TOKEN_KEY, "color", 10, 8 }, { TOKEN_STRING, "orange", 10, 16 },
-        { TOKEN_EOF, "", 11, 1 },
+    const Table result = {
+        { "apple", new TableValue({
+                { "type", new StringValue("fruit") },
+                { "skin", new StringValue("thin") },
+                { "color", new StringValue("red") } }) },
+        { "orange", new TableValue({
+                { "type", new StringValue("fruit") },
+                { "skin", new StringValue("thick") },
+                { "color", new StringValue("orange") } }) },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, basic_strings)
+TEST(parse, basic_strings)
 {
     const string toml =
         "str = \"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str", 1, 1 }, { TOKEN_STRING, "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.", 1, 7 },
-        { TOKEN_EOF, "", 2, 1 },
+    const Table result = {
+        { "str", new StringValue("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, multiline_basic_strings)
+TEST(parse, multiline_basic_strings)
 {
     const string toml =
         "str1 = \"\"\"\n"
@@ -394,16 +458,15 @@ TEST(lex, multiline_basic_strings)
         "Violets are blue\"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str1", 1, 1 }, { TOKEN_STRING, "Roses are red\nViolets are blue", 1, 8 },
-        { TOKEN_EOF, "", 4, 1 },
+    const Table result = {
+        { "str1", new StringValue("Roses are red\nViolets are blue") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, line_ending_backslash)
+TEST(parse, line_ending_backslash)
 {
     const string toml =
         "# The following strings are byte-for-byte equivalent:\n"
@@ -423,18 +486,17 @@ TEST(lex, line_ending_backslash)
         "       \"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str1", 2, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 2, 8 },
-        { TOKEN_KEY, "str2", 4, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 4, 8 },
-        { TOKEN_KEY, "str3", 11, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 11, 8 },
-        { TOKEN_EOF, "", 16, 1 },
+    const Table result = {
+        { "str1", new StringValue("The quick brown fox jumps over the lazy dog.") },
+        { "str2", new StringValue("The quick brown fox jumps over the lazy dog.") },
+        { "str3", new StringValue("The quick brown fox jumps over the lazy dog.") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, multiline_basic_string_escapes)
+TEST(parse, multiline_basic_string_escapes)
 {
     const string toml =
         "str4 = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"\n"
@@ -446,19 +508,18 @@ TEST(lex, multiline_basic_string_escapes)
         "str7 = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str4", 1, 1 }, { TOKEN_STRING, "Here are two quotation marks: \"\". Simple enough.", 1, 8 },
-        { TOKEN_KEY, "str5", 3, 1 }, { TOKEN_STRING, "Here are three quotation marks: \"\"\".", 3, 8 },
-        { TOKEN_KEY, "str6", 4, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".", 4, 8 },
-        { TOKEN_KEY, "str7", 7, 1 }, { TOKEN_STRING, "\"This,\" she said, \"is just a pointless statement.\"", 7, 8 },
-        { TOKEN_EOF, "", 8, 1 },
+    const Table result = {
+        { "str4", new StringValue("Here are two quotation marks: \"\". Simple enough.") },
+        { "str5", new StringValue("Here are three quotation marks: \"\"\".") },
+        { "str6", new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".") },
+        { "str7", new StringValue("\"This,\" she said, \"is just a pointless statement.\"") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, literal_strings)
+TEST(parse, literal_strings)
 {
     const string toml =
         "# What you see is what you get.\n"
@@ -468,19 +529,18 @@ TEST(lex, literal_strings)
         "regex    = '<\\i\\c*\\s*>'\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "winpath", 2, 1 }, { TOKEN_STRING, "C:\\Users\\nodejs\\templates", 2, 12 },
-        { TOKEN_KEY, "winpath2", 3, 1 }, { TOKEN_STRING, "\\\\ServerX\\admin$\\system32\\", 3, 12 },
-        { TOKEN_KEY, "quoted", 4, 1 }, { TOKEN_STRING, "Tom \"Dubs\" Preston-Werner", 4, 12 },
-        { TOKEN_KEY, "regex", 5, 1 }, { TOKEN_STRING, "<\\i\\c*\\s*>", 5, 12 },
-        { TOKEN_EOF, "", 6, 1 },
+    const Table result = {
+        { "winpath", new StringValue("C:\\Users\\nodejs\\templates") },
+        { "winpath2", new StringValue("\\\\ServerX\\admin$\\system32\\") },
+        { "quoted", new StringValue("Tom \"Dubs\" Preston-Werner") },
+        { "regex", new StringValue("<\\i\\c*\\s*>") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, multiline_literal_strings)
+TEST(parse, multiline_literal_strings)
 {
     const string toml =
         "regex2 = '''I [dw]on't need \\d{2} apples'''\n"
@@ -492,17 +552,16 @@ TEST(lex, multiline_literal_strings)
         "'''\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "regex2", 1, 1 }, { TOKEN_STRING, "I [dw]on't need \\d{2} apples", 1, 10 },
-        { TOKEN_KEY, "lines", 2, 1 }, { TOKEN_STRING, "The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n", 2, 10 },
-        { TOKEN_EOF, "", 8, 1 },
+    const Table result = {
+        { "regex2", new StringValue("I [dw]on't need \\d{2} apples") },
+        { "lines", new StringValue("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, mulitiline_literal_string_escapes)
+TEST(parse, mulitiline_literal_string_escapes)
 {
     const string toml =
         "quot15 = '''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''\n"
@@ -514,18 +573,18 @@ TEST(lex, mulitiline_literal_string_escapes)
         "str = ''''That,' she said, 'is still pointless.''''\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "quot15", 1, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"", 1, 10 },
-        { TOKEN_KEY, "apos15", 4, 1 }, { TOKEN_STRING, "Here are fifteen apostrophes: '''''''''''''''", 4, 10 },
-        { TOKEN_KEY, "str", 7, 1}, { TOKEN_STRING, "'That,' she said, 'is still pointless.'", 7, 7 },
-        { TOKEN_EOF, "", 8, 1 },
+    const Table result = {
+        { "quot15", new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"") },
+        { "apos15", new StringValue("Here are fifteen apostrophes: '''''''''''''''") },
+        { "str", new StringValue("'That,' she said, 'is still pointless.'") },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, integers)
+#if 0
+TEST(parse, integers)
 {
     const string toml =
         "int1 = +99\n"
@@ -550,7 +609,7 @@ TEST(lex, integers)
         "bin1 = 0b11010110\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "int1", 1, 1 }, { TOKEN_PLUS, "+", 1, 8 }, { TOKEN_DECIMAL, "99", 1, 9 },
         { TOKEN_KEY, "int2", 2, 1 }, { TOKEN_DECIMAL, "42", 2, 8 },
         { TOKEN_KEY, "int3", 3, 1 }, { TOKEN_DECIMAL, "0", 3, 8 },
@@ -565,14 +624,13 @@ TEST(lex, integers)
         { TOKEN_KEY, "oct1", 16, 1 }, { TOKEN_OCTAL, "01234567", 16, 8 },
         { TOKEN_KEY, "oct2", 17, 1 }, { TOKEN_OCTAL, "755", 17, 8 },
         { TOKEN_KEY, "bin1", 20, 1 }, { TOKEN_BINARY, "11010110", 20, 8 },
-        { TOKEN_EOF, "", 21, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, floats)
+TEST(parse, floats)
 {
     const string toml =
         "# fractional\n"
@@ -591,7 +649,7 @@ TEST(lex, floats)
         "flt8 = 224_617.445_991_228\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "flt1", 2, 1 }, { TOKEN_PLUS, "+", 2, 8 }, { TOKEN_DECIMAL, "1", 2, 9 }, { TOKEN_FRACTION, "0", 2, 11},
         { TOKEN_KEY, "flt2", 3, 1 }, { TOKEN_DECIMAL, "3", 3, 8 }, { TOKEN_FRACTION, "1415", 3, 10 },
         { TOKEN_KEY, "flt3", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "0", 4, 9 }, { TOKEN_FRACTION, "01", 4, 11 },
@@ -600,14 +658,13 @@ TEST(lex, floats)
         { TOKEN_KEY, "flt6", 9, 1 }, { TOKEN_MINUS, "-", 9, 8}, { TOKEN_DECIMAL, "2", 9, 9 }, { TOKEN_MINUS, "-", 9, 11}, { TOKEN_EXPONENT, "2", 9, 12 },
         { TOKEN_KEY, "flt7", 12, 1 }, { TOKEN_DECIMAL, "6", 12, 8 }, { TOKEN_FRACTION, "626", 12, 10 }, { TOKEN_MINUS, "-", 12, 14 }, { TOKEN_EXPONENT, "34", 12, 15 },
         { TOKEN_KEY, "flt8", 14, 1 }, { TOKEN_DECIMAL, "224617", 14, 8 }, { TOKEN_FRACTION, "445991228", 14, 16 },
-        { TOKEN_EOF, "", 15, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, invalid_floats)
+TEST(parse, invalid_floats)
 {
     const string toml =
         "# INVALID FLOATS\n"
@@ -626,7 +683,7 @@ TEST(lex, invalid_floats)
 }
 
 
-TEST(lex, infinity)
+TEST(parse, infinity)
 {
     const string toml =
         "# infinity\n"
@@ -635,18 +692,17 @@ TEST(lex, infinity)
         "sf3 = -inf # negative infinity\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "sf1", 2, 1 }, { TOKEN_INF, "", 2, 7 },
         { TOKEN_KEY, "sf2", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_INF, "", 3, 8 },
         { TOKEN_KEY, "sf3", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_INF, "", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, nan)
+TEST(parse, nan)
 {
     const string toml =
         "# not a number\n"
@@ -655,82 +711,77 @@ TEST(lex, nan)
         "sf6 = -nan # valid, actual encoding is implementation-specific\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "sf4", 2, 1 }, { TOKEN_NAN, "", 2, 7 },
         { TOKEN_KEY, "sf5", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_NAN, "", 3, 8 },
         { TOKEN_KEY, "sf6", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_NAN, "", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, booleans)
+TEST(parse, booleans)
 {
     const string toml =
         "bool1 = true\n"
         "bool2 = false\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "bool1", 1, 1}, { TOKEN_TRUE, "", 1, 9 },
         { TOKEN_KEY, "bool2", 2, 1}, { TOKEN_FALSE, "", 2, 9 },
-        { TOKEN_EOF, "", 3, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, local_times)
+TEST(parse, local_times)
 {
     const string toml =
         "lt1 = 07:32:00\n"
         "lt2 = 00:32:00.999999\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "lt1", 1, 1 }, { TOKEN_HOUR, "07", 1, 7 }, { TOKEN_MINUTE, "32", 1, 10 }, { TOKEN_SECOND, "00", 1, 13 },
         { TOKEN_KEY, "lt2", 2, 1 }, { TOKEN_HOUR, "00", 2, 7 }, { TOKEN_MINUTE, "32", 2, 10 }, { TOKEN_SECOND, "00", 2, 13 }, { TOKEN_FRACTION, "999999", 2, 16 },
-        { TOKEN_EOF, "", 3, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, local_dates)
+TEST(parse, local_dates)
 {
     const string toml = "ld1 = 1979-05-27";
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "ld1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 7 }, { TOKEN_MONTH, "05", 1, 12 }, { TOKEN_DAY, "27", 1, 15 },
-        { TOKEN_EOF, "", 1, 17 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, local_datetimes)
+TEST(parse, local_datetimes)
 {
     const string toml =
         "ldt1 = 1979-05-27T07:32:00\n"
         "ldt2 = 1979-05-27T00:32:00.999999\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "ldt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 },
         { TOKEN_KEY, "ldt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_FRACTION, "999999", 2, 28 },
-        { TOKEN_EOF, "", 3, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, offset_datetimes)
+TEST(parse, offset_datetimes)
 {
     const string toml =
         "odt1 = 1979-05-27T07:32:00Z\n"
@@ -739,19 +790,18 @@ TEST(lex, offset_datetimes)
         "odt4 = 1979-05-27 07:32:00Z\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "odt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 }, { TOKEN_PLUS, "+", 1, 27 }, { TOKEN_HOUR, "00", 1, 28 }, { TOKEN_MINUTE, "00", 1, 28 },
         { TOKEN_KEY, "odt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_MINUS, "-", 2, 27 }, { TOKEN_HOUR, "07", 2, 28 }, { TOKEN_MINUTE, "00", 2, 31 },
         { TOKEN_KEY, "odt3", 3, 1 }, { TOKEN_YEAR, "1979", 3, 8}, { TOKEN_MONTH, "05", 3, 13 }, { TOKEN_DAY, "27", 3, 16 }, { TOKEN_HOUR, "00", 3, 19}, { TOKEN_MINUTE, "32", 3, 22 }, { TOKEN_SECOND, "00", 3, 25 }, { TOKEN_FRACTION, "999999", 3, 28 }, { TOKEN_MINUS, "-", 3, 34 }, { TOKEN_HOUR, "07", 3, 35 }, { TOKEN_MINUTE, "00", 3, 38 },
         { TOKEN_KEY, "odt4", 4, 1 }, { TOKEN_YEAR, "1979", 4, 8}, { TOKEN_MONTH, "05", 4, 13 }, { TOKEN_DAY, "27", 4, 16 }, { TOKEN_HOUR, "07", 4, 19}, { TOKEN_MINUTE, "32", 4, 22 }, { TOKEN_SECOND, "00", 4, 25 }, { TOKEN_PLUS, "+", 4, 27 }, { TOKEN_HOUR, "00", 4, 28 }, { TOKEN_MINUTE, "00", 4, 28 },
-        { TOKEN_EOF, "", 5, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, arrays)
+TEST(parse, arrays)
 {
     const string toml =
         "integers = [ 1, 2, 3 ]\n"
@@ -768,7 +818,7 @@ TEST(lex, arrays)
         "]\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "integers", 1, 1 }, { TOKEN_LBRACKET, "", 1, 12 },
             { TOKEN_DECIMAL, "1", 1, 14 }, { TOKEN_COMMA, "", 1, 15 },
             { TOKEN_DECIMAL, "2", 1, 17 }, { TOKEN_COMMA, "", 1, 18 },
@@ -818,14 +868,13 @@ TEST(lex, arrays)
                 { TOKEN_KEY, "email", 11, 23 }, { TOKEN_STRING, "bazqux@example.com", 11, 31 }, { TOKEN_COMMA, "", 11, 51},
                 { TOKEN_KEY, "url", 11, 53 }, { TOKEN_STRING, "https://example.com/bazqux", 11, 59 }, { TOKEN_RBRACE, "", 11, 88},
             { TOKEN_RBRACKET, "", 12, 1 },
-        { TOKEN_EOF, "", 13, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, multiline_arrays)
+TEST(parse, multiline_arrays)
 {
     const string toml =
         "integers2 = [\n"
@@ -838,7 +887,7 @@ TEST(lex, multiline_arrays)
         "]\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "integers2", 1, 1 }, { TOKEN_LBRACKET, "", 1, 13 },
             { TOKEN_DECIMAL, "1", 2, 3 }, { TOKEN_COMMA, "", 2, 4 },
             { TOKEN_DECIMAL, "2", 2, 6 }, { TOKEN_COMMA, "", 2, 7 },
@@ -847,14 +896,13 @@ TEST(lex, multiline_arrays)
             { TOKEN_DECIMAL, "1", 6, 3 }, { TOKEN_COMMA, "", 6, 4 },
             { TOKEN_DECIMAL, "2", 7, 3 }, { TOKEN_COMMA, "", 7, 4 },
             { TOKEN_RBRACKET, "", 8, 1 },
-        { TOKEN_EOF, "", 9, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, inline_tables)
+TEST(parse, inline_tables)
 {
     const string toml =
         "name = { first = \"Tom\", last = \"Preston-Werner\" }\n"
@@ -862,7 +910,7 @@ TEST(lex, inline_tables)
         "animal = { type.name = \"pug\" }\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_KEY, "name", 1, 1 }, { TOKEN_LBRACE, "", 1, 8},
             { TOKEN_KEY, "first", 1, 10 }, { TOKEN_STRING, "Tom", 1, 18 }, { TOKEN_COMMA, "", 1, 23 },
             { TOKEN_KEY, "last", 1, 25 }, { TOKEN_STRING, "Preston-Werner", 1, 32 }, { TOKEN_RBRACE, "", 1, 49 },
@@ -872,14 +920,13 @@ TEST(lex, inline_tables)
         { TOKEN_KEY, "animal", 3, 1 }, { TOKEN_LBRACE, "", 3, 10},
             { TOKEN_KEY, "type", 3, 12 }, { TOKEN_KEY, "name", 3, 17 }, { TOKEN_STRING, "pug", 3, 24 },
             { TOKEN_RBRACE, "", 3, 30 },
-        { TOKEN_EOF, "", 4, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, tables)
+TEST(parse, tables)
 {
     const string toml =
         "[table]\n"
@@ -896,7 +943,7 @@ TEST(lex, tables)
         "type.name = \"pug\"\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "table", 1, 2 }, { TOKEN_RBRACKET, "", 1, 7 },
         { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "table-1", 3, 2 }, { TOKEN_RBRACKET, "", 3, 9 },
         { TOKEN_KEY, "key1", 4, 1 }, { TOKEN_STRING, "some string", 4, 8 },
@@ -906,14 +953,13 @@ TEST(lex, tables)
         { TOKEN_KEY, "key2", 9, 1 }, { TOKEN_DECIMAL, "456", 9, 8 },
         { TOKEN_LBRACKET, "", 11, 1 }, { TOKEN_KEY, "dog", 11, 2 }, { TOKEN_KEY, "tater.man", 11, 6 }, { TOKEN_RBRACKET, "", 11, 17 },
         { TOKEN_KEY, "type", 12, 1 }, {TOKEN_KEY, "name", 12, 6 }, { TOKEN_STRING, "pug", 12, 13 },
-        { TOKEN_EOF, "", 13, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, spaces_in_table_headers)
+TEST(parse, spaces_in_table_headers)
 {
     const string toml =
         "[a.b.c]            # this is best practice\n"
@@ -922,19 +968,18 @@ TEST(lex, spaces_in_table_headers)
         "[ j . \"ʞ\" . 'l' ]  # same as [j.\"ʞ\".'l']\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "a", 1, 2 }, { TOKEN_KEY, "b", 1, 4 }, { TOKEN_KEY, "c", 1, 6 }, { TOKEN_RBRACKET, "", 1, 7 },
         { TOKEN_LBRACKET, "", 2, 1 }, { TOKEN_KEY, "d", 2, 3 }, { TOKEN_KEY, "e", 2, 5 }, { TOKEN_KEY, "f", 2, 7 }, { TOKEN_RBRACKET, "", 2, 9 },
         { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "g", 3, 3 }, { TOKEN_KEY, "h", 3, 8 }, { TOKEN_KEY, "i", 3, 13 }, { TOKEN_RBRACKET, "", 3, 15 },
         { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "j", 4, 3 }, { TOKEN_KEY, "ʞ", 4, 7 }, { TOKEN_KEY, "l", 4, 13 }, { TOKEN_RBRACKET, "", 4, 17 },
-        { TOKEN_EOF, "", 5, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, implicit_super_tables)
+TEST(parse, implicit_super_tables)
 {
     const string toml =
         "# [x] you\n"
@@ -945,17 +990,16 @@ TEST(lex, implicit_super_tables)
         "[x] # defining a super-table afterward is ok\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "x", 4, 2 }, { TOKEN_KEY, "y", 4, 4 }, { TOKEN_KEY, "z", 4, 6 }, { TOKEN_KEY, "w", 4, 8 }, { TOKEN_RBRACKET, "", 4, 9 },
         { TOKEN_LBRACKET, "", 6, 1 }, { TOKEN_KEY, "x", 6, 2 }, { TOKEN_RBRACKET, "", 6, 3 },
-        { TOKEN_EOF, "", 7, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
 
 
-TEST(lex, table_arrays)
+TEST(parse, table_arrays)
 {
     const string toml =
         "[[products]]\n"
@@ -971,7 +1015,7 @@ TEST(lex, table_arrays)
         "color = \"gray\"\n"
         ;
 
-    const vector<Token> tokens = {
+    const Table result = {
         { TOKEN_DOUBLE_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "products", 1, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 1, 11 },
         { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Hammer", 2, 8 },
         { TOKEN_KEY, "sku", 3, 1 }, { TOKEN_DECIMAL, "738594937", 3, 7 },
@@ -980,8 +1024,8 @@ TEST(lex, table_arrays)
         { TOKEN_KEY, "name", 8, 1 }, { TOKEN_STRING, "Nail", 8, 8 },
         { TOKEN_KEY, "sku", 9, 1 }, { TOKEN_DECIMAL, "284758393", 9, 7 },
         { TOKEN_KEY, "color", 11, 1 }, { TOKEN_STRING, "gray", 11, 9 },
-        { TOKEN_EOF, "", 12, 1 },
     };
 
-    assert_lexed(toml, tokens);
+    assert_parsed(toml, result);
 }
+#endif

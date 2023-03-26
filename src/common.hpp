@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <climits>
+#include <string>
 
 
 static_assert(CHAR_BIT == 8, "Expected byte be 8 bits.");
@@ -37,6 +38,9 @@ static_assert(sizeof(u8) == 1, "Expected u8 to be 1 byte.");
 static_assert(sizeof(u16) == 2, "Expected u16 to be 2 bytes.");
 static_assert(sizeof(u32) == 4, "Expected u32 to be 4 bytes.");
 static_assert(sizeof(u64) == 8, "Expected u64 to be 8 bytes.");
+
+
+#define string_to_u64 std::stoll
 
 
 #endif // toml_common_hpp

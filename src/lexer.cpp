@@ -1816,6 +1816,9 @@ lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
         }
     }
 
+    advance(iterator);
+    add_token(iterator, TOKEN_EOF);
+
     return errors.size() == 0;
 }
 
