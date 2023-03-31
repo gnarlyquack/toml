@@ -7,153 +7,11 @@
 
 #include <gtest/gtest.h>
 
-#include "parser.hpp"
-
 #include "test_common.hpp"
 
 
 using namespace std;
 using namespace toml;
-
-
-namespace toml
-{
-
-
-inline bool
-operator==(const Table &left, const Table &right);
-
-
-inline bool
-operator==(const Value &left, const Value &right)
-{
-    bool result = false;
-    if (left.type == right.type)
-    {
-        switch (left.type)
-        {
-            case TYPE_BOOL:
-            {
-                result = static_cast<const BooleanValue &>(left).value
-                    == static_cast<const BooleanValue &>(right).value;
-            } break;
-
-            case TYPE_INTEGER:
-            {
-                result = static_cast<const IntegerValue &>(left).value
-                    == static_cast<const IntegerValue &>(right).value;
-            } break;
-
-            case TYPE_STRING:
-            {
-                result = static_cast<const StringValue &>(left).value
-                    == static_cast<const StringValue &>(right).value;
-            } break;
-
-            case TYPE_TABLE:
-            {
-                result = static_cast<const TableValue &>(left).value
-                    == static_cast<const TableValue &>(right).value;
-            } break;
-
-            case TYPE_INVALID:
-            {
-                assert(false);
-            } break;
-        }
-    }
-    return result;
-}
-
-
-inline bool
-operator==(const Table &left, const Table &right)
-{
-    bool result = left.size() == right.size();
-    if (result)
-    {
-        for (auto i : left)
-        {
-            result = (right.find(i.first) != right.end())
-                && (*i.second == *right.at(i.first));
-            if (!result)
-            {
-                break;
-            }
-        }
-    }
-
-    return result;
-}
-
-
-inline ostream &
-operator<<(ostream &os, const Table &value);
-
-
-inline ostream &
-operator<<(ostream &os, const Value &value)
-{
-    switch (value.type)
-    {
-        case TYPE_BOOL:
-        {
-            os << "Boolean(" << boolalpha << static_cast<const BooleanValue &>(value).value << ')';
-        } break;
-
-        case TYPE_INTEGER:
-        {
-            os << "Integer(" << static_cast<const IntegerValue &>(value).value << ')';
-        } break;
-
-        case TYPE_STRING:
-        {
-            os << "String(" << static_cast<const StringValue &>(value).value << ')';
-        } break;
-
-        case TYPE_TABLE:
-        {
-            os << "Table(" << static_cast<const TableValue &>(value).value << ')';
-        } break;
-
-        case TYPE_INVALID:
-        {
-            assert(false);
-        } break;
-    }
-
-    os << ")";
-    return os;
-}
-
-
-inline ostream &
-operator<<(ostream &os, const Value *value)
-{
-    os << *value;
-    return os;
-}
-
-
-inline ostream &
-operator<<(ostream &os, const Table &value)
-{
-    os << "{ ";
-    uint64_t count = 0;
-    for (auto i : value)
-    {
-        if (count++)
-        {
-            os << ", ";
-        }
-        os << "(\"" << i.first << "\", " << *i.second << ')';
-    }
-    os << " }";
-    return os;
-}
-
-
-} // namespace toml
 
 
 namespace
@@ -583,7 +441,6 @@ TEST(parse, mulitiline_literal_string_escapes)
 }
 
 
-#if 0
 TEST(parse, integers)
 {
     const string toml =
@@ -610,20 +467,23 @@ TEST(parse, integers)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "int1", 1, 1 }, { TOKEN_PLUS, "+", 1, 8 }, { TOKEN_DECIMAL, "99", 1, 9 },
-        { TOKEN_KEY, "int2", 2, 1 }, { TOKEN_DECIMAL, "42", 2, 8 },
-        { TOKEN_KEY, "int3", 3, 1 }, { TOKEN_DECIMAL, "0", 3, 8 },
-        { TOKEN_KEY, "int4", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "17", 4, 9 },
-        { TOKEN_KEY, "int5", 5, 1 }, { TOKEN_DECIMAL, "1000", 5, 8 },
-        { TOKEN_KEY, "int6", 6, 1 }, { TOKEN_DECIMAL, "5349221", 6, 8 },
-        { TOKEN_KEY, "int7", 7, 1 }, { TOKEN_DECIMAL, "5349221", 7, 8 },
-        { TOKEN_KEY, "int8", 8, 1 }, { TOKEN_DECIMAL, "12345", 8, 8 },
-        { TOKEN_KEY, "hex1", 11, 1 }, { TOKEN_HEXADECIMAL, "DEADBEEF", 11, 8 },
-        { TOKEN_KEY, "hex2", 12, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 12, 8 },
-        { TOKEN_KEY, "hex3", 13, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 13, 8 },
-        { TOKEN_KEY, "oct1", 16, 1 }, { TOKEN_OCTAL, "01234567", 16, 8 },
-        { TOKEN_KEY, "oct2", 17, 1 }, { TOKEN_OCTAL, "755", 17, 8 },
-        { TOKEN_KEY, "bin1", 20, 1 }, { TOKEN_BINARY, "11010110", 20, 8 },
+        { "int1", new IntegerValue(99) },
+        { "int2", new IntegerValue(42) },
+        { "int3", new IntegerValue(0) },
+        { "int4", new IntegerValue(-17) },
+        { "int5", new IntegerValue(1000) },
+        { "int6", new IntegerValue(5349221) },
+        { "int7", new IntegerValue(5349221) },
+        { "int8", new IntegerValue(12345) },
+
+        { "hex1", new IntegerValue(0xDEADBEEF) },
+        { "hex2", new IntegerValue(0xdeadbeef) },
+        { "hex3", new IntegerValue(0xdeadbeef) },
+
+        { "oct1", new IntegerValue(01234567) },
+        { "oct2", new IntegerValue(0755) },
+
+        { "bin1", new IntegerValue(214) },
     };
 
     assert_parsed(toml, result);
@@ -650,14 +510,14 @@ TEST(parse, floats)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "flt1", 2, 1 }, { TOKEN_PLUS, "+", 2, 8 }, { TOKEN_DECIMAL, "1", 2, 9 }, { TOKEN_FRACTION, "0", 2, 11},
-        { TOKEN_KEY, "flt2", 3, 1 }, { TOKEN_DECIMAL, "3", 3, 8 }, { TOKEN_FRACTION, "1415", 3, 10 },
-        { TOKEN_KEY, "flt3", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "0", 4, 9 }, { TOKEN_FRACTION, "01", 4, 11 },
-        { TOKEN_KEY, "flt4", 7, 1 }, { TOKEN_DECIMAL, "5", 7, 8 }, { TOKEN_PLUS, "+", 7, 10 }, { TOKEN_EXPONENT, "22", 7, 11 },
-        { TOKEN_KEY, "flt5", 8, 1 }, { TOKEN_DECIMAL, "1", 8, 8 }, { TOKEN_EXPONENT, "06", 8, 10 },
-        { TOKEN_KEY, "flt6", 9, 1 }, { TOKEN_MINUS, "-", 9, 8}, { TOKEN_DECIMAL, "2", 9, 9 }, { TOKEN_MINUS, "-", 9, 11}, { TOKEN_EXPONENT, "2", 9, 12 },
-        { TOKEN_KEY, "flt7", 12, 1 }, { TOKEN_DECIMAL, "6", 12, 8 }, { TOKEN_FRACTION, "626", 12, 10 }, { TOKEN_MINUS, "-", 12, 14 }, { TOKEN_EXPONENT, "34", 12, 15 },
-        { TOKEN_KEY, "flt8", 14, 1 }, { TOKEN_DECIMAL, "224617", 14, 8 }, { TOKEN_FRACTION, "445991228", 14, 16 },
+        { "flt1", new FloatValue(1) },
+        { "flt2", new FloatValue(3.1415) },
+        { "flt3", new FloatValue(-0.01) },
+        { "flt4", new FloatValue(5e+22) },
+        { "flt5", new FloatValue(1e06) },
+        { "flt6", new FloatValue(-2e-2) },
+        { "flt7", new FloatValue(6.626e-34) },
+        { "flt8", new FloatValue(224617.445991228) },
     };
 
     assert_parsed(toml, result);
@@ -693,9 +553,9 @@ TEST(parse, infinity)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "sf1", 2, 1 }, { TOKEN_INF, "", 2, 7 },
-        { TOKEN_KEY, "sf2", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_INF, "", 3, 8 },
-        { TOKEN_KEY, "sf3", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_INF, "", 4, 8 },
+        { "sf1", new FloatValue(INF64) },
+        { "sf2", new FloatValue(+INF64) },
+        { "sf3", new FloatValue(-INF64) },
     };
 
     assert_parsed(toml, result);
@@ -712,9 +572,9 @@ TEST(parse, nan)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "sf4", 2, 1 }, { TOKEN_NAN, "", 2, 7 },
-        { TOKEN_KEY, "sf5", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_NAN, "", 3, 8 },
-        { TOKEN_KEY, "sf6", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_NAN, "", 4, 8 },
+        { "sf4", new FloatValue(NAN64) },
+        { "sf5", new FloatValue(+NAN64) },
+        { "sf6", new FloatValue(-NAN64) },
     };
 
     assert_parsed(toml, result);
@@ -729,14 +589,15 @@ TEST(parse, booleans)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "bool1", 1, 1}, { TOKEN_TRUE, "", 1, 9 },
-        { TOKEN_KEY, "bool2", 2, 1}, { TOKEN_FALSE, "", 2, 9 },
+        { "bool1", new BooleanValue(true) },
+        { "bool2", new BooleanValue(false) },
     };
 
     assert_parsed(toml, result);
 }
 
 
+#if 0
 TEST(parse, local_times)
 {
     const string toml =

@@ -5,8 +5,6 @@
 
 #include <gtest/gtest.h>
 
-#include "lexer.hpp"
-
 #include "test_common.hpp"
 
 
@@ -14,83 +12,12 @@ using namespace std;
 using namespace toml;
 
 
-namespace toml
-{
-
-
-constexpr const char *TOKEN_NAMES[] = {
-    "ERROR",
-    "BINARY",
-    "COMMA",
-    "DAY",
-    "DECIMAL",
-    "DOUBLE LBRACKET",
-    "DOUBLE RBRACKET",
-    "EOF",
-    "EXPONENT",
-    "FALSE",
-    "FRACTION",
-    "INFINITY",
-    "KEY",
-    "HEXADECIMAL",
-    "HOUR",
-    "LBRACE",
-    "LBRACKET",
-    "MINUS",
-    "MINUTE",
-    "MONTH",
-    "NAN",
-    "NEWLINE",
-    "OCTAL",
-    "PLUS",
-    "RBRACE",
-    "RBRACKET",
-    "SECOND",
-    "STRING",
-    "TRUE",
-    "YEAR",
-};
-
-
-inline bool
-operator==(const Token &left, const Token &right)
-{
-    bool result =
-        (left.type == right.type)
-        && (left.line == right.line)
-        && (left.column == right.column)
-        && (left.lexeme == right.lexeme);
-    return result;
-}
-
-
-inline std::ostream& operator<<(std::ostream &os, const Token &token)
-{
-    os << "Token("
-        << TOKEN_NAMES[token.type] << ", \""
-        << token.lexeme << "\", "
-        << token.line << ", "
-        << token.column  << ")";
-    return os;
-}
-
-
-inline std::ostream& operator<<(std::ostream &os, const Error &error)
-{
-    os << "Error(" << error.line << ", " << error.column << ", \"" << error.message << "\")";
-    return os;
-}
-
-
-} // namespace toml
-
-
 namespace
 {
 
 
 void
-assert_lexed(const string &toml, const vector<Token> &expected)
+assert_lexed(const string &toml, vector<Token> &expected)
 {
     vector<Token> actual;
     vector<Error> errors;
@@ -99,6 +26,15 @@ assert_lexed(const string &toml, const vector<Token> &expected)
     EXPECT_TRUE(result);
     EXPECT_EQ(actual, expected);
     EXPECT_EQ(errors, vector<Error>{});
+
+    for (Token &token : expected)
+    {
+        delete token.value;
+    }
+    for (Token &token : actual)
+    {
+        delete token.value;
+    }
 }
 
 
@@ -111,11 +47,15 @@ assert_errors(const string &toml, const vector<Error> &expected)
 
     ASSERT_FALSE(result);
     ASSERT_EQ(actual, expected);
+
+    for (Token &token : tokens)
+    {
+        delete token.value;
+    }
 }
 
 
 } // namespace
-
 
 
 TEST(lex, comments)
@@ -126,10 +66,12 @@ TEST(lex, comments)
         "another = \"# This is not a comment\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 2, 1 }, { TOKEN_STRING, "value", 2, 7 },
-        { TOKEN_KEY, "another", 3, 1 }, { TOKEN_STRING, "# This is not a comment", 3, 11 } ,
-        { TOKEN_EOF, "", 4, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "key", 2, 1 },
+        { TOKEN_VALUE, new StringValue("value"), "\"value\"", 2, 7 },
+        { TOKEN_KEY, nullptr, "another", 3, 1 },
+        { TOKEN_VALUE, new StringValue("# This is not a comment"), "\"# This is not a comment\"", 3, 11 } ,
+        { TOKEN_EOF, nullptr, "", 4, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -140,9 +82,9 @@ TEST(lex, keyvals)
 {
     const string toml = "key = \"value\"";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
-        { TOKEN_EOF, "", 1, 14 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "key", 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 1, 7 },
+        { TOKEN_EOF, nullptr, "", 1, 14 },
     };
 
     assert_lexed(toml, tokens);
@@ -174,12 +116,12 @@ TEST(lex, bare_keys)
         "1234 = \"value\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "key", 1, 1 }, { TOKEN_STRING, "value", 1, 7 },
-        { TOKEN_KEY, "bare_key", 2, 1 }, { TOKEN_STRING, "value", 2, 12 },
-        { TOKEN_KEY, "bare-key", 3, 1 }, { TOKEN_STRING, "value", 3, 12 },
-        { TOKEN_KEY, "1234", 4, 1 }, { TOKEN_STRING, "value", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "key", 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 1, 7 },
+        { TOKEN_KEY, nullptr, "bare_key", 2, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 2, 12 },
+        { TOKEN_KEY, nullptr, "bare-key", 3, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 3, 12 },
+        { TOKEN_KEY, nullptr, "1234", 4, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 4, 8 },
+        { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -196,13 +138,13 @@ TEST(lex, quoted_keys)
         "'quoted \"value\"' = \"value\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "127.0.0.1", 1, 1 }, { TOKEN_STRING, "value", 1, 15 },
-        { TOKEN_KEY, "character encoding", 2, 1 }, { TOKEN_STRING, "value", 2, 24 },
-        { TOKEN_KEY, "ʎǝʞ", 3, 1 }, { TOKEN_STRING, "value", 3, 9 },
-        { TOKEN_KEY, "key2", 4, 1 }, { TOKEN_STRING, "value", 4, 10 },
-        { TOKEN_KEY, "quoted \"value\"", 5, 1 }, { TOKEN_STRING, "value", 5, 20 },
-        { TOKEN_EOF, "", 6, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "127.0.0.1", 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 1, 15 },
+        { TOKEN_KEY, nullptr, "character encoding", 2, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 2, 24 },
+        { TOKEN_KEY, nullptr, "ʎǝʞ", 3, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 3, 9 },
+        { TOKEN_KEY, nullptr, "key2", 4, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 4, 10 },
+        { TOKEN_KEY, nullptr, "quoted \"value\"", 5, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 5, 20 },
+        { TOKEN_EOF, nullptr, "", 6, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -225,9 +167,9 @@ TEST(lex, empty_string_key)
 {
     const string toml = "\"\" = \"blank\"     # VALID but discouraged";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "", 1, 1 }, { TOKEN_STRING, "blank", 1, 6 },
-        { TOKEN_EOF, "", 1, 41 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "", 1, 1 }, { TOKEN_VALUE, new StringValue("blank"), "\"blank\"", 1, 6 },
+        { TOKEN_EOF, nullptr, "", 1, 41 },
     };
 
     assert_lexed(toml, tokens);
@@ -238,9 +180,9 @@ TEST(lex, empty_literal_key)
 {
     const string toml = "'' = 'blank'     # VALID but discouraged";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "", 1, 1 }, { TOKEN_STRING, "blank", 1, 6 },
-        { TOKEN_EOF, "", 1, 41 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "", 1, 1 }, { TOKEN_VALUE, new StringValue("blank"), "'blank'", 1, 6 },
+        { TOKEN_EOF, nullptr, "", 1, 41 },
     };
 
     assert_lexed(toml, tokens);
@@ -260,16 +202,16 @@ TEST(lex, dotted_keys)
         "3.14159 = \"pi\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "name", 1, 1 }, { TOKEN_STRING, "Orange", 1, 8 },
-        { TOKEN_KEY, "physical", 2, 1 }, { TOKEN_KEY, "color", 2, 10 }, { TOKEN_STRING, "orange", 2, 18 },
-        { TOKEN_KEY, "physical", 3, 1 }, { TOKEN_KEY, "shape", 3, 10 }, { TOKEN_STRING, "round", 3, 18 },
-        { TOKEN_KEY, "site", 4, 1 }, { TOKEN_KEY, "google.com", 4, 6 }, { TOKEN_TRUE, "", 4, 21 },
-        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "name", 5, 7 }, { TOKEN_STRING, "banana", 5, 14 },
-        { TOKEN_KEY, "fruit", 6, 1 }, { TOKEN_KEY, "color", 6, 8 }, { TOKEN_STRING, "yellow", 6, 16 },
-        { TOKEN_KEY, "fruit", 7, 1 }, { TOKEN_KEY, "flavor", 7, 9 }, { TOKEN_STRING, "banana", 7, 18 },
-        { TOKEN_KEY, "3", 8, 1 }, { TOKEN_KEY, "14159", 8, 3 }, { TOKEN_STRING, "pi", 8, 11 },
-        { TOKEN_EOF, "", 9, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "name", 1, 1 }, { TOKEN_VALUE, new StringValue("Orange"), "\"Orange\"", 1, 8 },
+        { TOKEN_KEY, nullptr, "physical", 2, 1 }, { TOKEN_KEY, nullptr, "color", 2, 10 }, { TOKEN_VALUE, new StringValue("orange"), "\"orange\"", 2, 18 },
+        { TOKEN_KEY, nullptr, "physical", 3, 1 }, { TOKEN_KEY, nullptr, "shape", 3, 10 }, { TOKEN_VALUE, new StringValue("round"), "\"round\"", 3, 18 },
+        { TOKEN_KEY, nullptr, "site", 4, 1 }, { TOKEN_KEY, nullptr, "google.com", 4, 6 }, { TOKEN_VALUE, new BooleanValue(true), "true", 4, 21 },
+        { TOKEN_KEY, nullptr, "fruit", 5, 1 }, { TOKEN_KEY, nullptr, "name", 5, 7 }, { TOKEN_VALUE, new StringValue("banana"), "\"banana\"", 5, 14 },
+        { TOKEN_KEY, nullptr, "fruit", 6, 1 }, { TOKEN_KEY, nullptr, "color", 6, 8 }, { TOKEN_VALUE, new StringValue("yellow"), "\"yellow\"", 6, 16 },
+        { TOKEN_KEY, nullptr, "fruit", 7, 1 }, { TOKEN_KEY, nullptr, "flavor", 7, 9 }, { TOKEN_VALUE, new StringValue("banana"), "\"banana\"", 7, 18 },
+        { TOKEN_KEY, nullptr, "3", 8, 1 }, { TOKEN_KEY, nullptr, "14159", 8, 3 }, { TOKEN_VALUE, new StringValue("pi"), "\"pi\"", 8, 11 },
+        { TOKEN_EOF, nullptr, "", 9, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -287,12 +229,12 @@ TEST(lex, multiple_keys)
         "\"spelling\" = \"favourite\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Tom", 2, 8 },
-        { TOKEN_KEY, "name", 3, 1 }, { TOKEN_STRING, "Pradyun", 3, 8 },
-        { TOKEN_KEY, "spelling", 5, 1 }, { TOKEN_STRING, "favorite", 5, 12 },
-        { TOKEN_KEY, "spelling", 6, 1 }, { TOKEN_STRING, "favourite", 6, 14 },
-        { TOKEN_EOF, "", 7, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "name", 2, 1 }, { TOKEN_VALUE, new StringValue("Tom"), "\"Tom\"", 2, 8 },
+        { TOKEN_KEY, nullptr, "name", 3, 1 }, { TOKEN_VALUE, new StringValue("Pradyun"), "\"Pradyun\"", 3, 8 },
+        { TOKEN_KEY, nullptr, "spelling", 5, 1 }, { TOKEN_VALUE, new StringValue("favorite"), "\"favorite\"", 5, 12 },
+        { TOKEN_KEY, nullptr, "spelling", 6, 1 }, { TOKEN_VALUE, new StringValue("favourite"), "\"favourite\"", 6, 14 },
+        { TOKEN_EOF, nullptr, "", 7, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -309,10 +251,10 @@ TEST(lex, extend_implicit_key)
         "fruit.orange = 2\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 2, 1 }, { TOKEN_KEY, "apple", 2, 7 }, { TOKEN_KEY, "smooth", 2, 13 }, { TOKEN_TRUE, "", 2, 22 },
-        { TOKEN_KEY, "fruit", 5, 1 }, { TOKEN_KEY, "orange", 5, 7 }, { TOKEN_DECIMAL, "2", 5, 16 },
-        { TOKEN_EOF, "", 6, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "fruit", 2, 1 }, { TOKEN_KEY, nullptr, "apple", 2, 7 }, { TOKEN_KEY, nullptr, "smooth", 2, 13 }, { TOKEN_VALUE, new BooleanValue(true), "true", 2, 22 },
+        { TOKEN_KEY, nullptr, "fruit", 5, 1 }, { TOKEN_KEY, nullptr, "orange", 5, 7 }, { TOKEN_VALUE, new IntegerValue(2), "2", 5, 16 },
+        { TOKEN_EOF, nullptr, "", 6, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -332,10 +274,10 @@ TEST(lex, key_redefinition)
         "fruit.apple.smooth = true\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "fruit", 4, 1 }, { TOKEN_KEY, "apple", 4, 7 }, { TOKEN_DECIMAL, "1", 4, 15 },
-        { TOKEN_KEY, "fruit", 8, 1 }, { TOKEN_KEY, "apple", 8, 7 }, { TOKEN_KEY, "smooth", 8, 13 }, { TOKEN_TRUE, "", 8, 22 },
-        { TOKEN_EOF, "", 9, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "fruit", 4, 1 }, { TOKEN_KEY, nullptr, "apple", 4, 7 }, { TOKEN_VALUE, new IntegerValue(1), "1", 4, 15 },
+        { TOKEN_KEY, nullptr, "fruit", 8, 1 }, { TOKEN_KEY, nullptr, "apple", 8, 7 }, { TOKEN_KEY, nullptr, "smooth", 8, 13 }, { TOKEN_VALUE, new BooleanValue(true), "true", 8, 22 },
+        { TOKEN_EOF, nullptr, "", 9, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -357,14 +299,14 @@ TEST(lex, out_of_order_keys)
         "orange.color = \"orange\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "apple", 3, 1 }, { TOKEN_KEY, "type", 3, 7 }, { TOKEN_STRING, "fruit", 3, 14 },
-        { TOKEN_KEY, "orange", 4, 1 }, { TOKEN_KEY, "type", 4, 8 }, { TOKEN_STRING, "fruit", 4, 15 },
-        { TOKEN_KEY, "apple", 6, 1 }, { TOKEN_KEY, "skin", 6, 7 }, { TOKEN_STRING, "thin", 6, 14 },
-        { TOKEN_KEY, "orange", 7, 1 }, { TOKEN_KEY, "skin", 7, 8 }, { TOKEN_STRING, "thick", 7, 15 },
-        { TOKEN_KEY, "apple", 9, 1 }, { TOKEN_KEY, "color", 9, 7 }, { TOKEN_STRING, "red", 9, 15 },
-        { TOKEN_KEY, "orange", 10, 1 }, { TOKEN_KEY, "color", 10, 8 }, { TOKEN_STRING, "orange", 10, 16 },
-        { TOKEN_EOF, "", 11, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "apple", 3, 1 }, { TOKEN_KEY, nullptr, "type", 3, 7 }, { TOKEN_VALUE, new StringValue("fruit"), "\"fruit\"", 3, 14 },
+        { TOKEN_KEY, nullptr, "orange", 4, 1 }, { TOKEN_KEY, nullptr, "type", 4, 8 }, { TOKEN_VALUE, new StringValue("fruit"), "\"fruit\"", 4, 15 },
+        { TOKEN_KEY, nullptr, "apple", 6, 1 }, { TOKEN_KEY, nullptr, "skin", 6, 7 }, { TOKEN_VALUE, new StringValue("thin"), "\"thin\"", 6, 14 },
+        { TOKEN_KEY, nullptr, "orange", 7, 1 }, { TOKEN_KEY, nullptr, "skin", 7, 8 }, { TOKEN_VALUE, new StringValue("thick"), "\"thick\"", 7, 15 },
+        { TOKEN_KEY, nullptr, "apple", 9, 1 }, { TOKEN_KEY, nullptr, "color", 9, 7 }, { TOKEN_VALUE, new StringValue("red"), "\"red\"", 9, 15 },
+        { TOKEN_KEY, nullptr, "orange", 10, 1 }, { TOKEN_KEY, nullptr, "color", 10, 8 }, { TOKEN_VALUE, new StringValue("orange"), "\"orange\"", 10, 16 },
+        { TOKEN_EOF, nullptr, "", 11, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -377,9 +319,9 @@ TEST(lex, basic_strings)
         "str = \"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str", 1, 1 }, { TOKEN_STRING, "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.", 1, 7 },
-        { TOKEN_EOF, "", 2, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "str", 1, 1 }, { TOKEN_VALUE, new StringValue("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF."), "\"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"", 1, 7 },
+        { TOKEN_EOF, nullptr, "", 2, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -394,9 +336,9 @@ TEST(lex, multiline_basic_strings)
         "Violets are blue\"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str1", 1, 1 }, { TOKEN_STRING, "Roses are red\nViolets are blue", 1, 8 },
-        { TOKEN_EOF, "", 4, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "str1", 1, 1 }, { TOKEN_VALUE, new StringValue("Roses are red\nViolets are blue"), "\"\"\"\nRoses are red\nViolets are blue\"\"\"", 1, 8 },
+        { TOKEN_EOF, nullptr, "", 4, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -423,11 +365,11 @@ TEST(lex, line_ending_backslash)
         "       \"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str1", 2, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 2, 8 },
-        { TOKEN_KEY, "str2", 4, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 4, 8 },
-        { TOKEN_KEY, "str3", 11, 1 }, { TOKEN_STRING, "The quick brown fox jumps over the lazy dog.", 11, 8 },
-        { TOKEN_EOF, "", 16, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "str1", 2, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"The quick brown fox jumps over the lazy dog.\"", 2, 8 },
+        { TOKEN_KEY, nullptr, "str2", 4, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"\"\"\nThe quick brown \\\n\n\n  fox jumps over \\\n    the lazy dog.\"\"\"", 4, 8 },
+        { TOKEN_KEY, nullptr, "str3", 11, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"\"\"\\\n       The quick brown \\\n       fox jumps over \\\n       the lazy dog.\\\n       \"\"\"", 11, 8 },
+        { TOKEN_EOF, nullptr, "", 16, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -446,12 +388,12 @@ TEST(lex, multiline_basic_string_escapes)
         "str7 = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "str4", 1, 1 }, { TOKEN_STRING, "Here are two quotation marks: \"\". Simple enough.", 1, 8 },
-        { TOKEN_KEY, "str5", 3, 1 }, { TOKEN_STRING, "Here are three quotation marks: \"\"\".", 3, 8 },
-        { TOKEN_KEY, "str6", 4, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".", 4, 8 },
-        { TOKEN_KEY, "str7", 7, 1 }, { TOKEN_STRING, "\"This,\" she said, \"is just a pointless statement.\"", 7, 8 },
-        { TOKEN_EOF, "", 8, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "str4", 1, 1 }, { TOKEN_VALUE, new StringValue("Here are two quotation marks: \"\". Simple enough."), "\"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"", 1, 8 },
+        { TOKEN_KEY, nullptr, "str5", 3, 1 }, { TOKEN_VALUE, new StringValue("Here are three quotation marks: \"\"\"."), "\"\"\"Here are three quotation marks: \"\"\\\".\"\"\"", 3, 8 },
+        { TOKEN_KEY, nullptr, "str6", 4, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"."), "\"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"", 4, 8 },
+        { TOKEN_KEY, nullptr, "str7", 7, 1 }, { TOKEN_VALUE, new StringValue("\"This,\" she said, \"is just a pointless statement.\""), "\"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"", 7, 8 },
+        { TOKEN_EOF, nullptr, "", 8, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -468,12 +410,12 @@ TEST(lex, literal_strings)
         "regex    = '<\\i\\c*\\s*>'\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "winpath", 2, 1 }, { TOKEN_STRING, "C:\\Users\\nodejs\\templates", 2, 12 },
-        { TOKEN_KEY, "winpath2", 3, 1 }, { TOKEN_STRING, "\\\\ServerX\\admin$\\system32\\", 3, 12 },
-        { TOKEN_KEY, "quoted", 4, 1 }, { TOKEN_STRING, "Tom \"Dubs\" Preston-Werner", 4, 12 },
-        { TOKEN_KEY, "regex", 5, 1 }, { TOKEN_STRING, "<\\i\\c*\\s*>", 5, 12 },
-        { TOKEN_EOF, "", 6, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "winpath", 2, 1 }, { TOKEN_VALUE, new StringValue("C:\\Users\\nodejs\\templates"), "'C:\\Users\\nodejs\\templates'", 2, 12 },
+        { TOKEN_KEY, nullptr, "winpath2", 3, 1 }, { TOKEN_VALUE, new StringValue("\\\\ServerX\\admin$\\system32\\"), "'\\\\ServerX\\admin$\\system32\\'", 3, 12 },
+        { TOKEN_KEY, nullptr, "quoted", 4, 1 }, { TOKEN_VALUE, new StringValue("Tom \"Dubs\" Preston-Werner"), "'Tom \"Dubs\" Preston-Werner'", 4, 12 },
+        { TOKEN_KEY, nullptr, "regex", 5, 1 }, { TOKEN_VALUE, new StringValue("<\\i\\c*\\s*>"), "'<\\i\\c*\\s*>'", 5, 12 },
+        { TOKEN_EOF, nullptr, "", 6, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -492,17 +434,17 @@ TEST(lex, multiline_literal_strings)
         "'''\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "regex2", 1, 1 }, { TOKEN_STRING, "I [dw]on't need \\d{2} apples", 1, 10 },
-        { TOKEN_KEY, "lines", 2, 1 }, { TOKEN_STRING, "The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n", 2, 10 },
-        { TOKEN_EOF, "", 8, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "regex2", 1, 1 }, { TOKEN_VALUE, new StringValue("I [dw]on't need \\d{2} apples"), "'''I [dw]on't need \\d{2} apples'''", 1, 10 },
+        { TOKEN_KEY, nullptr, "lines", 2, 1 }, { TOKEN_VALUE, new StringValue("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n"), "'''\nThe first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n'''", 2, 10 },
+        { TOKEN_EOF, nullptr, "", 8, 1 },
     };
 
     assert_lexed(toml, tokens);
 }
 
 
-TEST(lex, mulitiline_literal_string_escapes)
+TEST(lex, multiline_literal_string_escapes)
 {
     const string toml =
         "quot15 = '''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''\n"
@@ -514,11 +456,11 @@ TEST(lex, mulitiline_literal_string_escapes)
         "str = ''''That,' she said, 'is still pointless.''''\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "quot15", 1, 1 }, { TOKEN_STRING, "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"", 1, 10 },
-        { TOKEN_KEY, "apos15", 4, 1 }, { TOKEN_STRING, "Here are fifteen apostrophes: '''''''''''''''", 4, 10 },
-        { TOKEN_KEY, "str", 7, 1}, { TOKEN_STRING, "'That,' she said, 'is still pointless.'", 7, 7 },
-        { TOKEN_EOF, "", 8, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "quot15", 1, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\""), "'''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''", 1, 10 },
+        { TOKEN_KEY, nullptr, "apos15", 4, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen apostrophes: '''''''''''''''"), "\"Here are fifteen apostrophes: '''''''''''''''\"", 4, 10 },
+        { TOKEN_KEY, nullptr, "str", 7, 1}, { TOKEN_VALUE, new StringValue("'That,' she said, 'is still pointless.'"), "''''That,' she said, 'is still pointless.''''", 7, 7 },
+        { TOKEN_EOF, nullptr, "", 8, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -550,22 +492,22 @@ TEST(lex, integers)
         "bin1 = 0b11010110\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "int1", 1, 1 }, { TOKEN_PLUS, "+", 1, 8 }, { TOKEN_DECIMAL, "99", 1, 9 },
-        { TOKEN_KEY, "int2", 2, 1 }, { TOKEN_DECIMAL, "42", 2, 8 },
-        { TOKEN_KEY, "int3", 3, 1 }, { TOKEN_DECIMAL, "0", 3, 8 },
-        { TOKEN_KEY, "int4", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "17", 4, 9 },
-        { TOKEN_KEY, "int5", 5, 1 }, { TOKEN_DECIMAL, "1000", 5, 8 },
-        { TOKEN_KEY, "int6", 6, 1 }, { TOKEN_DECIMAL, "5349221", 6, 8 },
-        { TOKEN_KEY, "int7", 7, 1 }, { TOKEN_DECIMAL, "5349221", 7, 8 },
-        { TOKEN_KEY, "int8", 8, 1 }, { TOKEN_DECIMAL, "12345", 8, 8 },
-        { TOKEN_KEY, "hex1", 11, 1 }, { TOKEN_HEXADECIMAL, "DEADBEEF", 11, 8 },
-        { TOKEN_KEY, "hex2", 12, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 12, 8 },
-        { TOKEN_KEY, "hex3", 13, 1 }, { TOKEN_HEXADECIMAL, "deadbeef", 13, 8 },
-        { TOKEN_KEY, "oct1", 16, 1 }, { TOKEN_OCTAL, "01234567", 16, 8 },
-        { TOKEN_KEY, "oct2", 17, 1 }, { TOKEN_OCTAL, "755", 17, 8 },
-        { TOKEN_KEY, "bin1", 20, 1 }, { TOKEN_BINARY, "11010110", 20, 8 },
-        { TOKEN_EOF, "", 21, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "int1", 1, 1 }, { TOKEN_VALUE, new IntegerValue(99), "+99", 1, 8 },
+        { TOKEN_KEY, nullptr, "int2", 2, 1 }, { TOKEN_VALUE, new IntegerValue(42), "42", 2, 8 },
+        { TOKEN_KEY, nullptr, "int3", 3, 1 }, { TOKEN_VALUE, new IntegerValue(0), "0", 3, 8 },
+        { TOKEN_KEY, nullptr, "int4", 4, 1 }, { TOKEN_VALUE, new IntegerValue(-17), "-17", 4, 8 },
+        { TOKEN_KEY, nullptr, "int5", 5, 1 }, { TOKEN_VALUE, new IntegerValue(1000), "1_000", 5, 8 },
+        { TOKEN_KEY, nullptr, "int6", 6, 1 }, { TOKEN_VALUE, new IntegerValue(5349221), "5_349_221", 6, 8 },
+        { TOKEN_KEY, nullptr, "int7", 7, 1 }, { TOKEN_VALUE, new IntegerValue(5349221), "53_49_221", 7, 8 },
+        { TOKEN_KEY, nullptr, "int8", 8, 1 }, { TOKEN_VALUE, new IntegerValue(12345), "1_2_3_4_5", 8, 8 },
+        { TOKEN_KEY, nullptr, "hex1", 11, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xDEADBEEF", 11, 8 },
+        { TOKEN_KEY, nullptr, "hex2", 12, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xdeadbeef", 12, 8 },
+        { TOKEN_KEY, nullptr, "hex3", 13, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xdead_beef", 13, 8 },
+        { TOKEN_KEY, nullptr, "oct1", 16, 1 }, { TOKEN_VALUE, new IntegerValue(01234567), "0o01234567", 16, 8 },
+        { TOKEN_KEY, nullptr, "oct2", 17, 1 }, { TOKEN_VALUE, new IntegerValue(0755), "0o755", 17, 8 },
+        { TOKEN_KEY, nullptr, "bin1", 20, 1 }, { TOKEN_VALUE, new IntegerValue(214), "0b11010110", 20, 8 },
+        { TOKEN_EOF, nullptr, "", 21, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -591,16 +533,16 @@ TEST(lex, floats)
         "flt8 = 224_617.445_991_228\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "flt1", 2, 1 }, { TOKEN_PLUS, "+", 2, 8 }, { TOKEN_DECIMAL, "1", 2, 9 }, { TOKEN_FRACTION, "0", 2, 11},
-        { TOKEN_KEY, "flt2", 3, 1 }, { TOKEN_DECIMAL, "3", 3, 8 }, { TOKEN_FRACTION, "1415", 3, 10 },
-        { TOKEN_KEY, "flt3", 4, 1 }, { TOKEN_MINUS, "-", 4, 8 }, { TOKEN_DECIMAL, "0", 4, 9 }, { TOKEN_FRACTION, "01", 4, 11 },
-        { TOKEN_KEY, "flt4", 7, 1 }, { TOKEN_DECIMAL, "5", 7, 8 }, { TOKEN_PLUS, "+", 7, 10 }, { TOKEN_EXPONENT, "22", 7, 11 },
-        { TOKEN_KEY, "flt5", 8, 1 }, { TOKEN_DECIMAL, "1", 8, 8 }, { TOKEN_EXPONENT, "06", 8, 10 },
-        { TOKEN_KEY, "flt6", 9, 1 }, { TOKEN_MINUS, "-", 9, 8}, { TOKEN_DECIMAL, "2", 9, 9 }, { TOKEN_MINUS, "-", 9, 11}, { TOKEN_EXPONENT, "2", 9, 12 },
-        { TOKEN_KEY, "flt7", 12, 1 }, { TOKEN_DECIMAL, "6", 12, 8 }, { TOKEN_FRACTION, "626", 12, 10 }, { TOKEN_MINUS, "-", 12, 14 }, { TOKEN_EXPONENT, "34", 12, 15 },
-        { TOKEN_KEY, "flt8", 14, 1 }, { TOKEN_DECIMAL, "224617", 14, 8 }, { TOKEN_FRACTION, "445991228", 14, 16 },
-        { TOKEN_EOF, "", 15, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "flt1", 2, 1 }, { TOKEN_VALUE, new FloatValue(1), "+1.0", 2, 8 },
+        { TOKEN_KEY, nullptr, "flt2", 3, 1 }, { TOKEN_VALUE, new FloatValue(3.1415), "3.1415", 3, 8 },
+        { TOKEN_KEY, nullptr, "flt3", 4, 1 }, { TOKEN_VALUE, new FloatValue(-0.01), "-0.01", 4, 8 },
+        { TOKEN_KEY, nullptr, "flt4", 7, 1 }, { TOKEN_VALUE, new FloatValue(5e+22), "5e+22", 7, 8 },
+        { TOKEN_KEY, nullptr, "flt5", 8, 1 }, { TOKEN_VALUE, new FloatValue(1e06), "1e06", 8, 8 },
+        { TOKEN_KEY, nullptr, "flt6", 9, 1 }, { TOKEN_VALUE, new FloatValue(-2e-2), "-2E-2", 9, 8},
+        { TOKEN_KEY, nullptr, "flt7", 12, 1 }, { TOKEN_VALUE, new FloatValue(6.626e-34), "6.626e-34", 12, 8 },
+        { TOKEN_KEY, nullptr, "flt8", 14, 1 }, { TOKEN_VALUE, new FloatValue(224617.445991228), "224_617.445_991_228", 14, 8 },
+        { TOKEN_EOF, nullptr, "", 15, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -635,11 +577,11 @@ TEST(lex, infinity)
         "sf3 = -inf # negative infinity\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "sf1", 2, 1 }, { TOKEN_INF, "", 2, 7 },
-        { TOKEN_KEY, "sf2", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_INF, "", 3, 8 },
-        { TOKEN_KEY, "sf3", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_INF, "", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "sf1", 2, 1 }, { TOKEN_VALUE, new FloatValue(INF64), "inf", 2, 7 },
+        { TOKEN_KEY, nullptr, "sf2", 3, 1 }, { TOKEN_VALUE, new FloatValue(+INF64), "+inf", 3, 7 },
+        { TOKEN_KEY, nullptr, "sf3", 4, 1 }, { TOKEN_VALUE, new FloatValue(-INF64), "-inf", 4, 7 },
+        { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -655,11 +597,11 @@ TEST(lex, nan)
         "sf6 = -nan # valid, actual encoding is implementation-specific\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "sf4", 2, 1 }, { TOKEN_NAN, "", 2, 7 },
-        { TOKEN_KEY, "sf5", 3, 1 }, { TOKEN_PLUS, "+", 3, 7 }, { TOKEN_NAN, "", 3, 8 },
-        { TOKEN_KEY, "sf6", 4, 1 }, { TOKEN_MINUS, "-", 4, 7 }, { TOKEN_NAN, "", 4, 8 },
-        { TOKEN_EOF, "", 5, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "sf4", 2, 1 }, { TOKEN_VALUE, new FloatValue(NAN64), "nan", 2, 7 },
+        { TOKEN_KEY, nullptr, "sf5", 3, 1 }, { TOKEN_VALUE, new FloatValue(+NAN64), "+nan", 3, 7 },
+        { TOKEN_KEY, nullptr, "sf6", 4, 1 }, { TOKEN_VALUE, new FloatValue(-NAN64), "-nan", 4, 7 },
+        { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -673,10 +615,10 @@ TEST(lex, booleans)
         "bool2 = false\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "bool1", 1, 1}, { TOKEN_TRUE, "", 1, 9 },
-        { TOKEN_KEY, "bool2", 2, 1}, { TOKEN_FALSE, "", 2, 9 },
-        { TOKEN_EOF, "", 3, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "bool1", 1, 1}, { TOKEN_VALUE, new BooleanValue(true), "true", 1, 9 },
+        { TOKEN_KEY, nullptr, "bool2", 2, 1}, { TOKEN_VALUE, new BooleanValue(false), "false", 2, 9 },
+        { TOKEN_EOF, nullptr, "", 3, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -690,10 +632,10 @@ TEST(lex, local_times)
         "lt2 = 00:32:00.999999\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "lt1", 1, 1 }, { TOKEN_HOUR, "07", 1, 7 }, { TOKEN_MINUTE, "32", 1, 10 }, { TOKEN_SECOND, "00", 1, 13 },
-        { TOKEN_KEY, "lt2", 2, 1 }, { TOKEN_HOUR, "00", 2, 7 }, { TOKEN_MINUTE, "32", 2, 10 }, { TOKEN_SECOND, "00", 2, 13 }, { TOKEN_FRACTION, "999999", 2, 16 },
-        { TOKEN_EOF, "", 3, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "lt1", 1, 1 }, { TOKEN_HOUR, nullptr, "07", 1, 7 }, { TOKEN_MINUTE, nullptr, "32", 1, 10 }, { TOKEN_SECOND, nullptr, "00", 1, 13 },
+        { TOKEN_KEY, nullptr, "lt2", 2, 1 }, { TOKEN_HOUR, nullptr, "00", 2, 7 }, { TOKEN_MINUTE, nullptr, "32", 2, 10 }, { TOKEN_SECOND, nullptr, "00", 2, 13 }, { TOKEN_FRACTION, nullptr, "999999", 2, 16 },
+        { TOKEN_EOF, nullptr, "", 3, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -704,9 +646,9 @@ TEST(lex, local_dates)
 {
     const string toml = "ld1 = 1979-05-27";
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "ld1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 7 }, { TOKEN_MONTH, "05", 1, 12 }, { TOKEN_DAY, "27", 1, 15 },
-        { TOKEN_EOF, "", 1, 17 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "ld1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 7 }, { TOKEN_MONTH, nullptr, "05", 1, 12 }, { TOKEN_DAY, nullptr, "27", 1, 15 },
+        { TOKEN_EOF, nullptr, "", 1, 17 },
     };
 
     assert_lexed(toml, tokens);
@@ -720,10 +662,10 @@ TEST(lex, local_datetimes)
         "ldt2 = 1979-05-27T00:32:00.999999\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "ldt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 },
-        { TOKEN_KEY, "ldt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_FRACTION, "999999", 2, 28 },
-        { TOKEN_EOF, "", 3, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "ldt1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 8}, { TOKEN_MONTH, nullptr, "05", 1, 13 }, { TOKEN_DAY, nullptr, "27", 1, 16 }, { TOKEN_HOUR, nullptr, "07", 1, 19}, { TOKEN_MINUTE, nullptr, "32", 1, 22 }, { TOKEN_SECOND, nullptr, "00", 1, 25 },
+        { TOKEN_KEY, nullptr, "ldt2", 2, 1 }, { TOKEN_YEAR, nullptr, "1979", 2, 8}, { TOKEN_MONTH, nullptr, "05", 2, 13 }, { TOKEN_DAY, nullptr, "27", 2, 16 }, { TOKEN_HOUR, nullptr, "00", 2, 19}, { TOKEN_MINUTE, nullptr, "32", 2, 22 }, { TOKEN_SECOND, nullptr, "00", 2, 25 }, { TOKEN_FRACTION, nullptr, "999999", 2, 28 },
+        { TOKEN_EOF, nullptr, "", 3, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -739,12 +681,12 @@ TEST(lex, offset_datetimes)
         "odt4 = 1979-05-27 07:32:00Z\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "odt1", 1, 1 }, { TOKEN_YEAR, "1979", 1, 8}, { TOKEN_MONTH, "05", 1, 13 }, { TOKEN_DAY, "27", 1, 16 }, { TOKEN_HOUR, "07", 1, 19}, { TOKEN_MINUTE, "32", 1, 22 }, { TOKEN_SECOND, "00", 1, 25 }, { TOKEN_PLUS, "+", 1, 27 }, { TOKEN_HOUR, "00", 1, 28 }, { TOKEN_MINUTE, "00", 1, 28 },
-        { TOKEN_KEY, "odt2", 2, 1 }, { TOKEN_YEAR, "1979", 2, 8}, { TOKEN_MONTH, "05", 2, 13 }, { TOKEN_DAY, "27", 2, 16 }, { TOKEN_HOUR, "00", 2, 19}, { TOKEN_MINUTE, "32", 2, 22 }, { TOKEN_SECOND, "00", 2, 25 }, { TOKEN_MINUS, "-", 2, 27 }, { TOKEN_HOUR, "07", 2, 28 }, { TOKEN_MINUTE, "00", 2, 31 },
-        { TOKEN_KEY, "odt3", 3, 1 }, { TOKEN_YEAR, "1979", 3, 8}, { TOKEN_MONTH, "05", 3, 13 }, { TOKEN_DAY, "27", 3, 16 }, { TOKEN_HOUR, "00", 3, 19}, { TOKEN_MINUTE, "32", 3, 22 }, { TOKEN_SECOND, "00", 3, 25 }, { TOKEN_FRACTION, "999999", 3, 28 }, { TOKEN_MINUS, "-", 3, 34 }, { TOKEN_HOUR, "07", 3, 35 }, { TOKEN_MINUTE, "00", 3, 38 },
-        { TOKEN_KEY, "odt4", 4, 1 }, { TOKEN_YEAR, "1979", 4, 8}, { TOKEN_MONTH, "05", 4, 13 }, { TOKEN_DAY, "27", 4, 16 }, { TOKEN_HOUR, "07", 4, 19}, { TOKEN_MINUTE, "32", 4, 22 }, { TOKEN_SECOND, "00", 4, 25 }, { TOKEN_PLUS, "+", 4, 27 }, { TOKEN_HOUR, "00", 4, 28 }, { TOKEN_MINUTE, "00", 4, 28 },
-        { TOKEN_EOF, "", 5, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "odt1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 8}, { TOKEN_MONTH, nullptr, "05", 1, 13 }, { TOKEN_DAY, nullptr, "27", 1, 16 }, { TOKEN_HOUR, nullptr, "07", 1, 19}, { TOKEN_MINUTE, nullptr, "32", 1, 22 }, { TOKEN_SECOND, nullptr, "00", 1, 25 }, { TOKEN_PLUS, nullptr, "+", 1, 27 }, { TOKEN_HOUR, nullptr, "00", 1, 28 }, { TOKEN_MINUTE, nullptr, "00", 1, 28 },
+        { TOKEN_KEY, nullptr, "odt2", 2, 1 }, { TOKEN_YEAR, nullptr, "1979", 2, 8}, { TOKEN_MONTH, nullptr, "05", 2, 13 }, { TOKEN_DAY, nullptr, "27", 2, 16 }, { TOKEN_HOUR, nullptr, "00", 2, 19}, { TOKEN_MINUTE, nullptr, "32", 2, 22 }, { TOKEN_SECOND, nullptr, "00", 2, 25 }, { TOKEN_MINUS, nullptr, "-", 2, 27 }, { TOKEN_HOUR, nullptr, "07", 2, 28 }, { TOKEN_MINUTE, nullptr, "00", 2, 31 },
+        { TOKEN_KEY, nullptr, "odt3", 3, 1 }, { TOKEN_YEAR, nullptr, "1979", 3, 8}, { TOKEN_MONTH, nullptr, "05", 3, 13 }, { TOKEN_DAY, nullptr, "27", 3, 16 }, { TOKEN_HOUR, nullptr, "00", 3, 19}, { TOKEN_MINUTE, nullptr, "32", 3, 22 }, { TOKEN_SECOND, nullptr, "00", 3, 25 }, { TOKEN_FRACTION, nullptr, "999999", 3, 28 }, { TOKEN_MINUS, nullptr, "-", 3, 34 }, { TOKEN_HOUR, nullptr, "07", 3, 35 }, { TOKEN_MINUTE, nullptr, "00", 3, 38 },
+        { TOKEN_KEY, nullptr, "odt4", 4, 1 }, { TOKEN_YEAR, nullptr, "1979", 4, 8}, { TOKEN_MONTH, nullptr, "05", 4, 13 }, { TOKEN_DAY, nullptr, "27", 4, 16 }, { TOKEN_HOUR, nullptr, "07", 4, 19}, { TOKEN_MINUTE, nullptr, "32", 4, 22 }, { TOKEN_SECOND, nullptr, "00", 4, 25 }, { TOKEN_PLUS, nullptr, "+", 4, 27 }, { TOKEN_HOUR, nullptr, "00", 4, 28 }, { TOKEN_MINUTE, nullptr, "00", 4, 28 },
+        { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -768,57 +710,57 @@ TEST(lex, arrays)
         "]\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "integers", 1, 1 }, { TOKEN_LBRACKET, "", 1, 12 },
-            { TOKEN_DECIMAL, "1", 1, 14 }, { TOKEN_COMMA, "", 1, 15 },
-            { TOKEN_DECIMAL, "2", 1, 17 }, { TOKEN_COMMA, "", 1, 18 },
-            { TOKEN_DECIMAL, "3", 1, 20 }, { TOKEN_RBRACKET, "", 1, 22 },
-        { TOKEN_KEY, "colors", 2, 1 }, { TOKEN_LBRACKET, "", 2, 10 },
-            { TOKEN_STRING, "red", 2, 12 }, { TOKEN_COMMA, "", 2, 17 },
-            { TOKEN_STRING, "yellow", 2, 19 }, { TOKEN_COMMA, "", 2, 27 },
-            { TOKEN_STRING, "green", 2, 29 }, { TOKEN_RBRACKET, "", 2, 37 },
-        { TOKEN_KEY, "nested_arrays_of_ints", 3, 1 }, { TOKEN_LBRACKET, "", 3, 25 },
-            { TOKEN_LBRACKET, "", 3, 27 },
-                { TOKEN_DECIMAL, "1", 3, 29 }, { TOKEN_COMMA, "", 3, 30 },
-                { TOKEN_DECIMAL, "2", 3, 32 },
-            { TOKEN_RBRACKET, "", 3, 34 }, { TOKEN_COMMA, "", 3, 35 },
-            { TOKEN_LBRACKET, "", 3, 37 },
-                { TOKEN_DECIMAL, "3", 3, 38 }, { TOKEN_COMMA, "", 3, 39 },
-                { TOKEN_DECIMAL, "4", 3, 41 }, { TOKEN_COMMA, "", 3, 42 },
-                { TOKEN_DECIMAL, "5", 3, 44 },
-            { TOKEN_RBRACKET, "", 3, 45 },
-        { TOKEN_RBRACKET, "", 3, 47 },
-        { TOKEN_KEY, "nested_mixed_array", 4, 1 }, { TOKEN_LBRACKET, "", 4, 22 },
-            { TOKEN_LBRACKET, "", 4, 24 },
-                { TOKEN_DECIMAL, "1", 4, 26 }, { TOKEN_COMMA, "", 4, 27 },
-                { TOKEN_DECIMAL, "2", 4, 29 },
-            { TOKEN_RBRACKET, "", 4, 31 }, { TOKEN_COMMA, "", 4, 32 },
-            { TOKEN_LBRACKET, "", 4, 34 },
-                { TOKEN_STRING, "a", 4, 35 }, { TOKEN_COMMA, "", 4, 38 },
-                { TOKEN_STRING, "b", 4, 40 }, { TOKEN_COMMA, "", 4, 43 },
-                { TOKEN_STRING, "c", 4, 45 },
-            { TOKEN_RBRACKET, "", 4, 48 },
-        { TOKEN_RBRACKET, "", 4, 50 },
-        { TOKEN_KEY, "string_array", 5, 1 }, { TOKEN_LBRACKET, "", 5, 16 },
-            { TOKEN_STRING, "all", 5, 18 }, { TOKEN_COMMA, "", 5, 23 },
-            { TOKEN_STRING, "strings", 5, 25 }, { TOKEN_COMMA, "", 5, 34 },
-            { TOKEN_STRING, "are the same", 5, 36 }, { TOKEN_COMMA, "", 5, 54 },
-            { TOKEN_STRING, "type", 5, 56 }, { TOKEN_RBRACKET, "", 5, 67 },
-        { TOKEN_KEY, "numbers", 8, 1 }, { TOKEN_LBRACKET, "", 8, 11 },
-            { TOKEN_DECIMAL, "0", 8, 13 }, { TOKEN_FRACTION, "1", 8, 15 }, { TOKEN_COMMA, "", 8, 16 },
-            { TOKEN_DECIMAL, "0", 8, 18 }, { TOKEN_FRACTION, "2", 8, 20 }, { TOKEN_COMMA, "", 8, 21 },
-            { TOKEN_DECIMAL, "0", 8, 23 }, { TOKEN_FRACTION, "5", 8, 25 }, { TOKEN_COMMA, "", 8, 26 },
-            { TOKEN_DECIMAL, "1", 8, 28 }, { TOKEN_COMMA, "", 8, 29 },
-            { TOKEN_DECIMAL, "2", 8, 31 }, { TOKEN_COMMA, "", 8, 32 },
-            { TOKEN_DECIMAL, "5", 8, 34 }, { TOKEN_RBRACKET, "", 8, 36 },
-        { TOKEN_KEY, "contributors", 9, 1 }, { TOKEN_LBRACKET, "", 9, 16 },
-            { TOKEN_STRING, "Foo Bar <foo@example.com>", 10, 3 }, { TOKEN_COMMA, "", 10, 30 },
-            { TOKEN_LBRACE, "", 11, 3 },
-                { TOKEN_KEY, "name", 11, 5 }, { TOKEN_STRING, "Baz Qux", 11, 12 }, { TOKEN_COMMA, "", 11, 21},
-                { TOKEN_KEY, "email", 11, 23 }, { TOKEN_STRING, "bazqux@example.com", 11, 31 }, { TOKEN_COMMA, "", 11, 51},
-                { TOKEN_KEY, "url", 11, 53 }, { TOKEN_STRING, "https://example.com/bazqux", 11, 59 }, { TOKEN_RBRACE, "", 11, 88},
-            { TOKEN_RBRACKET, "", 12, 1 },
-        { TOKEN_EOF, "", 13, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "integers", 1, 1 }, { TOKEN_LBRACKET, nullptr, "", 1, 12 },
+            { TOKEN_VALUE, new IntegerValue(1), "1", 1, 14 }, { TOKEN_COMMA, nullptr, "", 1, 15 },
+            { TOKEN_VALUE, new IntegerValue(2), "2", 1, 17 }, { TOKEN_COMMA, nullptr, "", 1, 18 },
+            { TOKEN_VALUE, new IntegerValue(3), "3", 1, 20 }, { TOKEN_RBRACKET, nullptr, "", 1, 22 },
+        { TOKEN_KEY, nullptr, "colors", 2, 1 }, { TOKEN_LBRACKET, nullptr, "", 2, 10 },
+            { TOKEN_VALUE, new StringValue("red"), "\"red\"", 2, 12 }, { TOKEN_COMMA, nullptr, "", 2, 17 },
+            { TOKEN_VALUE, new StringValue("yellow"), "\"yellow\"", 2, 19 }, { TOKEN_COMMA, nullptr, "", 2, 27 },
+            { TOKEN_VALUE, new StringValue("green"), "\"green\"", 2, 29 }, { TOKEN_RBRACKET, nullptr, "", 2, 37 },
+        { TOKEN_KEY, nullptr, "nested_arrays_of_ints", 3, 1 }, { TOKEN_LBRACKET, nullptr, "", 3, 25 },
+            { TOKEN_LBRACKET, nullptr, "", 3, 27 },
+                { TOKEN_VALUE, new IntegerValue(1), "1", 3, 29 }, { TOKEN_COMMA, nullptr, "", 3, 30 },
+                { TOKEN_VALUE, new IntegerValue(2), "2", 3, 32 },
+            { TOKEN_RBRACKET, nullptr, "", 3, 34 }, { TOKEN_COMMA, nullptr, "", 3, 35 },
+            { TOKEN_LBRACKET, nullptr, "", 3, 37 },
+                { TOKEN_VALUE, new IntegerValue(3), "3", 3, 38 }, { TOKEN_COMMA, nullptr, "", 3, 39 },
+                { TOKEN_VALUE, new IntegerValue(4), "4", 3, 41 }, { TOKEN_COMMA, nullptr, "", 3, 42 },
+                { TOKEN_VALUE, new IntegerValue(5), "5", 3, 44 },
+            { TOKEN_RBRACKET, nullptr, "", 3, 45 },
+        { TOKEN_RBRACKET, nullptr, "", 3, 47 },
+        { TOKEN_KEY, nullptr, "nested_mixed_array", 4, 1 }, { TOKEN_LBRACKET, nullptr, "", 4, 22 },
+            { TOKEN_LBRACKET, nullptr, "", 4, 24 },
+                { TOKEN_VALUE, new IntegerValue(1), "1", 4, 26 }, { TOKEN_COMMA, nullptr, "", 4, 27 },
+                { TOKEN_VALUE, new IntegerValue(2), "2", 4, 29 },
+            { TOKEN_RBRACKET, nullptr, "", 4, 31 }, { TOKEN_COMMA, nullptr, "", 4, 32 },
+            { TOKEN_LBRACKET, nullptr, "", 4, 34 },
+                { TOKEN_VALUE, new StringValue("a"), "\"a\"", 4, 35 }, { TOKEN_COMMA, nullptr, "", 4, 38 },
+                { TOKEN_VALUE, new StringValue("b"), "\"b\"", 4, 40 }, { TOKEN_COMMA, nullptr, "", 4, 43 },
+                { TOKEN_VALUE, new StringValue("c"), "\"c\"", 4, 45 },
+            { TOKEN_RBRACKET, nullptr, "", 4, 48 },
+        { TOKEN_RBRACKET, nullptr, "", 4, 50 },
+        { TOKEN_KEY, nullptr, "string_array", 5, 1 }, { TOKEN_LBRACKET, nullptr, "", 5, 16 },
+            { TOKEN_VALUE, new StringValue("all"), "\"all\"", 5, 18 }, { TOKEN_COMMA, nullptr, "", 5, 23 },
+            { TOKEN_VALUE, new StringValue("strings"), "'strings'", 5, 25 }, { TOKEN_COMMA, nullptr, "", 5, 34 },
+            { TOKEN_VALUE, new StringValue("are the same"), "\"\"\"are the same\"\"\"", 5, 36 }, { TOKEN_COMMA, nullptr, "", 5, 54 },
+            { TOKEN_VALUE, new StringValue("type"), "'''type'''", 5, 56 }, { TOKEN_RBRACKET, nullptr, "", 5, 67 },
+        { TOKEN_KEY, nullptr, "numbers", 8, 1 }, { TOKEN_LBRACKET, nullptr, "", 8, 11 },
+            { TOKEN_VALUE, new FloatValue(0.1), "0.1", 8, 13 }, { TOKEN_COMMA, nullptr, "", 8, 16 },
+            { TOKEN_VALUE, new FloatValue(0.2), "0.2", 8, 18 }, { TOKEN_COMMA, nullptr, "", 8, 21 },
+            { TOKEN_VALUE, new FloatValue(0.5), "0.5", 8, 23 }, { TOKEN_COMMA, nullptr, "", 8, 26 },
+            { TOKEN_VALUE, new IntegerValue(1), "1", 8, 28 }, { TOKEN_COMMA, nullptr, "", 8, 29 },
+            { TOKEN_VALUE, new IntegerValue(2), "2", 8, 31 }, { TOKEN_COMMA, nullptr, "", 8, 32 },
+            { TOKEN_VALUE, new IntegerValue(5), "5", 8, 34 }, { TOKEN_RBRACKET, nullptr, "", 8, 36 },
+        { TOKEN_KEY, nullptr, "contributors", 9, 1 }, { TOKEN_LBRACKET, nullptr, "", 9, 16 },
+            { TOKEN_VALUE, new StringValue("Foo Bar <foo@example.com>"), "\"Foo Bar <foo@example.com>\"", 10, 3 }, { TOKEN_COMMA, nullptr, "", 10, 30 },
+            { TOKEN_LBRACE, nullptr, "", 11, 3 },
+                { TOKEN_KEY, nullptr, "name", 11, 5 }, { TOKEN_VALUE, new StringValue("Baz Qux"), "\"Baz Qux\"", 11, 12 }, { TOKEN_COMMA, nullptr, "", 11, 21},
+                { TOKEN_KEY, nullptr, "email", 11, 23 }, { TOKEN_VALUE, new StringValue("bazqux@example.com"), "\"bazqux@example.com\"", 11, 31 }, { TOKEN_COMMA, nullptr, "", 11, 51},
+                { TOKEN_KEY, nullptr, "url", 11, 53 }, { TOKEN_VALUE, new StringValue("https://example.com/bazqux"), "\"https://example.com/bazqux\"", 11, 59 }, { TOKEN_RBRACE, nullptr, "", 11, 88},
+            { TOKEN_RBRACKET, nullptr, "", 12, 1 },
+        { TOKEN_EOF, nullptr, "", 13, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -838,16 +780,16 @@ TEST(lex, multiline_arrays)
         "]\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "integers2", 1, 1 }, { TOKEN_LBRACKET, "", 1, 13 },
-            { TOKEN_DECIMAL, "1", 2, 3 }, { TOKEN_COMMA, "", 2, 4 },
-            { TOKEN_DECIMAL, "2", 2, 6 }, { TOKEN_COMMA, "", 2, 7 },
-            { TOKEN_DECIMAL, "3", 2, 9 }, { TOKEN_RBRACKET, "", 3, 1 },
-        { TOKEN_KEY, "integers3", 5, 1 }, { TOKEN_LBRACKET, "", 5, 13 },
-            { TOKEN_DECIMAL, "1", 6, 3 }, { TOKEN_COMMA, "", 6, 4 },
-            { TOKEN_DECIMAL, "2", 7, 3 }, { TOKEN_COMMA, "", 7, 4 },
-            { TOKEN_RBRACKET, "", 8, 1 },
-        { TOKEN_EOF, "", 9, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "integers2", 1, 1 }, { TOKEN_LBRACKET, nullptr, "", 1, 13 },
+            { TOKEN_VALUE, new IntegerValue(1), "1", 2, 3 }, { TOKEN_COMMA, nullptr, "", 2, 4 },
+            { TOKEN_VALUE, new IntegerValue(2), "2", 2, 6 }, { TOKEN_COMMA, nullptr, "", 2, 7 },
+            { TOKEN_VALUE, new IntegerValue(3), "3", 2, 9 }, { TOKEN_RBRACKET, nullptr, "", 3, 1 },
+        { TOKEN_KEY, nullptr, "integers3", 5, 1 }, { TOKEN_LBRACKET, nullptr, "", 5, 13 },
+            { TOKEN_VALUE, new IntegerValue(1), "1", 6, 3 }, { TOKEN_COMMA, nullptr, "", 6, 4 },
+            { TOKEN_VALUE, new IntegerValue(2), "2", 7, 3 }, { TOKEN_COMMA, nullptr, "", 7, 4 },
+            { TOKEN_RBRACKET, nullptr, "", 8, 1 },
+        { TOKEN_EOF, nullptr, "", 9, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -862,17 +804,17 @@ TEST(lex, inline_tables)
         "animal = { type.name = \"pug\" }\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_KEY, "name", 1, 1 }, { TOKEN_LBRACE, "", 1, 8},
-            { TOKEN_KEY, "first", 1, 10 }, { TOKEN_STRING, "Tom", 1, 18 }, { TOKEN_COMMA, "", 1, 23 },
-            { TOKEN_KEY, "last", 1, 25 }, { TOKEN_STRING, "Preston-Werner", 1, 32 }, { TOKEN_RBRACE, "", 1, 49 },
-        { TOKEN_KEY, "point", 2, 1 }, { TOKEN_LBRACE, "", 2, 9},
-            { TOKEN_KEY, "x", 2, 11 }, { TOKEN_DECIMAL, "1", 2, 15 }, { TOKEN_COMMA, "", 2, 16 },
-            { TOKEN_KEY, "y", 2, 18 }, { TOKEN_DECIMAL, "2", 2, 22 }, { TOKEN_RBRACE, "", 2, 24 },
-        { TOKEN_KEY, "animal", 3, 1 }, { TOKEN_LBRACE, "", 3, 10},
-            { TOKEN_KEY, "type", 3, 12 }, { TOKEN_KEY, "name", 3, 17 }, { TOKEN_STRING, "pug", 3, 24 },
-            { TOKEN_RBRACE, "", 3, 30 },
-        { TOKEN_EOF, "", 4, 1 },
+    vector<Token> tokens = {
+        { TOKEN_KEY, nullptr, "name", 1, 1 }, { TOKEN_LBRACE, nullptr, "", 1, 8},
+            { TOKEN_KEY, nullptr, "first", 1, 10 }, { TOKEN_VALUE, new StringValue("Tom"), "\"Tom\"", 1, 18 }, { TOKEN_COMMA, nullptr, "", 1, 23 },
+            { TOKEN_KEY, nullptr, "last", 1, 25 }, { TOKEN_VALUE, new StringValue("Preston-Werner"), "\"Preston-Werner\"", 1, 32 }, { TOKEN_RBRACE, nullptr, "", 1, 49 },
+        { TOKEN_KEY, nullptr, "point", 2, 1 }, { TOKEN_LBRACE, nullptr, "", 2, 9},
+            { TOKEN_KEY, nullptr, "x", 2, 11 }, { TOKEN_VALUE, new IntegerValue(1), "1", 2, 15 }, { TOKEN_COMMA, nullptr, "", 2, 16 },
+            { TOKEN_KEY, nullptr, "y", 2, 18 }, { TOKEN_VALUE, new IntegerValue(2), "2", 2, 22 }, { TOKEN_RBRACE, nullptr, "", 2, 24 },
+        { TOKEN_KEY, nullptr, "animal", 3, 1 }, { TOKEN_LBRACE, nullptr, "", 3, 10},
+            { TOKEN_KEY, nullptr, "type", 3, 12 }, { TOKEN_KEY, nullptr, "name", 3, 17 }, { TOKEN_VALUE, new StringValue("pug"), "\"pug\"", 3, 24 },
+            { TOKEN_RBRACE, nullptr, "", 3, 30 },
+        { TOKEN_EOF, nullptr, "", 4, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -896,17 +838,17 @@ TEST(lex, tables)
         "type.name = \"pug\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "table", 1, 2 }, { TOKEN_RBRACKET, "", 1, 7 },
-        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "table-1", 3, 2 }, { TOKEN_RBRACKET, "", 3, 9 },
-        { TOKEN_KEY, "key1", 4, 1 }, { TOKEN_STRING, "some string", 4, 8 },
-        { TOKEN_KEY, "key2", 5, 1 }, { TOKEN_DECIMAL, "123", 5, 8 },
-        { TOKEN_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "table-2", 7, 2 }, { TOKEN_RBRACKET, "", 7, 9 },
-        { TOKEN_KEY, "key1", 8, 1 }, { TOKEN_STRING, "another string", 8, 8 },
-        { TOKEN_KEY, "key2", 9, 1 }, { TOKEN_DECIMAL, "456", 9, 8 },
-        { TOKEN_LBRACKET, "", 11, 1 }, { TOKEN_KEY, "dog", 11, 2 }, { TOKEN_KEY, "tater.man", 11, 6 }, { TOKEN_RBRACKET, "", 11, 17 },
-        { TOKEN_KEY, "type", 12, 1 }, {TOKEN_KEY, "name", 12, 6 }, { TOKEN_STRING, "pug", 12, 13 },
-        { TOKEN_EOF, "", 13, 1 },
+    vector<Token> tokens = {
+        { TOKEN_LBRACKET, nullptr, "", 1, 1 }, { TOKEN_KEY, nullptr, "table", 1, 2 }, { TOKEN_RBRACKET, nullptr, "", 1, 7 },
+        { TOKEN_LBRACKET, nullptr, "", 3, 1 }, { TOKEN_KEY, nullptr, "table-1", 3, 2 }, { TOKEN_RBRACKET, nullptr, "", 3, 9 },
+        { TOKEN_KEY, nullptr, "key1", 4, 1 }, { TOKEN_VALUE, new StringValue("some string"), "\"some string\"", 4, 8 },
+        { TOKEN_KEY, nullptr, "key2", 5, 1 }, { TOKEN_VALUE, new IntegerValue(123), "123", 5, 8 },
+        { TOKEN_LBRACKET, nullptr, "", 7, 1 }, { TOKEN_KEY, nullptr, "table-2", 7, 2 }, { TOKEN_RBRACKET, nullptr, "", 7, 9 },
+        { TOKEN_KEY, nullptr, "key1", 8, 1 }, { TOKEN_VALUE, new StringValue("another string"), "\"another string\"", 8, 8 },
+        { TOKEN_KEY, nullptr, "key2", 9, 1 }, { TOKEN_VALUE, new IntegerValue(456), "456", 9, 8 },
+        { TOKEN_LBRACKET, nullptr, "", 11, 1 }, { TOKEN_KEY, nullptr, "dog", 11, 2 }, { TOKEN_KEY, nullptr, "tater.man", 11, 6 }, { TOKEN_RBRACKET, nullptr, "", 11, 17 },
+        { TOKEN_KEY, nullptr, "type", 12, 1 }, {TOKEN_KEY, nullptr, "name", 12, 6 }, { TOKEN_VALUE, new StringValue("pug"), "\"pug\"", 12, 13 },
+        { TOKEN_EOF, nullptr, "", 13, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -922,12 +864,12 @@ TEST(lex, spaces_in_table_headers)
         "[ j . \"ʞ\" . 'l' ]  # same as [j.\"ʞ\".'l']\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "a", 1, 2 }, { TOKEN_KEY, "b", 1, 4 }, { TOKEN_KEY, "c", 1, 6 }, { TOKEN_RBRACKET, "", 1, 7 },
-        { TOKEN_LBRACKET, "", 2, 1 }, { TOKEN_KEY, "d", 2, 3 }, { TOKEN_KEY, "e", 2, 5 }, { TOKEN_KEY, "f", 2, 7 }, { TOKEN_RBRACKET, "", 2, 9 },
-        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "g", 3, 3 }, { TOKEN_KEY, "h", 3, 8 }, { TOKEN_KEY, "i", 3, 13 }, { TOKEN_RBRACKET, "", 3, 15 },
-        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "j", 4, 3 }, { TOKEN_KEY, "ʞ", 4, 7 }, { TOKEN_KEY, "l", 4, 13 }, { TOKEN_RBRACKET, "", 4, 17 },
-        { TOKEN_EOF, "", 5, 1 },
+    vector<Token> tokens = {
+        { TOKEN_LBRACKET, nullptr, "", 1, 1 }, { TOKEN_KEY, nullptr, "a", 1, 2 }, { TOKEN_KEY, nullptr, "b", 1, 4 }, { TOKEN_KEY, nullptr, "c", 1, 6 }, { TOKEN_RBRACKET, nullptr, "", 1, 7 },
+        { TOKEN_LBRACKET, nullptr, "", 2, 1 }, { TOKEN_KEY, nullptr, "d", 2, 3 }, { TOKEN_KEY, nullptr, "e", 2, 5 }, { TOKEN_KEY, nullptr, "f", 2, 7 }, { TOKEN_RBRACKET, nullptr, "", 2, 9 },
+        { TOKEN_LBRACKET, nullptr, "", 3, 1 }, { TOKEN_KEY, nullptr, "g", 3, 3 }, { TOKEN_KEY, nullptr, "h", 3, 8 }, { TOKEN_KEY, nullptr, "i", 3, 13 }, { TOKEN_RBRACKET, nullptr, "", 3, 15 },
+        { TOKEN_LBRACKET, nullptr, "", 4, 1 }, { TOKEN_KEY, nullptr, "j", 4, 3 }, { TOKEN_KEY, nullptr, "ʞ", 4, 7 }, { TOKEN_KEY, nullptr, "l", 4, 13 }, { TOKEN_RBRACKET, nullptr, "", 4, 17 },
+        { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -945,10 +887,10 @@ TEST(lex, implicit_super_tables)
         "[x] # defining a super-table afterward is ok\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "x", 4, 2 }, { TOKEN_KEY, "y", 4, 4 }, { TOKEN_KEY, "z", 4, 6 }, { TOKEN_KEY, "w", 4, 8 }, { TOKEN_RBRACKET, "", 4, 9 },
-        { TOKEN_LBRACKET, "", 6, 1 }, { TOKEN_KEY, "x", 6, 2 }, { TOKEN_RBRACKET, "", 6, 3 },
-        { TOKEN_EOF, "", 7, 1 },
+    vector<Token> tokens = {
+        { TOKEN_LBRACKET, nullptr, "", 4, 1 }, { TOKEN_KEY, nullptr, "x", 4, 2 }, { TOKEN_KEY, nullptr, "y", 4, 4 }, { TOKEN_KEY, nullptr, "z", 4, 6 }, { TOKEN_KEY, nullptr, "w", 4, 8 }, { TOKEN_RBRACKET, nullptr, "", 4, 9 },
+        { TOKEN_LBRACKET, nullptr, "", 6, 1 }, { TOKEN_KEY, nullptr, "x", 6, 2 }, { TOKEN_RBRACKET, nullptr, "", 6, 3 },
+        { TOKEN_EOF, nullptr, "", 7, 1 },
     };
 
     assert_lexed(toml, tokens);
@@ -971,16 +913,16 @@ TEST(lex, table_arrays)
         "color = \"gray\"\n"
         ;
 
-    const vector<Token> tokens = {
-        { TOKEN_DOUBLE_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "products", 1, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 1, 11 },
-        { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Hammer", 2, 8 },
-        { TOKEN_KEY, "sku", 3, 1 }, { TOKEN_DECIMAL, "738594937", 3, 7 },
-        { TOKEN_DOUBLE_LBRACKET, "", 5, 1 }, { TOKEN_KEY, "products", 5, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 5, 11 },
-        { TOKEN_DOUBLE_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "products", 7, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 7, 11 },
-        { TOKEN_KEY, "name", 8, 1 }, { TOKEN_STRING, "Nail", 8, 8 },
-        { TOKEN_KEY, "sku", 9, 1 }, { TOKEN_DECIMAL, "284758393", 9, 7 },
-        { TOKEN_KEY, "color", 11, 1 }, { TOKEN_STRING, "gray", 11, 9 },
-        { TOKEN_EOF, "", 12, 1 },
+    vector<Token> tokens = {
+        { TOKEN_DOUBLE_LBRACKET, nullptr, "", 1, 1 }, { TOKEN_KEY, nullptr, "products", 1, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 1, 11 },
+        { TOKEN_KEY, nullptr, "name", 2, 1 }, { TOKEN_VALUE, new StringValue("Hammer"), "\"Hammer\"", 2, 8 },
+        { TOKEN_KEY, nullptr, "sku", 3, 1 }, { TOKEN_VALUE, new IntegerValue(738594937), "738594937", 3, 7 },
+        { TOKEN_DOUBLE_LBRACKET, nullptr, "", 5, 1 }, { TOKEN_KEY, nullptr, "products", 5, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 5, 11 },
+        { TOKEN_DOUBLE_LBRACKET, nullptr, "", 7, 1 }, { TOKEN_KEY, nullptr, "products", 7, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 7, 11 },
+        { TOKEN_KEY, nullptr, "name", 8, 1 }, { TOKEN_VALUE, new StringValue("Nail"), "\"Nail\"", 8, 8 },
+        { TOKEN_KEY, nullptr, "sku", 9, 1 }, { TOKEN_VALUE, new IntegerValue(284758393), "284758393", 9, 7 },
+        { TOKEN_KEY, nullptr, "color", 11, 1 }, { TOKEN_VALUE, new StringValue("gray"), "\"gray\"", 11, 9 },
+        { TOKEN_EOF, nullptr, "", 12, 1 },
     };
 
     assert_lexed(toml, tokens);

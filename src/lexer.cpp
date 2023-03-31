@@ -71,15 +71,15 @@ enum ContainerState
 struct TomlIterator
 {
     const string &toml;
-    string::size_type length;
+    u64 length;
 
-    string::size_type start_position;
-    string::size_type start_line;
-    string::size_type start_column;
+    u64 start_position;
+    u64 start_line;
+    u64 start_column;
 
-    string::size_type current_position;
-    string::size_type current_line;
-    string::size_type current_column;
+    u64 current_position;
+    u64 current_line;
+    u64 current_column;
 
     vector<Token> &tokens;
     vector<Error> &errors;
@@ -130,6 +130,16 @@ advance(TomlIterator &iterator)
 }
 
 
+string
+get_lexeme(const TomlIterator &iterator)
+{
+    string result = iterator.toml.substr(
+        iterator.start_position,
+        iterator.current_position - iterator.start_position);
+    return result;
+}
+
+
 void
 add_error(TomlIterator &iterator, string message)
 {
@@ -142,7 +152,16 @@ add_error(TomlIterator &iterator, string message)
 void
 add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 {
-    Token token = { type, move(lexeme), iterator.start_line, iterator.start_column };
+    Token token = { type, nullptr, move(lexeme), iterator.start_line, iterator.start_column };
+    iterator.tokens.push_back(move(token));
+    advance(iterator);
+}
+
+
+void
+add_value(TomlIterator &iterator, Value *value)
+{
+    Token token = { TOKEN_VALUE, value, get_lexeme(iterator), iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
@@ -177,20 +196,10 @@ get_byte(const TomlIterator &iterator, u64 ahead = 0)
 }
 
 
-string
-get_lexeme(const TomlIterator &iterator)
-{
-    string result = iterator.toml.substr(
-        iterator.start_position,
-        iterator.current_position - iterator.start_position + 1);
-    return result;
-}
-
-
 bool
 is_binary(byte value)
 {
-    bool result = (value == '0') || (value <= '1');
+    bool result = (value == '0') || (value == '1');
     return result;
 }
 
@@ -244,7 +253,7 @@ is_printable(byte value)
 
 
 bool
-match(const TomlIterator &iterator, byte value, string::size_type ahead = 0)
+match(const TomlIterator &iterator, byte value, u64 ahead = 0)
 {
     assert(iterator.current_position <= iterator.length);
 
@@ -308,10 +317,10 @@ eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
 
 
 void
-eat_bytes(TomlIterator &iterator, string::size_type count, byte expected = INVALID_BYTE)
+eat_bytes(TomlIterator &iterator, u64 count, byte expected = INVALID_BYTE)
 {
     assert(count);
-    for (string::size_type i = 0; i < count; ++i)
+    for (u64 i = 0; i < count; ++i)
     {
         eat_byte(iterator, expected);
     }
@@ -522,28 +531,36 @@ invalid_unicode_escape(TomlIterator &iterator, u64 position)
 }
 
 
-void
+bool
 validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type, bool no_sign = false)
 {
+    bool valid = true;
     if (no_sign && (prev_token(iterator.tokens, TOKEN_MINUS) || prev_token(iterator.tokens, TOKEN_PLUS)))
     {
         const Token &token = iterator.tokens.back();
         Error error = { token.line, token.column, "'" + token.lexeme + "' sign not allowed for " + type + "number" };
         iterator.errors.push_back(move(error));
+        valid = false;
     }
 
     if (result.flags & result.INVALID_DIGIT)
     {
         add_error(iterator, "Invalid " + type + " number: " + get_lexeme(iterator));
+        valid = false;
     }
     else if (result.flags & result.INVALID_UNDERSCORE)
     {
         add_error(iterator, "'_' must separate digits in " + type + " number: " + get_lexeme(iterator));
+        valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing " + type + " number");
+        Error error = { iterator.current_line, iterator.current_column, "Missing " + type + " number" };
+        iterator.errors.push_back(move(error));
+        valid = false;
     }
+
+    return valid;
 }
 
 
@@ -768,39 +785,36 @@ lex_plus(TomlIterator &iterator)
 }
 
 
-void
-lex_exponent(TomlIterator &iterator, u32 context)
+bool
+lex_exponent(TomlIterator &iterator, u32 context, string &value)
 {
-    advance(iterator);
-
-    if (match(iterator, '-'))
+    if (match(iterator, '-') || match(iterator, '+'))
     {
-        lex_minus(iterator);
-    }
-    else if (match(iterator, '+'))
-    {
-        lex_plus(iterator);
+        value.push_back(eat_byte(iterator));
     }
 
     LexDigitResult exponent = lex_digits(iterator, is_decimal, context);
-    validate_digits(iterator, exponent, "exponential part of decimal");
-    add_token(iterator, TOKEN_EXPONENT, exponent.digits);
+    bool valid = validate_digits(iterator, exponent, "exponential part of decimal");
+    value += move(exponent.digits);
+
+    return valid;
 }
 
 
-void
-lex_fraction(TomlIterator &iterator, u32 context)
+bool
+lex_fraction(TomlIterator &iterator, u32 context, string &value)
 {
-    advance(iterator);
     LexDigitResult fraction = lex_digits(iterator, is_decimal, context | LEX_EXPONENT);
-    validate_digits(iterator, fraction, "fractional part of decimal");
-    add_token(iterator, TOKEN_FRACTION, fraction.digits);
+    bool valid = validate_digits(iterator, fraction, "fractional part of decimal");
+    value += move(fraction.digits);
 
     if (match(iterator, 'e') || match(iterator, 'E'))
     {
-        eat_byte(iterator);
-        lex_exponent(iterator, context);
+        value.push_back(eat_byte(iterator));
+        valid = lex_exponent(iterator, context, value) && valid;
     }
+
+    return valid;
 }
 
 
@@ -907,26 +921,46 @@ lex_date(TomlIterator &iterator, u32 context)
 
 
 void
-lex_decimal(TomlIterator &iterator, u32 context)
+lex_decimal(TomlIterator &iterator, u32 context, string &value)
 {
     LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
     if (match(iterator, '.'))
     {
-        validate_digits(iterator, result, "whole part of decimal");
-        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
-        eat_byte(iterator);
-        lex_fraction(iterator, context);
+        bool valid = validate_digits(iterator, result, "whole part of decimal");
+        value += move(result.digits);
+        value.push_back(eat_byte(iterator));
+        valid = lex_fraction(iterator, context, value) && valid;
+        if (valid)
+        {
+            add_value(iterator, new FloatValue(string_to_f64(value)));
+        }
+        else
+        {
+            add_value(iterator, new Value());
+        }
     }
     else if (match(iterator, 'e') || match(iterator, 'E'))
     {
-        validate_digits(iterator, result, "whole part of decimal");
-        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
-        eat_byte(iterator);
-        lex_exponent(iterator, context);
+        bool valid = validate_digits(iterator, result, "whole part of decimal");
+        value += move(result.digits);
+        value.push_back(eat_byte(iterator));
+        valid = lex_exponent(iterator, context, value) && valid;
+        if (valid)
+        {
+            add_value(iterator, new FloatValue(string_to_f64(value)));
+        }
+        else
+        {
+            add_value(iterator, new Value());
+        }
     }
     else if (match(iterator, '-'))
     {
+        if (value.length())
+        {
+            add_error(iterator, "'" + value + "' sign not allowed for date");
+        }
         validate_year(iterator, result);
         add_token(iterator, TOKEN_YEAR, result.digits);
         eat_byte(iterator);
@@ -934,6 +968,10 @@ lex_decimal(TomlIterator &iterator, u32 context)
     }
     else if (match(iterator, ':'))
     {
+        if (value.length())
+        {
+            add_error(iterator, "'" + value + "' sign not allowed for time");
+        }
         validate_hour(iterator, result);
         add_token(iterator, TOKEN_HOUR, move(result.digits));
         eat_byte(iterator);
@@ -941,67 +979,77 @@ lex_decimal(TomlIterator &iterator, u32 context)
     }
     else
     {
-        validate_digits(iterator, result, "decimal");
-        add_token(iterator, TOKEN_DECIMAL, move(result.digits));
+        if (validate_digits(iterator, result, "decimal"))
+        {
+            value += move(result.digits);
+            add_value(iterator, new IntegerValue(string_to_s64(value)));
+        }
+        else
+        {
+            add_value(iterator, new Value());
+        }
     }
 }
 
 
 void
-lex_hexadecimal(TomlIterator &iterator, u32 context)
+lex_hexadecimal(TomlIterator &iterator, u32 context, const string &)
 {
     LexDigitResult result = lex_digits(iterator, is_hexadecimal, context);
     validate_digits(iterator, result, "hexadecimal", true);
-    add_token(iterator, TOKEN_HEXADECIMAL, move(result.digits));
+    add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 16)));
 }
 
 
 void
-lex_octal(TomlIterator &iterator, u32 context)
+lex_octal(TomlIterator &iterator, u32 context, const string &)
 {
     LexDigitResult result = lex_digits(iterator, is_octal, context);
     validate_digits(iterator, result, "octal", true);
-    add_token(iterator, TOKEN_OCTAL, move(result.digits));
+    add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 8)));
 }
 
 
 void
-lex_binary(TomlIterator &iterator, u32 context)
+lex_binary(TomlIterator &iterator, u32 context, const string &)
 {
     LexDigitResult result = lex_digits(iterator, is_binary, context);
     validate_digits(iterator, result, "binary", true);
-    add_token(iterator, TOKEN_BINARY, move(result.digits));
+    add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 2)));
 }
 
 
 void
 lex_number(TomlIterator &iterator, u32 context)
 {
+    string result = get_lexeme(iterator);
+    assert((result == "") || (result == "-") || (result == "+"));
+
     if (match(iterator, '0'))
     {
         if (match(iterator, 'x', 1))
         {
             eat_bytes(iterator, 2);
-            lex_hexadecimal(iterator, context);
+            lex_hexadecimal(iterator, context, result);
         }
         else if (match(iterator, 'o', 1))
         {
             eat_bytes(iterator, 2);
-            lex_octal(iterator, context);
+            lex_octal(iterator, context, result);
         }
         else if (match(iterator, 'b', 1))
         {
             eat_bytes(iterator, 2);
-            lex_binary(iterator, context);
+            lex_binary(iterator, context, result);
         }
         else
         {
-            lex_decimal(iterator, context);
+            lex_decimal(iterator, context, result);
         }
     }
     else
     {
-        lex_decimal(iterator, context);
+        lex_decimal(iterator, context, result);
     }
 }
 
@@ -1201,10 +1249,10 @@ lex_unicode(TomlIterator &iterator, string &result, u64 count)
 void
 lex_escape(TomlIterator &iterator, string &result)
 {
-    assert (!end_of_file(iterator));
+    assert(!end_of_file(iterator));
 
     byte c = get_byte(iterator);
-    switch (get_byte(iterator))
+    switch (c)
     {
         case '"':
         case '\'':
@@ -1376,7 +1424,7 @@ lex_string(TomlIterator &iterator, byte delimiter)
     bool lexing = true;
     while (lexing)
     {
-        if (end_of_file(iterator))
+        if (match_eol(iterator))
         {
             assert(false);
             lexing = false;
@@ -1554,27 +1602,27 @@ lex_value(TomlIterator &iterator, u32 context)
                 if (match(iterator, c, 1) && match(iterator, c, 2))
                 {
                     string value = lex_multiline_string(iterator, c);
-                    add_token(iterator, TOKEN_STRING, move(value));
+                    add_value(iterator, new StringValue(move(value)));
                 }
                 else
                 {
                     string value = lex_string(iterator, c);
-                    add_token(iterator, TOKEN_STRING, move(value));
+                    add_value(iterator, new StringValue(move(value)));
                 }
             } break;
 
             case '-':
             {
-                lex_minus(iterator);
+                eat_byte(iterator);
                 if (match(iterator, 'i'))
                 {
                     eat_string(iterator, "inf");
-                    add_token(iterator, TOKEN_INF);
+                    add_value(iterator, new FloatValue(-INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
                     eat_string(iterator, "nan");
-                    add_token(iterator, TOKEN_NAN);
+                    add_value(iterator, new FloatValue(-NAN64));
                 }
                 else
                 {
@@ -1584,16 +1632,16 @@ lex_value(TomlIterator &iterator, u32 context)
 
             case '+':
             {
-                lex_plus(iterator);
+                eat_byte(iterator);
                 if (match(iterator, 'i'))
                 {
                     eat_string(iterator, "inf");
-                    add_token(iterator, TOKEN_INF);
+                    add_value(iterator, new FloatValue(+INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
                     eat_string(iterator, "nan");
-                    add_token(iterator, TOKEN_NAN);
+                    add_value(iterator, new FloatValue(+NAN64));
                 }
                 else
                 {
@@ -1604,26 +1652,26 @@ lex_value(TomlIterator &iterator, u32 context)
             case 'i':
             {
                 eat_string(iterator, "inf");
-                add_token(iterator, TOKEN_INF);
+                add_value(iterator, new FloatValue(INF64));
             } break;
 
             case 'n':
             {
                 eat_string(iterator, "nan");
-                add_token(iterator, TOKEN_NAN);
+                add_value(iterator, new FloatValue(NAN64));
             } break;
 
 
             case 't':
             {
                 eat_string(iterator, "true");
-                add_token(iterator, TOKEN_TRUE);
+                add_value(iterator, new BooleanValue(true));
             } break;
 
             case 'f':
             {
                 eat_string(iterator, "false");
-                add_token(iterator, TOKEN_FALSE);
+                add_value(iterator, new BooleanValue(false));
             } break;
 
             case '[':

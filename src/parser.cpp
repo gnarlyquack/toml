@@ -59,47 +59,6 @@ key_redefinition(Parser &parser, const Token &token)
 }
 
 
-Value *
-lex_value(Parser &parser)
-{
-    Value *result;
-
-    switch (peek(parser).type)
-    {
-        case TOKEN_DECIMAL:
-        {
-            Token &value = eat(parser);
-            result = new IntegerValue(string_to_u64(value.lexeme));
-        } break;
-
-        case TOKEN_FALSE:
-        {
-            eat(parser);
-            result = new BooleanValue(false);
-        } break;
-
-        case TOKEN_STRING:
-        {
-            Token &value = eat(parser);
-            result = new StringValue(move(value.lexeme));
-        } break;
-
-        case TOKEN_TRUE:
-        {
-            eat(parser);
-            result = new BooleanValue(true);
-        } break;
-
-        default:
-        {
-            assert(false); // unreachable
-        } break;
-    }
-
-    return result;
-}
-
-
 void
 parse_keyval(Parser &parser)
 {
@@ -137,7 +96,7 @@ parse_keyval(Parser &parser)
         key_redefinition(parser, *key);
         delete value;
     }
-    value = lex_value(parser);
+    value = eat(parser, TOKEN_VALUE).value;
 }
 
 

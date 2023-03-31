@@ -19,7 +19,7 @@ test: build/Makefile
 .PHONY: debug
 debug: build/Makefile
 	cmake --build build --target test_toml
-	lldb build/test_toml
+	gdb build/test_toml
 
 
 .PHONY: clean

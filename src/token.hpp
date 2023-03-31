@@ -8,6 +8,9 @@
 
 #include <string>
 
+#include "common.hpp"
+#include "types.hpp"
+
 
 namespace toml
 {
@@ -17,34 +20,25 @@ enum TokenType
 {
     TOKEN_ERROR,
 
-    TOKEN_BINARY,
     TOKEN_COMMA,
     TOKEN_DAY,
-    TOKEN_DECIMAL,
     TOKEN_DOUBLE_LBRACKET,
     TOKEN_DOUBLE_RBRACKET,
     TOKEN_EOF,
-    TOKEN_EXPONENT,
-    TOKEN_FALSE,
     TOKEN_FRACTION,
-    TOKEN_INF,
     TOKEN_KEY,
-    TOKEN_HEXADECIMAL,
     TOKEN_HOUR,
     TOKEN_LBRACE,
     TOKEN_LBRACKET,
     TOKEN_MINUS,
     TOKEN_MINUTE,
     TOKEN_MONTH,
-    TOKEN_NAN,
     TOKEN_NEWLINE,
-    TOKEN_OCTAL,
     TOKEN_PLUS,
     TOKEN_RBRACE,
     TOKEN_RBRACKET,
     TOKEN_SECOND,
-    TOKEN_STRING,
-    TOKEN_TRUE,
+    TOKEN_VALUE,
     TOKEN_YEAR,
 };
 
@@ -52,10 +46,11 @@ enum TokenType
 struct Token
 {
     TokenType type;
-    std::string lexeme;
+    Value *value;
 
-    std::string::size_type line;
-    std::string::size_type column;
+    std::string lexeme;
+    u64 line;
+    u64 column;
 };
 
 

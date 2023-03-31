@@ -3,8 +3,8 @@
 //  of this project, including this file, may be copied, modified, propagated,
 //  or distributed except according to the terms contained in the LICENSE file.
 
-#ifndef TOML_VALUES_HPP
-#define TOML_VALUES_HPP
+#ifndef TOML_TYPES_HPP
+#define TOML_TYPES_HPP
 
 #include <cassert>
 #include <cstdint>
@@ -28,6 +28,7 @@ enum ValueType
     TYPE_INVALID,
 
     TYPE_BOOL,
+    TYPE_FLOAT,
     TYPE_INTEGER,
     TYPE_STRING,
     TYPE_TABLE,
@@ -61,6 +62,22 @@ struct BooleanValue final : public Value
 
 
     explicit BooleanValue(bool boolean) : Value(TYPE_BOOL), value(boolean)
+    {
+    }
+};
+
+
+struct FloatValue final : public Value
+{
+    double value;
+
+
+    explicit FloatValue() : Value(TYPE_FLOAT), value(0)
+    {
+    }
+
+
+    explicit FloatValue(double number) : Value(TYPE_FLOAT) , value(number)
     {
     }
 };
@@ -113,14 +130,12 @@ struct TableValue final : public Value
     }
 
 
-    explicit TableValue(const Table &table)
-        : Value(TYPE_TABLE) , value(table)
+    explicit TableValue(const Table &table) : Value(TYPE_TABLE) , value(table)
     {
     }
 
 
-    explicit TableValue(Table &&table)
-        : Value(TYPE_TABLE) , value(std::move(table))
+    explicit TableValue(Table &&table) : Value(TYPE_TABLE) , value(std::move(table))
     {
     }
 };
@@ -129,4 +144,4 @@ struct TableValue final : public Value
 } // namespace toml
 
 
-#endif // TOML_VALUES_HPP
+#endif // TOML_TYPES_HPP

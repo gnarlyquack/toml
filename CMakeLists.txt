@@ -48,6 +48,6 @@ add_executable(test_toml
     test/parser.cpp
     )
 target_include_directories(test_toml PRIVATE src)
-target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)
+target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main m)
 
 add_custom_target(run_toml_tests COMMAND test_toml)
