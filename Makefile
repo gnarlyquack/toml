@@ -8,7 +8,7 @@ build:
 
 
 build/Makefile: Makefile CMakeLists.txt | build
-	cmake -B build .
+	cmake -DCMAKE_CXX_STANDARD=11 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=OFF -B build .
 
 
 .PHONY: test

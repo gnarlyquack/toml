@@ -6,7 +6,6 @@ project(toml VERSION 1.0.0 LANGUAGES CXX)
 add_library(cxxflags INTERFACE)
 target_compile_features(cxxflags INTERFACE cxx_std_11)
 target_compile_options(cxxflags INTERFACE
-    -std=c++11
     -g
     -Werror
     -Wall -Wextra -Wpedantic
