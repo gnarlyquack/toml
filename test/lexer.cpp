@@ -633,8 +633,8 @@ TEST(lex, local_times)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "lt1", 1, 1 }, { TOKEN_HOUR, nullptr, "07", 1, 7 }, { TOKEN_MINUTE, nullptr, "32", 1, 10 }, { TOKEN_SECOND, nullptr, "00", 1, 13 },
-        { TOKEN_KEY, nullptr, "lt2", 2, 1 }, { TOKEN_HOUR, nullptr, "00", 2, 7 }, { TOKEN_MINUTE, nullptr, "32", 2, 10 }, { TOKEN_SECOND, nullptr, "00", 2, 13 }, { TOKEN_FRACTION, nullptr, "999999", 2, 16 },
+        { TOKEN_KEY, nullptr, "lt1", 1, 1 }, { TOKEN_VALUE, new LocalTimeValue{LocalTime{chrono::hours{7} + chrono::minutes{32}}}, "07:32:00", 1, 7 },
+        { TOKEN_KEY, nullptr, "lt2", 2, 1 }, { TOKEN_VALUE, new LocalTimeValue{LocalTime{chrono::minutes{32} + chrono::microseconds{999999}}}, "00:32:00.999999", 2, 7 },
         { TOKEN_EOF, nullptr, "", 3, 1 },
     };
 
@@ -647,7 +647,7 @@ TEST(lex, local_dates)
     const string toml = "ld1 = 1979-05-27";
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "ld1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 7 }, { TOKEN_MONTH, nullptr, "05", 1, 12 }, { TOKEN_DAY, nullptr, "27", 1, 15 },
+        { TOKEN_KEY, nullptr, "ld1", 1, 1 }, { TOKEN_VALUE, new LocalDateValue{LocalDate{date::year{1979} / date::month{5} / date::day{27}}}, "1979-05-27", 1, 7 },
         { TOKEN_EOF, nullptr, "", 1, 17 },
     };
 
@@ -663,8 +663,22 @@ TEST(lex, local_datetimes)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "ldt1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 8}, { TOKEN_MONTH, nullptr, "05", 1, 13 }, { TOKEN_DAY, nullptr, "27", 1, 16 }, { TOKEN_HOUR, nullptr, "07", 1, 19}, { TOKEN_MINUTE, nullptr, "32", 1, 22 }, { TOKEN_SECOND, nullptr, "00", 1, 25 },
-        { TOKEN_KEY, nullptr, "ldt2", 2, 1 }, { TOKEN_YEAR, nullptr, "1979", 2, 8}, { TOKEN_MONTH, nullptr, "05", 2, 13 }, { TOKEN_DAY, nullptr, "27", 2, 16 }, { TOKEN_HOUR, nullptr, "00", 2, 19}, { TOKEN_MINUTE, nullptr, "32", 2, 22 }, { TOKEN_SECOND, nullptr, "00", 2, 25 }, { TOKEN_FRACTION, nullptr, "999999", 2, 28 },
+        { TOKEN_KEY, nullptr, "ldt1", 1, 1 },
+        { TOKEN_VALUE,
+            new LocalDateTimeValue{
+                LocalDate{date::year{1979} / date::month{5} / date::day{27}}
+                + chrono::hours{7} + chrono::minutes{32}
+            },
+            "1979-05-27T07:32:00", 1, 8},
+
+        { TOKEN_KEY, nullptr, "ldt2", 2, 1 },
+        { TOKEN_VALUE,
+            new LocalDateTimeValue{
+                LocalDate{date::year{1979} / date::month{5} / date::day{27}}
+                + chrono::minutes{32} + chrono::microseconds{999999}
+            },
+            "1979-05-27T00:32:00.999999", 2, 8 },
+
         { TOKEN_EOF, nullptr, "", 3, 1 },
     };
 
@@ -682,10 +696,35 @@ TEST(lex, offset_datetimes)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "odt1", 1, 1 }, { TOKEN_YEAR, nullptr, "1979", 1, 8}, { TOKEN_MONTH, nullptr, "05", 1, 13 }, { TOKEN_DAY, nullptr, "27", 1, 16 }, { TOKEN_HOUR, nullptr, "07", 1, 19}, { TOKEN_MINUTE, nullptr, "32", 1, 22 }, { TOKEN_SECOND, nullptr, "00", 1, 25 }, { TOKEN_PLUS, nullptr, "+", 1, 27 }, { TOKEN_HOUR, nullptr, "00", 1, 28 }, { TOKEN_MINUTE, nullptr, "00", 1, 28 },
-        { TOKEN_KEY, nullptr, "odt2", 2, 1 }, { TOKEN_YEAR, nullptr, "1979", 2, 8}, { TOKEN_MONTH, nullptr, "05", 2, 13 }, { TOKEN_DAY, nullptr, "27", 2, 16 }, { TOKEN_HOUR, nullptr, "00", 2, 19}, { TOKEN_MINUTE, nullptr, "32", 2, 22 }, { TOKEN_SECOND, nullptr, "00", 2, 25 }, { TOKEN_MINUS, nullptr, "-", 2, 27 }, { TOKEN_HOUR, nullptr, "07", 2, 28 }, { TOKEN_MINUTE, nullptr, "00", 2, 31 },
-        { TOKEN_KEY, nullptr, "odt3", 3, 1 }, { TOKEN_YEAR, nullptr, "1979", 3, 8}, { TOKEN_MONTH, nullptr, "05", 3, 13 }, { TOKEN_DAY, nullptr, "27", 3, 16 }, { TOKEN_HOUR, nullptr, "00", 3, 19}, { TOKEN_MINUTE, nullptr, "32", 3, 22 }, { TOKEN_SECOND, nullptr, "00", 3, 25 }, { TOKEN_FRACTION, nullptr, "999999", 3, 28 }, { TOKEN_MINUS, nullptr, "-", 3, 34 }, { TOKEN_HOUR, nullptr, "07", 3, 35 }, { TOKEN_MINUTE, nullptr, "00", 3, 38 },
-        { TOKEN_KEY, nullptr, "odt4", 4, 1 }, { TOKEN_YEAR, nullptr, "1979", 4, 8}, { TOKEN_MONTH, nullptr, "05", 4, 13 }, { TOKEN_DAY, nullptr, "27", 4, 16 }, { TOKEN_HOUR, nullptr, "07", 4, 19}, { TOKEN_MINUTE, nullptr, "32", 4, 22 }, { TOKEN_SECOND, nullptr, "00", 4, 25 }, { TOKEN_PLUS, nullptr, "+", 4, 27 }, { TOKEN_HOUR, nullptr, "00", 4, 28 }, { TOKEN_MINUTE, nullptr, "00", 4, 28 },
+        { TOKEN_KEY, nullptr, "odt1", 1, 1 },
+        { TOKEN_VALUE,
+            new OffsetDateTimeValue(
+                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
+                    + chrono::hours{7} + chrono::minutes{32}),
+            "1979-05-27T07:32:00Z", 1, 8},
+
+        { TOKEN_KEY, nullptr, "odt2", 2, 1 },
+        { TOKEN_VALUE,
+            new OffsetDateTimeValue(
+                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
+                    + chrono::hours{7} + chrono::minutes{32}),
+            "1979-05-27T00:32:00-07:00", 2, 8},
+
+        { TOKEN_KEY, nullptr, "odt3", 3, 1 },
+        { TOKEN_VALUE,
+            new OffsetDateTimeValue(
+                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
+                    + chrono::hours{7} + chrono::minutes{32} + chrono::microseconds{999999}),
+            "1979-05-27T00:32:00.999999-07:00", 3, 8},
+
+
+        { TOKEN_KEY, nullptr, "odt4", 4, 1 },
+        { TOKEN_VALUE,
+            new OffsetDateTimeValue(
+                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
+                    + chrono::hours{7} + chrono::minutes{32}),
+            "1979-05-27 07:32:00Z", 4, 8},
+
         { TOKEN_EOF, nullptr, "", 5, 1 },
     };
 

@@ -21,11 +21,26 @@ target_compile_options(cxxflags INTERFACE
     )
 
 
+# Build instructions from date/CMakeLists.txt
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+include(FetchContent)
+FetchContent_Declare(
+    datetime
+    GIT_REPOSITORY  https://github.com/HowardHinnant/date.git
+    GIT_TAG         v3.0.1
+    #GIT_TAG         master
+    )
+set(BUILD_TZ_LIB ON)
+set(ENABLE_DATE_TESTING ON)
+set(USE_SYSTEM_TZ_DB ON)
+FetchContent_MakeAvailable(datetime)
+
+
 add_library(toml
     src/lexer.cpp
     src/parser.cpp
     )
-target_link_libraries(toml PRIVATE cxxflags)
+target_link_libraries(toml PUBLIC date-tz PRIVATE cxxflags)
 
 
 # Build instructions from googletest/googletest/README.md

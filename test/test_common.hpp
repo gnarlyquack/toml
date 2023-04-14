@@ -84,6 +84,30 @@ operator==(const Value &left, const Value &right)
                     == static_cast<const IntegerValue &>(right).value;
             } break;
 
+            case TYPE_LOCAL_DATE:
+            {
+                result = static_cast<const LocalDateValue &>(left).value
+                    == static_cast<const LocalDateValue &>(right).value;
+            } break;
+
+            case TYPE_LOCAL_DATETIME:
+            {
+                result = static_cast<const LocalDateTimeValue &>(left).value
+                    == static_cast<const LocalDateTimeValue &>(right).value;
+            } break;
+
+            case TYPE_LOCAL_TIME:
+            {
+                result = static_cast<const LocalTimeValue &>(left).value
+                    == static_cast<const LocalTimeValue &>(right).value;
+            } break;
+
+            case TYPE_OFFSET_DATETIME:
+            {
+                result = static_cast<const OffsetDateTimeValue &>(left).value
+                    == static_cast<const OffsetDateTimeValue &>(right).value;
+            } break;
+
             case TYPE_STRING:
             {
                 result = static_cast<const StringValue &>(left).value
@@ -165,6 +189,26 @@ operator<<(std::ostream &os, const Value &value)
         case TYPE_INTEGER:
         {
             os << "Integer(" << static_cast<const IntegerValue &>(value).value << ')';
+        } break;
+
+        case TYPE_LOCAL_DATE:
+        {
+            os << "LocalDate(" << static_cast<const LocalDateValue &>(value).value << ')';
+        } break;
+
+        case TYPE_LOCAL_DATETIME:
+        {
+            os << "LocalDateTime(" << static_cast<const LocalDateTimeValue &>(value).value << ')';
+        } break;
+
+        case TYPE_LOCAL_TIME:
+        {
+            os << "LocalTime(" << static_cast<const LocalTimeValue &>(value).value << ')';
+        } break;
+
+        case TYPE_OFFSET_DATETIME:
+        {
+            os << "OffsetDateTime(" << date::format("%Y-%m-%d %T %Z", static_cast<const OffsetDateTimeValue &>(value).value) << ')';
         } break;
 
         case TYPE_STRING:
