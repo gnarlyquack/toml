@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility> // move
+#include <vector>
 
 #include <date/tz.h>
 
@@ -21,14 +22,13 @@ namespace toml
 {
 
 
+struct Value;
+
+using Array = std::vector<Value *>;
 using LocalDate = date::local_time<date::days>;
 using LocalDateTime = date::local_time<std::chrono::microseconds>;
 using LocalTime = date::local_time<std::chrono::microseconds>;
 using OffsetDateTime = date::sys_time<std::chrono::microseconds>;
-
-
-struct Value;
-
 using Table = std::unordered_map<std::string, Value *>;
 
 
@@ -36,6 +36,7 @@ enum ValueType
 {
     TYPE_INVALID,
 
+    TYPE_ARRAY,
     TYPE_BOOL,
     TYPE_FLOAT,
     TYPE_INTEGER,
@@ -59,6 +60,26 @@ struct Value
 
 protected:
     explicit Value(ValueType t) : type(t)
+    {
+    }
+};
+
+
+struct ArrayValue final : public Value
+{
+    Array value;
+
+
+    explicit ArrayValue() : Value{TYPE_ARRAY}, value{}
+    {
+    }
+
+
+    explicit ArrayValue(const Array &array) : Value{TYPE_ARRAY}, value{array}
+    {
+    }
+
+    explicit ArrayValue(Array &&array) : Value{TYPE_ARRAY}, value{std::move(array)}
     {
     }
 };

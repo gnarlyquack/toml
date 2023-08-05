@@ -53,6 +53,9 @@ operator==(const Error &left, const Error &right)
 
 
 inline bool
+operator==(const Array &left, const Array &right);
+
+inline bool
 operator==(const Table &left, const Table &right);
 
 
@@ -64,6 +67,12 @@ operator==(const Value &left, const Value &right)
     {
         switch (left.type)
         {
+            case TYPE_ARRAY:
+            {
+                result = static_cast<const ArrayValue &>(left).value
+                    == static_cast<const ArrayValue &>(right).value;
+            } break;
+
             case TYPE_BOOL:
             {
                 result = static_cast<const BooleanValue &>(left).value
@@ -131,6 +140,22 @@ operator==(const Value &left, const Value &right)
 
 
 inline bool
+operator==(const Array &left, const Array &right)
+{
+    bool result = left.size() == right.size();
+
+    for (size_t i = 0; result && i < left.size(); ++i)
+    {
+        Value *lvalue = left[i];
+        Value *rvalue = right[i];
+        result = *lvalue == *rvalue;
+    }
+
+    return result;
+}
+
+
+inline bool
 operator==(const Table &left, const Table &right)
 {
     bool result = left.size() == right.size();
@@ -168,6 +193,10 @@ operator==(const Token &left, const Token &right)
 
 
 inline std::ostream &
+operator<<(std::ostream &os, const Array &value);
+
+
+inline std::ostream &
 operator<<(std::ostream &os, const Table &value);
 
 
@@ -176,6 +205,11 @@ operator<<(std::ostream &os, const Value &value)
 {
     switch (value.type)
     {
+        case TYPE_ARRAY:
+        {
+            os << "Array(" << static_cast<const ArrayValue &>(value).value << ')';
+        } break;
+
         case TYPE_BOOL:
         {
             os << "Boolean(" << std::boolalpha << static_cast<const BooleanValue &>(value).value << ')';
@@ -227,7 +261,6 @@ operator<<(std::ostream &os, const Value &value)
         } break;
     }
 
-    os << ")";
     return os;
 }
 
@@ -236,6 +269,22 @@ inline std::ostream &
 operator<<(std::ostream &os, const Value *value)
 {
     os << *value;
+    return os;
+}
+
+
+inline std::ostream &
+operator<<(std::ostream &os, const Array &value)
+{
+    uint64_t count = 0;
+    for (auto i : value)
+    {
+        if (count++)
+        {
+            os << ", ";
+        }
+        os << i;
+    }
     return os;
 }
 
@@ -251,7 +300,7 @@ operator<<(std::ostream &os, const Table &value)
         {
             os << ", ";
         }
-        os << "(\"" << i.first << "\", " << *i.second << ')';
+        os << "(\"" << i.first << "\", " << i.second << ')';
     }
     os << " }";
     return os;

@@ -34,6 +34,9 @@ struct Parser
 };
 
 
+Value *parse_value(Parser &parser);
+
+
 const Token &
 peek(const Parser &parser)
 {
@@ -56,6 +59,79 @@ key_redefinition(Parser &parser, const Token &token)
 {
     Error error = {token.line, token.column, "Key \"" + token.lexeme + "\" has already been defined."};
     parser.errors.push_back(move(error));
+}
+
+
+ArrayValue *
+parse_array(Parser &parser)
+{
+    auto result = new ArrayValue{};
+    eat(parser, TOKEN_LBRACKET);
+
+    bool parsing = true;
+    while (parsing)
+    {
+        const Token &token = peek(parser);
+
+        switch (token.type)
+        {
+            case TOKEN_EOF:
+            {
+                // TODO: handle unterminated array
+                assert(false);
+            } break;
+
+            case TOKEN_COMMA:
+            {
+                eat(parser);
+                break;
+            }
+
+            case TOKEN_RBRACKET:
+            {
+                eat(parser);
+                parsing = false;
+            } break;
+
+            default:
+            {
+                Value *value = parse_value(parser);
+                result->value.push_back(value);
+            } break;
+        }
+    }
+
+    return result;
+}
+
+
+Value *
+parse_value(Parser &parser)
+{
+    Value *result;
+
+    const Token &token = peek(parser);
+    switch (token.type)
+    {
+        case TOKEN_VALUE:
+        {
+            eat(parser);
+            result = token.value;
+        } break;
+
+        case TOKEN_LBRACKET:
+        {
+            result = parse_array(parser);
+        } break;
+
+        default:
+        {
+            assert(false);
+            result = new Value{};
+        } break;
+    }
+
+    return result;
 }
 
 
@@ -96,7 +172,8 @@ parse_keyval(Parser &parser)
         key_redefinition(parser, *key);
         delete value;
     }
-    value = eat(parser, TOKEN_VALUE).value;
+
+    value = parse_value(parser);
 }
 
 

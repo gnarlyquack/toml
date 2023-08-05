@@ -682,7 +682,6 @@ TEST(parse, offset_datetimes)
 }
 
 
-#if 0
 TEST(parse, arrays)
 {
     const string toml =
@@ -694,55 +693,32 @@ TEST(parse, arrays)
         "\n"
         "# Mixed-type arrays are allowed\n"
         "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\n"
+#if 0
         "contributors = [\n"
         "  \"Foo Bar <foo@example.com>\",\n"
         "  { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }\n"
         "]\n"
+#endif
         ;
 
     const Table result = {
-        { TOKEN_KEY, "integers", 1, 1 }, { TOKEN_LBRACKET, "", 1, 12 },
-            { TOKEN_DECIMAL, "1", 1, 14 }, { TOKEN_COMMA, "", 1, 15 },
-            { TOKEN_DECIMAL, "2", 1, 17 }, { TOKEN_COMMA, "", 1, 18 },
-            { TOKEN_DECIMAL, "3", 1, 20 }, { TOKEN_RBRACKET, "", 1, 22 },
-        { TOKEN_KEY, "colors", 2, 1 }, { TOKEN_LBRACKET, "", 2, 10 },
-            { TOKEN_STRING, "red", 2, 12 }, { TOKEN_COMMA, "", 2, 17 },
-            { TOKEN_STRING, "yellow", 2, 19 }, { TOKEN_COMMA, "", 2, 27 },
-            { TOKEN_STRING, "green", 2, 29 }, { TOKEN_RBRACKET, "", 2, 37 },
-        { TOKEN_KEY, "nested_arrays_of_ints", 3, 1 }, { TOKEN_LBRACKET, "", 3, 25 },
-            { TOKEN_LBRACKET, "", 3, 27 },
-                { TOKEN_DECIMAL, "1", 3, 29 }, { TOKEN_COMMA, "", 3, 30 },
-                { TOKEN_DECIMAL, "2", 3, 32 },
-            { TOKEN_RBRACKET, "", 3, 34 }, { TOKEN_COMMA, "", 3, 35 },
-            { TOKEN_LBRACKET, "", 3, 37 },
-                { TOKEN_DECIMAL, "3", 3, 38 }, { TOKEN_COMMA, "", 3, 39 },
-                { TOKEN_DECIMAL, "4", 3, 41 }, { TOKEN_COMMA, "", 3, 42 },
-                { TOKEN_DECIMAL, "5", 3, 44 },
-            { TOKEN_RBRACKET, "", 3, 45 },
-        { TOKEN_RBRACKET, "", 3, 47 },
-        { TOKEN_KEY, "nested_mixed_array", 4, 1 }, { TOKEN_LBRACKET, "", 4, 22 },
-            { TOKEN_LBRACKET, "", 4, 24 },
-                { TOKEN_DECIMAL, "1", 4, 26 }, { TOKEN_COMMA, "", 4, 27 },
-                { TOKEN_DECIMAL, "2", 4, 29 },
-            { TOKEN_RBRACKET, "", 4, 31 }, { TOKEN_COMMA, "", 4, 32 },
-            { TOKEN_LBRACKET, "", 4, 34 },
-                { TOKEN_STRING, "a", 4, 35 }, { TOKEN_COMMA, "", 4, 38 },
-                { TOKEN_STRING, "b", 4, 40 }, { TOKEN_COMMA, "", 4, 43 },
-                { TOKEN_STRING, "c", 4, 45 },
-            { TOKEN_RBRACKET, "", 4, 48 },
-        { TOKEN_RBRACKET, "", 4, 50 },
-        { TOKEN_KEY, "string_array", 5, 1 }, { TOKEN_LBRACKET, "", 5, 16 },
-            { TOKEN_STRING, "all", 5, 18 }, { TOKEN_COMMA, "", 5, 23 },
-            { TOKEN_STRING, "strings", 5, 25 }, { TOKEN_COMMA, "", 5, 34 },
-            { TOKEN_STRING, "are the same", 5, 36 }, { TOKEN_COMMA, "", 5, 54 },
-            { TOKEN_STRING, "type", 5, 56 }, { TOKEN_RBRACKET, "", 5, 67 },
-        { TOKEN_KEY, "numbers", 8, 1 }, { TOKEN_LBRACKET, "", 8, 11 },
-            { TOKEN_DECIMAL, "0", 8, 13 }, { TOKEN_FRACTION, "1", 8, 15 }, { TOKEN_COMMA, "", 8, 16 },
-            { TOKEN_DECIMAL, "0", 8, 18 }, { TOKEN_FRACTION, "2", 8, 20 }, { TOKEN_COMMA, "", 8, 21 },
-            { TOKEN_DECIMAL, "0", 8, 23 }, { TOKEN_FRACTION, "5", 8, 25 }, { TOKEN_COMMA, "", 8, 26 },
-            { TOKEN_DECIMAL, "1", 8, 28 }, { TOKEN_COMMA, "", 8, 29 },
-            { TOKEN_DECIMAL, "2", 8, 31 }, { TOKEN_COMMA, "", 8, 32 },
-            { TOKEN_DECIMAL, "5", 8, 34 }, { TOKEN_RBRACKET, "", 8, 36 },
+        { "integers", new ArrayValue{{new IntegerValue{1}, new IntegerValue{2}, new IntegerValue{3} }} },
+        { "colors", new ArrayValue{{new StringValue{"red"}, new StringValue{"yellow"}, new StringValue{"green"} }} },
+        { "nested_arrays_of_ints", new ArrayValue{{
+                new ArrayValue{{ new IntegerValue{1}, new IntegerValue{2} }},
+                new ArrayValue{{ new IntegerValue{3}, new IntegerValue{4}, new IntegerValue{5} }},
+            }} },
+        { "nested_mixed_array", new ArrayValue{{
+                new ArrayValue{{ new IntegerValue{1}, new IntegerValue{2} }},
+                new ArrayValue{{ new StringValue{"a"}, new StringValue{"b"}, new StringValue{"c"} }},
+            }} },
+        { "string_array", new ArrayValue{{
+                new StringValue{"all"}, new StringValue{"strings"}, new StringValue{"are the same"}, new StringValue{"type"},
+            }} },
+        { "numbers", new ArrayValue{{
+                new FloatValue{0.1}, new FloatValue{0.2}, new FloatValue{0.5}, new IntegerValue{1}, new IntegerValue{2}, new IntegerValue{5},
+            }} },
+#if 0
         { TOKEN_KEY, "contributors", 9, 1 }, { TOKEN_LBRACKET, "", 9, 16 },
             { TOKEN_STRING, "Foo Bar <foo@example.com>", 10, 3 }, { TOKEN_COMMA, "", 10, 30 },
             { TOKEN_LBRACE, "", 11, 3 },
@@ -750,6 +726,7 @@ TEST(parse, arrays)
                 { TOKEN_KEY, "email", 11, 23 }, { TOKEN_STRING, "bazqux@example.com", 11, 31 }, { TOKEN_COMMA, "", 11, 51},
                 { TOKEN_KEY, "url", 11, 53 }, { TOKEN_STRING, "https://example.com/bazqux", 11, 59 }, { TOKEN_RBRACE, "", 11, 88},
             { TOKEN_RBRACKET, "", 12, 1 },
+#endif
     };
 
     assert_parsed(toml, result);
@@ -770,20 +747,19 @@ TEST(parse, multiline_arrays)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "integers2", 1, 1 }, { TOKEN_LBRACKET, "", 1, 13 },
-            { TOKEN_DECIMAL, "1", 2, 3 }, { TOKEN_COMMA, "", 2, 4 },
-            { TOKEN_DECIMAL, "2", 2, 6 }, { TOKEN_COMMA, "", 2, 7 },
-            { TOKEN_DECIMAL, "3", 2, 9 }, { TOKEN_RBRACKET, "", 3, 1 },
-        { TOKEN_KEY, "integers3", 5, 1 }, { TOKEN_LBRACKET, "", 5, 13 },
-            { TOKEN_DECIMAL, "1", 6, 3 }, { TOKEN_COMMA, "", 6, 4 },
-            { TOKEN_DECIMAL, "2", 7, 3 }, { TOKEN_COMMA, "", 7, 4 },
-            { TOKEN_RBRACKET, "", 8, 1 },
+        { "integers2", new ArrayValue{{
+                new IntegerValue{1}, new IntegerValue{2}, new IntegerValue{3},
+            }} },
+        { "integers3", new ArrayValue{{
+                new IntegerValue{1}, new IntegerValue{2},
+            }} },
     };
 
     assert_parsed(toml, result);
 }
 
 
+#if 0
 TEST(parse, inline_tables)
 {
     const string toml =
