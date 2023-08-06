@@ -693,12 +693,10 @@ TEST(parse, arrays)
         "\n"
         "# Mixed-type arrays are allowed\n"
         "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\n"
-#if 0
         "contributors = [\n"
         "  \"Foo Bar <foo@example.com>\",\n"
         "  { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }\n"
         "]\n"
-#endif
         ;
 
     const Table result = {
@@ -718,15 +716,14 @@ TEST(parse, arrays)
         { "numbers", new ArrayValue{{
                 new FloatValue{0.1}, new FloatValue{0.2}, new FloatValue{0.5}, new IntegerValue{1}, new IntegerValue{2}, new IntegerValue{5},
             }} },
-#if 0
-        { TOKEN_KEY, "contributors", 9, 1 }, { TOKEN_LBRACKET, "", 9, 16 },
-            { TOKEN_STRING, "Foo Bar <foo@example.com>", 10, 3 }, { TOKEN_COMMA, "", 10, 30 },
-            { TOKEN_LBRACE, "", 11, 3 },
-                { TOKEN_KEY, "name", 11, 5 }, { TOKEN_STRING, "Baz Qux", 11, 12 }, { TOKEN_COMMA, "", 11, 21},
-                { TOKEN_KEY, "email", 11, 23 }, { TOKEN_STRING, "bazqux@example.com", 11, 31 }, { TOKEN_COMMA, "", 11, 51},
-                { TOKEN_KEY, "url", 11, 53 }, { TOKEN_STRING, "https://example.com/bazqux", 11, 59 }, { TOKEN_RBRACE, "", 11, 88},
-            { TOKEN_RBRACKET, "", 12, 1 },
-#endif
+        { "contributors", new ArrayValue{{
+                new StringValue{"Foo Bar <foo@example.com>"},
+                new TableValue{{
+                    { "name", new StringValue{"Baz Qux"} },
+                    { "email", new StringValue{"bazqux@example.com"} },
+                    { "url", new StringValue{"https://example.com/bazqux"} },
+                }},
+            }} },
     };
 
     assert_parsed(toml, result);
@@ -759,7 +756,6 @@ TEST(parse, multiline_arrays)
 }
 
 
-#if 0
 TEST(parse, inline_tables)
 {
     const string toml =
@@ -769,21 +765,24 @@ TEST(parse, inline_tables)
         ;
 
     const Table result = {
-        { TOKEN_KEY, "name", 1, 1 }, { TOKEN_LBRACE, "", 1, 8},
-            { TOKEN_KEY, "first", 1, 10 }, { TOKEN_STRING, "Tom", 1, 18 }, { TOKEN_COMMA, "", 1, 23 },
-            { TOKEN_KEY, "last", 1, 25 }, { TOKEN_STRING, "Preston-Werner", 1, 32 }, { TOKEN_RBRACE, "", 1, 49 },
-        { TOKEN_KEY, "point", 2, 1 }, { TOKEN_LBRACE, "", 2, 9},
-            { TOKEN_KEY, "x", 2, 11 }, { TOKEN_DECIMAL, "1", 2, 15 }, { TOKEN_COMMA, "", 2, 16 },
-            { TOKEN_KEY, "y", 2, 18 }, { TOKEN_DECIMAL, "2", 2, 22 }, { TOKEN_RBRACE, "", 2, 24 },
-        { TOKEN_KEY, "animal", 3, 1 }, { TOKEN_LBRACE, "", 3, 10},
-            { TOKEN_KEY, "type", 3, 12 }, { TOKEN_KEY, "name", 3, 17 }, { TOKEN_STRING, "pug", 3, 24 },
-            { TOKEN_RBRACE, "", 3, 30 },
+        { "name", new TableValue{{
+                { "first", new StringValue{"Tom"} },
+                { "last", new StringValue{"Preston-Werner"} },
+            }} },
+        { "point", new TableValue{{
+                { "x", new IntegerValue{1} },
+                { "y", new IntegerValue{2} },
+            }} },
+        { "animal", new TableValue{{
+                { "type", new TableValue{{ { "name", new StringValue{"pug"} } }} },
+            }} },
     };
 
     assert_parsed(toml, result);
 }
 
 
+#if 0
 TEST(parse, tables)
 {
     const string toml =
@@ -886,4 +885,37 @@ TEST(parse, table_arrays)
 
     assert_parsed(toml, result);
 }
+
+
+TEST(parse, inline_tables_cannot_be_extended)
+{
+    const string toml =
+        "[product]\n"
+        "type = { name = \"Nail\" }\n"
+        "type.edible = false  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+        { 3, 1, "Cannot add key to inline table" },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, inline_tables_cannot_extend_other_tables)
+{
+    const string toml =
+        "[product]\n"
+        "type.name = \"Nail\"\n"
+        "type = { edible = false }  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+    };
+
+    assert_errors(toml, errors);
+}
+
+
 #endif

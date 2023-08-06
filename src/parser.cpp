@@ -34,8 +34,20 @@ struct Parser
 };
 
 
+
+//
+// Predeclarations
+//
+
+void parse_keyval(Parser &parser, Table *table);
+
 Value *parse_value(Parser &parser);
 
+
+
+//
+// Implementation
+//
 
 const Token &
 peek(const Parser &parser)
@@ -105,6 +117,48 @@ parse_array(Parser &parser)
 }
 
 
+TableValue *
+parse_inline_table(Parser &parser)
+{
+    auto result = new TableValue{};
+    eat(parser, TOKEN_LBRACE);
+
+    bool parsing = true;
+    while (parsing)
+    {
+        const Token &token = peek(parser);
+
+        switch (token.type)
+        {
+            case TOKEN_EOF:
+            {
+                // TODO: handle unterminated table
+                assert(false);
+            } break;
+
+            case TOKEN_COMMA:
+            {
+                eat(parser);
+                break;
+            }
+
+            case TOKEN_RBRACE:
+            {
+                eat(parser);
+                parsing = false;
+            } break;
+
+            default:
+            {
+                parse_keyval(parser, &result->value);
+            } break;
+        }
+    }
+
+    return result;
+}
+
+
 Value *
 parse_value(Parser &parser)
 {
@@ -124,6 +178,11 @@ parse_value(Parser &parser)
             result = parse_array(parser);
         } break;
 
+        case TOKEN_LBRACE:
+        {
+            result = parse_inline_table(parser);
+        } break;
+
         default:
         {
             assert(false);
@@ -136,14 +195,13 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser)
+parse_keyval(Parser &parser, Table *table)
 {
-    Table *table = &parser.result;
     Token *key = &eat(parser, TOKEN_KEY);
 
     while (peek(parser).type == TOKEN_KEY)
     {
-        Value* &value = (*table)[key->lexeme];
+        Value *&value = (*table)[key->lexeme];
         if (value)
         {
             if (value->type != TYPE_TABLE)
@@ -184,7 +242,7 @@ parse_expression(Parser &parser)
     {
         case TOKEN_KEY:
         {
-            parse_keyval(parser);
+            parse_keyval(parser, &parser.result);
         } break;
 
         case TOKEN_LBRACKET:
@@ -192,7 +250,6 @@ parse_expression(Parser &parser)
             fputs("Implement parse_table\n", stderr);
             assert(false);
         } break;
-
 
         case TOKEN_DOUBLE_LBRACKET:
         {
