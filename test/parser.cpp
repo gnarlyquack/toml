@@ -230,13 +230,26 @@ TEST(parse, extend_implicit_key)
         "\n"
         "# So then you can add to the table \"fruit\" like so:\n"
         "fruit.orange = 2\n"
+        "\n"
+        "fruit.apple.color = \"red\"\n"
+        "# Defines a table named fruit\n"
+        "# Defines a table named fruit.apple\n"
+        "\n"
+        "fruit.apple.taste.sweet = true\n"
+        "# Defines a table named fruit.apple.taste\n"
+        "# fruit and fruit.apple were already created\n"
         ;
 
     const Table result = {
-        { "fruit", new TableValue({
-                    { "apple", new TableValue({
-                                { "smooth", new BooleanValue(true) } }) },
-                    { "orange", new IntegerValue(2) } }) },
+        { "fruit", new TableValue{{
+                    { "apple", new TableValue{{
+                                { "smooth", new BooleanValue{true} },
+                                { "color", new StringValue{"red"} },
+                                { "taste", new TableValue{{
+                                        { "sweet", new BooleanValue{true} },
+                                    }} },
+                            }} },
+                    { "orange", new IntegerValue{2} } }} },
     };
 
     assert_parsed(toml, result);
@@ -782,7 +795,6 @@ TEST(parse, inline_tables)
 }
 
 
-#if 0
 TEST(parse, tables)
 {
     const string toml =
@@ -801,15 +813,22 @@ TEST(parse, tables)
         ;
 
     const Table result = {
-        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "table", 1, 2 }, { TOKEN_RBRACKET, "", 1, 7 },
-        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "table-1", 3, 2 }, { TOKEN_RBRACKET, "", 3, 9 },
-        { TOKEN_KEY, "key1", 4, 1 }, { TOKEN_STRING, "some string", 4, 8 },
-        { TOKEN_KEY, "key2", 5, 1 }, { TOKEN_DECIMAL, "123", 5, 8 },
-        { TOKEN_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "table-2", 7, 2 }, { TOKEN_RBRACKET, "", 7, 9 },
-        { TOKEN_KEY, "key1", 8, 1 }, { TOKEN_STRING, "another string", 8, 8 },
-        { TOKEN_KEY, "key2", 9, 1 }, { TOKEN_DECIMAL, "456", 9, 8 },
-        { TOKEN_LBRACKET, "", 11, 1 }, { TOKEN_KEY, "dog", 11, 2 }, { TOKEN_KEY, "tater.man", 11, 6 }, { TOKEN_RBRACKET, "", 11, 17 },
-        { TOKEN_KEY, "type", 12, 1 }, {TOKEN_KEY, "name", 12, 6 }, { TOKEN_STRING, "pug", 12, 13 },
+        { "table", new TableValue{} },
+        { "table-1", new TableValue{{
+                { "key1", new StringValue{"some string"} },
+                { "key2", new IntegerValue{123} },
+            }} },
+        { "table-2", new TableValue{{
+                { "key1", new StringValue{"another string"} },
+                { "key2", new IntegerValue{456} },
+            }} },
+        { "dog", new TableValue{{
+                { "tater.man", new TableValue{{
+                        { "type", new TableValue{{
+                                { "name", new StringValue{"pug"} },
+                            }} },
+                    }} },
+            }} },
     };
 
     assert_parsed(toml, result);
@@ -826,10 +845,26 @@ TEST(parse, spaces_in_table_headers)
         ;
 
     const Table result = {
-        { TOKEN_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "a", 1, 2 }, { TOKEN_KEY, "b", 1, 4 }, { TOKEN_KEY, "c", 1, 6 }, { TOKEN_RBRACKET, "", 1, 7 },
-        { TOKEN_LBRACKET, "", 2, 1 }, { TOKEN_KEY, "d", 2, 3 }, { TOKEN_KEY, "e", 2, 5 }, { TOKEN_KEY, "f", 2, 7 }, { TOKEN_RBRACKET, "", 2, 9 },
-        { TOKEN_LBRACKET, "", 3, 1 }, { TOKEN_KEY, "g", 3, 3 }, { TOKEN_KEY, "h", 3, 8 }, { TOKEN_KEY, "i", 3, 13 }, { TOKEN_RBRACKET, "", 3, 15 },
-        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "j", 4, 3 }, { TOKEN_KEY, "ʞ", 4, 7 }, { TOKEN_KEY, "l", 4, 13 }, { TOKEN_RBRACKET, "", 4, 17 },
+        { "a", new TableValue{{
+                { "b", new TableValue{{
+                        { "c", new TableValue{} },
+                    }} },
+            }} },
+        { "d", new TableValue{{
+                { "e", new TableValue{{
+                        { "f", new TableValue{} },
+                    }} },
+            }} },
+        { "g", new TableValue{{
+                { "h", new TableValue{{
+                        { "i", new TableValue{} },
+                    }} },
+            }} },
+        { "j", new TableValue{{
+                { "ʞ", new TableValue{{
+                        { "l", new TableValue{} },
+                    }} },
+            }} },
     };
 
     assert_parsed(toml, result);
@@ -848,14 +883,148 @@ TEST(parse, implicit_super_tables)
         ;
 
     const Table result = {
-        { TOKEN_LBRACKET, "", 4, 1 }, { TOKEN_KEY, "x", 4, 2 }, { TOKEN_KEY, "y", 4, 4 }, { TOKEN_KEY, "z", 4, 6 }, { TOKEN_KEY, "w", 4, 8 }, { TOKEN_RBRACKET, "", 4, 9 },
-        { TOKEN_LBRACKET, "", 6, 1 }, { TOKEN_KEY, "x", 6, 2 }, { TOKEN_RBRACKET, "", 6, 3 },
+        { "x", new TableValue{{
+                { "y", new TableValue{{
+                        { "z", new TableValue{{
+                                { "w", new TableValue{} },
+                            }} },
+                    }} },
+            }} },
     };
 
     assert_parsed(toml, result);
 }
 
 
+TEST(parse, cannot_redefine_tables)
+{
+    const string toml =
+        "# DO NOT DO THIS\n"
+        "\n"
+        "[fruit]\n"
+        "apple = \"red\"\n"
+        "\n"
+        "[fruit]\n"
+        "orange = \"orange\"\n"
+        "\n"
+        "# DO NOT DO THIS EITHER\n"
+        "\n"
+        "[fruit.apple]\n"
+        "texture = \"smooth\"\n"
+        ;
+
+    const vector<Error> errors = {
+        { 6, 2, "Key \"fruit\" has already been defined." },
+        { 11, 8, "Key \"apple\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, out_of_order_table_definitions)
+{
+    const string toml =
+        "# VALID BUT DISCOURAGED\n"
+        "[fruit.apple]\n"
+        "[animal]\n"
+        "[fruit.orange]\n"
+        ;
+
+    const Table result = {
+        { "fruit", new TableValue{{
+                { "apple", new TableValue{} },
+                { "orange", new TableValue{} },
+            }} },
+        { "animal", new TableValue{} },
+    };
+
+    assert_parsed(toml, result);
+}
+
+
+TEST(parse, top_level_table)
+{
+    const string toml =
+        "# Top-level table begins.\n"
+        "name = \"Fido\"\n"
+        "breed = \"pug\"\n"
+        "\n"
+        "# Top-level table ends.\n"
+        "[owner]\n"
+        "name = \"Regina Dogman\"\n"
+        "member_since = 1999-08-04\n"
+        ;
+
+    const Table result = {
+        { "name", new StringValue{"Fido"} },
+        { "breed", new StringValue{"pug"} },
+        { "owner", new TableValue{{
+                { "name", new StringValue{"Regina Dogman"} },
+                { "member_since", new LocalDateValue{LocalDate{date::year{1999} / date::month{8} / date::day{4}}} },
+            }} },
+    };
+
+    assert_parsed(toml, result);
+}
+
+
+TEST(parse, dotted_keys_cannot_redefine_tables)
+{
+    const string toml =
+        "[fruit]\n"
+        "apple.color = \"red\"\n"
+        "apple.taste.sweet = true\n"
+        "\n"
+        "[fruit.apple]  # INVALID\n"
+        "[fruit.apple.taste]  # INVALID\n"
+        "\n"
+        "[fruit.apple.texture]  # you can add sub-tables\n"
+        "smooth = true\n"
+        ;
+
+    const vector<Error> errors = {
+        { 5, 8, "Key \"apple\" has already been defined." },
+        { 6, 14, "Key \"taste\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, inline_tables_cannot_be_extended)
+{
+    const string toml =
+        "[product]\n"
+        "type = { name = \"Nail\" }\n"
+        "type.edible = false  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+        { 3, 1, "Key \"type\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, inline_tables_cannot_extend_other_tables)
+{
+    const string toml =
+        "[product]\n"
+        "type.name = \"Nail\"\n"
+        "type = { edible = false }  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+        { 3, 1, "Key \"type\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+#if 0
 TEST(parse, table_arrays)
 {
     const string toml =
@@ -884,37 +1053,6 @@ TEST(parse, table_arrays)
     };
 
     assert_parsed(toml, result);
-}
-
-
-TEST(parse, inline_tables_cannot_be_extended)
-{
-    const string toml =
-        "[product]\n"
-        "type = { name = \"Nail\" }\n"
-        "type.edible = false  # INVALID\n"
-        ;
-
-    const vector<Error> errors = {
-        { 3, 1, "Cannot add key to inline table" },
-    };
-
-    assert_errors(toml, errors);
-}
-
-
-TEST(parse, inline_tables_cannot_extend_other_tables)
-{
-    const string toml =
-        "[product]\n"
-        "type.name = \"Nail\"\n"
-        "type = { edible = false }  # INVALID\n"
-        ;
-
-    const vector<Error> errors = {
-    };
-
-    assert_errors(toml, errors);
 }
 
 

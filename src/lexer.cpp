@@ -717,7 +717,7 @@ validate_day(TomlIterator &iterator, const LexDigitResult &result)
         add_error(iterator, "Missing day");
         valid = false;
     }
-    else if (((result.digits[0] == '0') && (result.digits[0] == '0'))
+    else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
             || ((result.digits[0] == '3') && (result.digits[1] > '1'))
             || (result.digits[0] > '3'))
     {
