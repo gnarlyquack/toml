@@ -23,13 +23,13 @@ using TokenList = vector<Token>;
 namespace {
 
 
-enum MetaValueType {
-    META_TYPE_SCALAR,
-    META_TYPE_ARRAY,
-    META_TYPE_DOTTED_TABLE,
-    META_TYPE_HEADER_TABLE,
-    META_TYPE_ROOT_TABLE,
-};
+constexpr u32 FLAG_DEFINED = 1 << 0;
+constexpr u32 FLAG_HEADER  = 1 << 1;
+constexpr u32 FLAG_ARRAY   = 1 << 3;
+constexpr u32 FLAG_TABLE   = 1 << 2;
+constexpr u32 FLAG_LITERAL = 1 << 4;
+
+constexpr u32 MASK_TYPE = FLAG_TABLE | FLAG_ARRAY | FLAG_LITERAL;
 
 
 struct MetaValue final
@@ -39,38 +39,34 @@ struct MetaValue final
         unordered_map<string, MetaValue *> *table;
         vector<MetaValue *> *array;
     };
-    MetaValueType type;
-    bool defined;
+    u32 flags;
 
 
     explicit MetaValue()
-        : type{META_TYPE_SCALAR}
-        , defined{true}
+        : flags{FLAG_LITERAL | FLAG_DEFINED}
     {
     }
 
 
-    explicit MetaValue(MetaValueType t, bool d)
-        : type{t}
-        , defined{d}
+    explicit MetaValue(u32 f)
+        : flags{f}
     {
+        u32 type = flags & MASK_TYPE;
         switch (type)
         {
-            case META_TYPE_ARRAY:
+            case FLAG_ARRAY:
             {
                 array = new vector<MetaValue *>{};
             } break;
 
-            case META_TYPE_DOTTED_TABLE:
-            case META_TYPE_HEADER_TABLE:
-            case META_TYPE_ROOT_TABLE:
+            case FLAG_TABLE:
             {
                 table = new unordered_map<string, MetaValue *>{};
             } break;
 
             default:
             {
-                assert(false);
+                assert(type == FLAG_LITERAL);
             } break;
         }
     }
@@ -78,23 +74,22 @@ struct MetaValue final
 
     ~MetaValue()
     {
+        u32 type = flags & MASK_TYPE;
         switch (type)
         {
-            case META_TYPE_ARRAY:
+            case FLAG_ARRAY:
             {
                 delete array;
             } break;
 
-            case META_TYPE_DOTTED_TABLE:
-            case META_TYPE_HEADER_TABLE:
-            case META_TYPE_ROOT_TABLE:
+            case FLAG_TABLE:
             {
                 delete table;
             } break;
 
             default:
             {
-                assert(type == META_TYPE_SCALAR);
+                assert(type == FLAG_LITERAL);
             } break;
         }
     }
@@ -120,7 +115,7 @@ struct Parser final
         , length{tokens.size()}
         , position{0}
         , result{table}
-        , meta{META_TYPE_ROOT_TABLE, false}
+        , meta{FLAG_TABLE}
         , current_value{&result}
         , current_meta{&meta}
         , errors{error_list}
@@ -216,7 +211,7 @@ TableValue *
 parse_inline_table(Parser &parser)
 {
     auto result = new TableValue{};
-    MetaValue meta{META_TYPE_ROOT_TABLE, true};
+    MetaValue meta{FLAG_TABLE};
 
     eat(parser, TOKEN_LBRACE);
 
@@ -292,18 +287,43 @@ parse_value(Parser &parser)
 
 
 Token *
-parse_key(Parser &parser, Table *&table, MetaValue *&table_meta, MetaValueType type)
+parse_key(Parser &parser, Table *&table, MetaValue *&table_meta, u32 flags)
 {
     Token *key = &eat(parser, TOKEN_KEY);
 
     while (peek(parser).type == TOKEN_KEY)
     {
-        Value *&value = (*table)[key->lexeme];
-        MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
+        Value *value = (*table)[key->lexeme];
+        MetaValue *value_meta = (*table_meta->table)[key->lexeme];
         if (!value)
         {
             value = new TableValue();
-            value_meta = new MetaValue{type, false};
+            value_meta = new MetaValue{flags};
+            (*table)[key->lexeme] = value;
+            (*table_meta->table)[key->lexeme] = value_meta;
+        }
+        else if (value->type == TYPE_ARRAY)
+        {
+            if ((flags & FLAG_HEADER) && (value_meta->flags & FLAG_HEADER))
+            {
+                ArrayValue *array = static_cast<ArrayValue *>(value);
+                assert(array->value.size());
+                value = array->value.back();
+                value_meta = value_meta->array->back();
+                assert(value->type == TYPE_TABLE);
+            }
+            else
+            {
+                key_redefinition(parser, *key);
+                // Replacing the value and continuing on seems like maybe the
+                // best way to mitigate cascading errors.
+                delete value;
+                delete value_meta;
+                value = new TableValue();
+                value_meta = new MetaValue{flags};
+                (*table)[key->lexeme] = value;
+                (*table_meta->table)[key->lexeme] = value_meta;
+            }
         }
         else if (value->type != TYPE_TABLE)
         {
@@ -313,16 +333,20 @@ parse_key(Parser &parser, Table *&table, MetaValue *&table_meta, MetaValueType t
             delete value;
             delete value_meta;
             value = new TableValue();
-            value_meta = new MetaValue{type, false};
+            value_meta = new MetaValue{flags};
+            (*table)[key->lexeme] = value;
+            (*table_meta->table)[key->lexeme] = value_meta;
         }
-        else if (value_meta->type == META_TYPE_SCALAR)
+        else if (value_meta->flags & FLAG_LITERAL)
         {
             // TODO: Handle trying to extend an inline table
             key_redefinition(parser, *key);
             // Replacing the value and continuing on seems like maybe the
             // best way to mitigate cascading errors.
-            value_meta->type = META_TYPE_ROOT_TABLE;
+            value_meta->flags = FLAG_TABLE;
             value_meta->table = new unordered_map<string, MetaValue *>{};
+            (*table)[key->lexeme] = value;
+            (*table_meta->table)[key->lexeme] = value_meta;
         }
 
         assert(value->type == TYPE_TABLE);
@@ -339,7 +363,7 @@ parse_key(Parser &parser, Table *&table, MetaValue *&table_meta, MetaValueType t
 void
 parse_keyval(Parser &parser, Table *table, MetaValue *table_meta)
 {
-    Token *key = parse_key(parser, table, table_meta, META_TYPE_DOTTED_TABLE);
+    Token *key = parse_key(parser, table, table_meta, FLAG_TABLE);
 
     Value *&value = (*table)[key->lexeme];
     MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
@@ -364,14 +388,14 @@ parse_table(Parser &parser)
     parser.current_value = &parser.result;
     parser.current_meta = &parser.meta;
 
-    Token *key = parse_key(parser, parser.current_value, parser.current_meta, META_TYPE_HEADER_TABLE);
+    Token *key = parse_key(parser, parser.current_value, parser.current_meta, FLAG_TABLE | FLAG_HEADER);
 
     Value *&value = (*parser.current_value)[key->lexeme];
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
     if (!value)
     {
         value = new TableValue{};
-        value_meta = new MetaValue{META_TYPE_HEADER_TABLE, true};
+        value_meta = new MetaValue{FLAG_TABLE | FLAG_HEADER | FLAG_DEFINED};
     }
     else if (value->type != TYPE_TABLE)
     {
@@ -381,26 +405,77 @@ parse_table(Parser &parser)
         delete value;
         delete value_meta;
         value = new TableValue();
-        value_meta = new MetaValue{META_TYPE_HEADER_TABLE, true};
+        value_meta = new MetaValue{FLAG_TABLE | FLAG_HEADER | FLAG_DEFINED};
     }
-    else if (value_meta->defined)
+    else if (value_meta->flags & FLAG_DEFINED)
     {
         key_redefinition(parser, *key);
     }
-    else if (value_meta->type != META_TYPE_HEADER_TABLE)
+    else if ((value_meta->flags & FLAG_HEADER) == 0)
     {
         key_redefinition(parser, *key);
         //value_meta->defined = true;
     }
     else
     {
-        value_meta->defined = true;
+        value_meta->flags |= FLAG_DEFINED;
     }
 
     parser.current_value = &static_cast<TableValue *>(value)->value;
     parser.current_meta = value_meta;
 
     eat(parser, TOKEN_RBRACKET);
+}
+
+
+void
+parse_table_array(Parser &parser)
+{
+    eat(parser, TOKEN_DOUBLE_LBRACKET);
+    parser.current_value = &parser.result;
+    parser.current_meta = &parser.meta;
+
+    Token *key = parse_key(parser, parser.current_value, parser.current_meta, FLAG_ARRAY | FLAG_HEADER);
+
+    Value *&value = (*parser.current_value)[key->lexeme];
+    MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
+    if (!value)
+    {
+        value = new ArrayValue{};
+        value_meta = new MetaValue{FLAG_ARRAY | FLAG_HEADER};
+    }
+    else if (value->type != TYPE_ARRAY)
+    {
+        key_redefinition(parser, *key);
+        // Replacing the value and continuing on seems like maybe the best way
+        // to mitigate cascading errors.
+        delete value;
+        delete value_meta;
+        value = new ArrayValue{};
+        value_meta = new MetaValue{FLAG_ARRAY | FLAG_HEADER};
+    }
+    else if ((value_meta->flags & FLAG_ARRAY) == 0)
+    {
+        // TODO Handle trying to extend array literal
+        key_redefinition(parser, *key);
+        // Replacing the value and continuing on seems like maybe the best way
+        // to mitigate cascading errors.
+        value_meta->flags = FLAG_ARRAY | FLAG_HEADER;
+        value_meta->array = new vector<MetaValue *>{};
+    }
+
+    auto table = new TableValue{};
+    auto table_meta = new MetaValue{FLAG_TABLE};
+
+    assert(value->type == TYPE_ARRAY);
+    auto array = static_cast<ArrayValue *>(value);
+    array->value.push_back(table);
+    value_meta->array->push_back(table_meta);
+
+    parser.current_value = &table->value;
+    parser.current_meta = table_meta;
+
+    eat(parser, TOKEN_DOUBLE_RBRACKET);
 }
 
 
@@ -421,8 +496,7 @@ parse_expression(Parser &parser)
 
         case TOKEN_DOUBLE_LBRACKET:
         {
-            fputs("Implement parse_table_array\n", stderr);
-            assert(false);
+            parse_table_array(parser);
         } break;
 
         default:

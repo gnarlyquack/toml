@@ -1024,7 +1024,6 @@ TEST(parse, inline_tables_cannot_extend_other_tables)
 }
 
 
-#if 0
 TEST(parse, table_arrays)
 {
     const string toml =
@@ -1042,18 +1041,145 @@ TEST(parse, table_arrays)
         ;
 
     const Table result = {
-        { TOKEN_DOUBLE_LBRACKET, "", 1, 1 }, { TOKEN_KEY, "products", 1, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 1, 11 },
-        { TOKEN_KEY, "name", 2, 1 }, { TOKEN_STRING, "Hammer", 2, 8 },
-        { TOKEN_KEY, "sku", 3, 1 }, { TOKEN_DECIMAL, "738594937", 3, 7 },
-        { TOKEN_DOUBLE_LBRACKET, "", 5, 1 }, { TOKEN_KEY, "products", 5, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 5, 11 },
-        { TOKEN_DOUBLE_LBRACKET, "", 7, 1 }, { TOKEN_KEY, "products", 7, 3 }, { TOKEN_DOUBLE_RBRACKET, "", 7, 11 },
-        { TOKEN_KEY, "name", 8, 1 }, { TOKEN_STRING, "Nail", 8, 8 },
-        { TOKEN_KEY, "sku", 9, 1 }, { TOKEN_DECIMAL, "284758393", 9, 7 },
-        { TOKEN_KEY, "color", 11, 1 }, { TOKEN_STRING, "gray", 11, 9 },
+        { "products", new ArrayValue{{
+                new TableValue{{
+                        { "name", new StringValue{"Hammer"} },
+                        { "sku", new IntegerValue{738594937} },
+                    }},
+                new TableValue{},
+                new TableValue{{
+                        { "name", new StringValue{"Nail"} },
+                        { "sku", new IntegerValue{284758393} },
+                        { "color", new StringValue{"gray"} }
+                    }},
+            }} },
     };
 
     assert_parsed(toml, result);
 }
 
 
-#endif
+TEST(parse, table_array_sub_elements)
+{
+    const string toml =
+        "[[fruits]]\n"
+        "name = \"apple\"\n"
+        "\n"
+        "[fruits.physical]  # subtable\n"
+        "color = \"red\"\n"
+        "shape = \"round\"\n"
+        "\n"
+        "[[fruits.varieties]]  # nested array of tables\n"
+        "name = \"red delicious\"\n"
+        "\n"
+        "[[fruits.varieties]]\n"
+        "name = \"granny smith\"\n"
+        "\n"
+        "\n"
+        "[[fruits]]\n"
+        "name = \"banana\"\n"
+        "\n"
+        "[[fruits.varieties]]\n"
+        "name = \"plantain\"\n"
+        ;
+
+    const Table result = {
+        { "fruits", new ArrayValue{{
+                new TableValue{{
+                        { "name", new StringValue{"apple"} },
+                        { "physical", new TableValue{{
+                                { "color", new StringValue{"red"} },
+                                { "shape", new StringValue{"round"} },
+                            }} },
+                        { "varieties", new ArrayValue{{
+                                new TableValue{{
+                                    { "name", new StringValue{"red delicious"} },
+                                }},
+                                new TableValue{{
+                                    { "name", new StringValue{"granny smith"} },
+                                }},
+                            }} },
+                    }},
+                new TableValue{{
+                        { "name", new StringValue{"banana"} },
+                        { "varieties", new ArrayValue{{
+                                new TableValue{{
+                                        { "name", new StringValue{"plantain"} },
+                                    }},
+                            }} },
+                    }},
+            }} },
+    };
+
+    assert_parsed(toml, result);
+}
+
+
+TEST(parse, cannot_redefine_table_as_table_array)
+{
+    const string toml =
+        "# INVALID TOML DOC\n"
+        "[fruit.physical]  # subtable, but to which parent element should it belong?\n"
+        "color = \"red\"\n"
+        "shape = \"round\"\n"
+        "\n"
+        "[[fruit]]  # parser must throw an error upon discovering that \"fruit\" is\n"
+        "           # an array rather than a table\n"
+        "name = \"apple\"\n"
+        ;
+
+    const vector<Error> errors = {
+        { 6, 3, "Key \"fruit\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, table_array_cannot_extend_array)
+{
+    const string toml =
+        "# INVALID TOML DOC\n"
+        "fruits = []\n"
+        "\n"
+        "[[fruits]] # Not allowed\n"
+        ;
+
+    const vector<Error> errors = {
+        { 4, 3, "Key \"fruits\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, tables_and_table_arrays_cannot_redefine_each_other)
+{
+    const string toml =
+        "# INVALID TOML DOC\n"
+        "[[fruits]]\n"
+        "name = \"apple\"\n"
+        "\n"
+        "[[fruits.varieties]]\n"
+        "name = \"red delicious\"\n"
+        "\n"
+        "# INVALID: This table conflicts with the previous array of tables\n"
+        "[fruits.varieties]\n"
+        "name = \"granny smith\"\n"
+        "\n"
+        "[fruits.physical]\n"
+        "color = \"red\"\n"
+        "shape = \"round\"\n"
+        "\n"
+        "# INVALID: This array of tables conflicts with the previous table\n"
+        "[[fruits.physical]]\n"
+        "color = \"green\"\n"
+        ;
+
+    const vector<Error> errors = {
+        { 9, 9, "Key \"varieties\" has already been defined." },
+        { 17, 10, "Key \"physical\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
