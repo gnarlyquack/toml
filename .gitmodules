@@ -1,0 +1,3 @@
+[submodule "dep/toml-test"]
+	path = dep/toml-test
+	url = https://github.com/gnarlyquack/toml-test
