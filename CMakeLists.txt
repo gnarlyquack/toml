@@ -21,9 +21,14 @@ target_compile_options(cxxflags INTERFACE
     )
 
 
-# Build instructions from date/CMakeLists.txt
-set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW) # for datetime lib
 include(FetchContent)
+
+
+find_package(Python)
+
+
+# Build instructions from date/CMakeLists.txt
 FetchContent_Declare(
     datetime
     GIT_REPOSITORY  https://github.com/HowardHinnant/date.git
@@ -44,7 +49,6 @@ target_link_libraries(toml PUBLIC date-tz PRIVATE cxxflags)
 
 
 # Build instructions from googletest/googletest/README.md
-include(FetchContent)
 FetchContent_Declare(
     googletest
     GIT_REPOSITORY  https://github.com/google/googletest.git
@@ -57,11 +61,4 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 
-add_executable(test_toml
-    test/lexer.cpp
-    test/parser.cpp
-    )
-target_include_directories(test_toml PRIVATE src)
-target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main m)
-
-add_custom_target(run_toml_tests COMMAND test_toml)
+add_subdirectory(test)

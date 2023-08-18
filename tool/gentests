@@ -1,0 +1,383 @@
+#!/usr/bin/env python3
+
+import datetime
+import json
+import os
+import sys
+
+from math import isnan
+from os.path import dirname
+from pathlib import Path
+
+
+ROOT_PATH = dirname(dirname(os.path.realpath(__file__)))
+
+SOURCE_DIR = os.path.join(ROOT_PATH, "dep", "toml-test", "tests")
+
+TEST_DIR = os.path.join(ROOT_PATH, "test")
+
+STRING_CONVERT = str.maketrans({
+    '\n':   r'\n',
+    '"':    r'\"',
+    '\\':   r'\\',
+})
+
+
+NAME_CONVERT = str.maketrans({
+    '/': '_',
+    '-': '_',
+})
+
+
+def main():
+    # ensure test directory exists
+    os.makedirs(TEST_DIR, exist_ok=True)
+
+    files = []
+    generate_valid_tests("valid", files)
+
+    '''
+    invalid_dir = os.path.join(SOURCE_DIR, "invalid")
+    generate_invalid_tests(os.path.join(TEST_DIR, "invalid"), invalid_dir)
+    '''
+
+    filename = os.path.join(TEST_DIR, "CMakeLists.txt")
+    with open(filename, "w") as fh:
+        fh.write(CMAKELISTS_TEMPLATE.format("\n        ".join(files)))
+
+    sys.exit()
+
+
+VALID_TEST_FILE_TEMPLATE = b'''\
+#include "test_common.hpp"
+
+
+using namespace std;
+using namespace toml;
+'''
+
+
+VALID_TEST_TEMPLATE = b'''\
+
+
+TEST(%b, %b)
+{
+    const string toml = "%b";
+
+    const Table expected{%b};
+
+    assert_parsed(toml, expected);
+}
+'''
+
+
+INVALID_TEST_TEMPLATE = b'''\
+#include "test_common.hpp"
+
+#include <gtest/gtest.h>
+
+using namespace std;
+using namespace toml;
+
+
+namespace
+{
+
+
+void
+assert_parsed(const string &toml, const Table &expected)
+{
+    Table actual;
+    vector<Error> errors;
+    bool result = parse_toml(toml, actual, errors);
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(actual, expected);
+    EXPECT_EQ(errors, vector<Error>{});
+}
+
+
+}
+
+
+TEST(%b, %b)
+{
+    const string toml = R"TOML(
+%b
+)TOML";
+
+    const Table expected = %b;
+
+    assert_parsed(toml, expected);
+}
+'''
+
+
+CMAKELISTS_TEMPLATE = '''\
+    add_executable(test_toml
+        lexer.cpp
+        parser.cpp
+        {}
+        )
+    target_include_directories(test_toml PRIVATE ${{PROJECT_SOURCE_DIR}}/src)
+    target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)
+
+    add_custom_target(run_toml_tests COMMAND test_toml)
+'''
+
+
+def generate_valid_tests(relative_src_dir, files):
+    suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
+    src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
+
+    result = VALID_TEST_FILE_TEMPLATE
+
+    with os.scandir(src_dir) as it:
+        for entry in it:
+            if should_include_test(entry.path):
+                with open(entry.path, "rb") as fh:
+                    toml = fh.read()
+
+                basename = entry.name.rsplit('.', 1)[0]
+
+                jsonname = f"{basename}.json"
+                jsonfile = os.path.join(src_dir, jsonname)
+                with open(jsonfile, "r") as fh:
+                    expected = fh.read()
+                expected = json.JSONDecoder().decode(expected)
+                expected = convert_result(expected)
+
+                testname = "test_{}".format(basename.replace('-', '_'))
+                result += format_valid_test(suitename, testname, toml, expected)
+
+            elif entry.is_dir():
+                generate_valid_tests(os.path.join(relative_src_dir, entry.name), files)
+
+    filename = f"{suitename}.cpp"
+    filepath = os.path.join(TEST_DIR, filename)
+    with open(filepath, "wb") as fh:
+        fh.write(result)
+
+    files.append(filename);
+
+
+def convert_result(value, child=False):
+    if type(value) is list:
+        result = "new ArrayValue({"
+        for element in value:
+            converted = convert_result(element, True)
+            result += converted + ','
+        result += "})"
+
+    else:
+        assert type(value) is dict
+
+        if (*value.keys(), ) == ("type", "value"):
+            if value['type'] == "integer":
+                result = "new IntegerValue({}ULL)".format(value['value'])
+
+            elif value['type'] == "float":
+                converted = value['value']
+                if "nan" in converted:
+                    converted = converted.replace("nan", "NAN64")
+                elif "inf" in converted:
+                    converted = converted.replace("inf", "INF64")
+                result = "new FloatValue({})".format(converted)
+
+            elif value['type'] == "bool":
+                assert value['value'] in {"true", "false"}
+                result = "new BooleanValue({})".format(value['value'])
+
+            elif value['type'] == "datetime":
+                dt_format = "%Y-%m-%dT%H:%M:%S"
+                if '.' in value['value']:
+                    dt_format += ".%f"
+                if 'Z' in value['value']:
+                    value['value'] = value['value'].replace('Z', '+00:00')
+                if ('+' in value['value']) or ('-' in value['value']):
+                    dt_format += "%z"
+                converted = datetime.datetime.strptime(value['value'], dt_format)
+                converted = converted.astimezone(datetime.timezone(datetime.timedelta(0)))
+                result = ("new OffsetDateTimeValue("
+                            "date::sys_days(date::year({}) / date::month({}) / date::day({})) "
+                            "+ chrono::hours({}) "
+                            "+ chrono::minutes({}) "
+                            "+ chrono::seconds({}) "
+                            "+ chrono::microseconds({}))"
+                          ).format(
+                                converted.year, converted.month, converted.day,
+                                converted.hour, converted.minute, converted.second, converted.microsecond)
+
+            elif value['type'] == "datetime-local":
+                converted = datetime.datetime.fromisoformat(value['value'])
+                result = ("new LocalDateTimeValue("
+                            "LocalDate(date::year({}) / date::month({}) / date::day({})) "
+                            "+ chrono::hours({}) "
+                            "+ chrono::minutes({}) "
+                            "+ chrono::seconds({}) "
+                            "+ chrono::microseconds({}))"
+                          ).format(
+                                converted.year, converted.month, converted.day,
+                                converted.hour, converted.minute, converted.second, converted.microsecond)
+
+            elif value['type'] == "date-local":
+                converted = datetime.date.fromisoformat(value['value'])
+                result = "new LocalDateValue(LocalDate(date::year({}) / date::month({}) / date::day({})))".format(
+                        converted.year, converted.month, converted.day)
+
+            elif value['type'] == "time-local":
+                converted = datetime.time.fromisoformat(value['value'])
+                result = "new LocalTimeValue(LocalTime(chrono::hours({}) + chrono::minutes({}) + chrono::seconds({}) + chrono::microseconds({})))".format(
+                        converted.hour, converted.minute, converted.second, converted.microsecond)
+
+            else:
+                assert value['type'] == "string"
+                result = "new StringValue(\"{}\")".format(escape_string(value['value']))
+
+        else:
+            result = ""
+            if child:
+                result = "new TableValue({"
+
+            for k, v in value.items():
+                converted = convert_result(v, True)
+                result += "{{ \"{}\", {} }},".format(k.translate(STRING_CONVERT), converted)
+
+            if child:
+                result += "})"
+
+    return result
+
+
+'''
+def generate_invalid_tests(output_dir, src_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    Path(os.path.join(output_dir, "__init__.py")).touch()
+    with os.scandir(src_dir) as it:
+        for entry in it:
+            if should_include_test(entry.path):
+                try:
+                    with open(entry.path, "r", newline="") as fh:
+                        toml = fh.read()
+                except UnicodeDecodeError:
+                    continue
+
+                basename = entry.name.rsplit('.', 1)[0]
+
+                jsonname = f"{basename}.json"
+                jsonfile = os.path.join(src_dir, jsonname)
+                if os.path.isfile(jsonfile):
+                    assert not os.path.islink(jsonfile)
+                    with open(jsonfile, "r") as fh:
+                        errors = fh.read()
+                    errors = json.JSONDecoder().decode(errors)
+
+                    result = []
+                    for error in errors:
+                        result.append(Error(**error))
+
+                else:
+                    print(f"Using parser to generate baseline for new(?) invalid test: {entry.path}")
+                    parsed, result = parse_toml(toml)
+                    assert parsed is None, f"File {entry.path} had valid toml? {toml!r}"
+                    assert result
+
+                    errors = []
+                    for error in result:
+                        errors.append(error.__dict__)
+                    output = json.JSONEncoder(indent=4, separators=(", ", ": ")).encode(errors)
+                    with open(jsonfile, "a") as fh:
+                        fh.write(output)
+
+                testname = "test_{}".format(basename.replace('-', '_'))
+                output = INVALID_TEST_TEMPLATE.format(
+                    testname=testname, toml=toml, result=result)
+
+                filename = os.path.join(output_dir, f"{testname}.py")
+                with open(filename, "w") as fh:
+                    fh.write(output)
+
+            elif entry.is_dir():
+                generate_invalid_tests(
+                    os.path.join(output_dir, entry.name),
+                    os.path.join(src_dir, entry.name))
+'''
+
+
+def should_include_test(path):
+    result = path.endswith(".toml")
+    return result
+
+
+def format_valid_test(suitename, testname, toml, expected):
+    result = VALID_TEST_TEMPLATE % (
+            suitename.encode("UTF-8"),
+            testname.encode("UTF-8"),
+            escape_bytes(toml),
+            expected.encode("UTF-8")
+        )
+    return result
+
+
+def escape_bytes(value):
+    result = bytearray()
+
+    for c in value:
+        if c == 34:
+            result.extend(b'\\"')
+        elif c == 92:
+            result.extend(b'\\\\')
+        elif c >= 32 and c <= 126:
+            result.append(c)
+        elif c == 8:
+            result.extend(b'\\b')
+        elif c == 9:
+            result.extend(b'\\t')
+        elif c == 10:
+            result.extend(b'\\n')
+        elif c == 11:
+            result.extend(b'\\v')
+        elif c == 12:
+            result.extend(b'\\f')
+        elif c == 13:
+            result.extend(b'\\r')
+        else:
+            result.extend(b'\\%03o' % c)
+
+    return result
+
+
+def escape_string(value):
+    result = ''
+
+    for c in value:
+        if c == '"':
+            result += '\\"'
+        elif c == '\\':
+            result += '\\\\'
+        elif c.isprintable():
+            result += c
+        elif c == '\b':
+            result += '\\b'
+        elif c == '\t':
+            result += '\\t'
+        elif c == '\n':
+            result += '\\n'
+        elif c == '\v':
+            result += '\\v'
+        elif c == '\f':
+            result += '\\f'
+        elif c == '\r':
+            result += '\\r'
+        else:
+            c = ord(c)
+            if c > 9999:
+                result += '\\U{:0>8X}""'.format(c)
+            else:
+                result += '\\u{:0>4X}'.format(c)
+
+    return result
+
+
+if __name__ == "__main__":
+    main()

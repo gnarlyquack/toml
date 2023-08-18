@@ -435,7 +435,7 @@ parse_table_array(Parser &parser)
     parser.current_value = &parser.result;
     parser.current_meta = &parser.meta;
 
-    Token *key = parse_key(parser, parser.current_value, parser.current_meta, FLAG_ARRAY | FLAG_HEADER);
+    Token *key = parse_key(parser, parser.current_value, parser.current_meta, FLAG_TABLE | FLAG_HEADER);
 
     Value *&value = (*parser.current_value)[key->lexeme];
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];

@@ -3,47 +3,13 @@
 //  of this project, including this file, may be copied, modified, propagated,
 //  or distributed except according to the terms contained in the LICENSE file.
 
-#include <unordered_map>
+#include "test_common.hpp"
 
 #include <gtest/gtest.h>
-
-#include "test_common.hpp"
 
 
 using namespace std;
 using namespace toml;
-
-
-namespace
-{
-
-
-void
-assert_parsed(const string &toml, const Table &expected)
-{
-    Table actual;
-    vector<Error> errors;
-    bool result = parse_toml(toml, actual, errors);
-
-    EXPECT_TRUE(result);
-    EXPECT_EQ(actual, expected);
-    EXPECT_EQ(errors, vector<Error>{});
-}
-
-
-void
-assert_errors(const string &toml, const vector<Error> &expected)
-{
-    Table table;
-    vector<Error> actual;
-    bool result = parse_toml(toml, table, actual);
-
-    ASSERT_FALSE(result);
-    ASSERT_EQ(actual, expected);
-}
-
-
-} // namespace
 
 
 

@@ -3,9 +3,9 @@
 //  of this project, including this file, may be copied, modified, propagated,
 //  or distributed except according to the terms contained in the LICENSE file.
 
-#include <gtest/gtest.h>
-
 #include "test_common.hpp"
+
+#include <gtest/gtest.h>
 
 
 using namespace std;
@@ -39,7 +39,7 @@ assert_lexed(const string &toml, vector<Token> &expected)
 
 
 void
-assert_errors(const string &toml, const vector<Error> &expected)
+assert_lex_errors(const string &toml, const vector<Error> &expected)
 {
     vector<Token> tokens;
     vector<Error> actual;
@@ -103,7 +103,7 @@ TEST(lex, invalid_keyvals)
         { 2, 15, "Expected new line but got: last = \"Preston-Werner\" # INVALID" },
     };
 
-    assert_errors(toml, errors);
+    assert_lex_errors(toml, errors);
 }
 
 
@@ -159,7 +159,7 @@ TEST(lex, empty_unqoted_key)
         { 1, 1, "Missing key" },
     };
 
-    assert_errors(toml, errors);
+    assert_lex_errors(toml, errors);
 }
 
 
@@ -564,7 +564,7 @@ TEST(lex, invalid_floats)
         { 4, 21, "Missing fractional part of decimal number" },
     };
 
-    assert_errors(toml, errors);
+    assert_lex_errors(toml, errors);
 }
 
 

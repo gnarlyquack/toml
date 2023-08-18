@@ -4,22 +4,35 @@ toml: build/Makefile
 
 
 build:
-	mkdir build
+	mkdir -p build
 
 
-build/Makefile: Makefile CMakeLists.txt | build
+test:
+	mkdir -p test
+
+
+build/Makefile: Makefile CMakeLists.txt test/CMakeLists.txt | build
 	cmake -DCMAKE_CXX_STANDARD=11 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_EXTENSIONS=OFF -B build .
 
 
-.PHONY: test
-test: build/Makefile
+test/CMakeLists.txt: tool/gentests | test
+	tool/gentests
+
+
+.PHONY: runtests
+runtests: build/Makefile
 	cmake --build build --target run_toml_tests
 
 
-.PHONY: debug
-debug: build/Makefile
+.PHONY: debugtests
+debugtests: build/Makefile
 	cmake --build build --target test_toml
-	gdb build/test_toml
+	gdb build/test/test_toml
+
+
+.PHONY: gentests
+gentests:
+	tool/gentests
 
 
 .PHONY: clean

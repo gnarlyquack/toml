@@ -6,11 +6,12 @@
 #ifndef TOML_TEST_COMMON_HPP
 #define TOML_TEST_COMMON_HPP
 
-#include <cmath>
+#include <lexer.hpp>
+#include <parser.hpp>
 
-#include "lexer.hpp"
-#include "parser.hpp"
+#include <gtest/gtest.h>
 
+//#include <cmath>
 
 namespace toml
 {
@@ -339,6 +340,31 @@ operator<<(std::ostream &os, const Error &error)
 
 
 } // namespace toml
+
+
+inline void
+assert_parsed(const std::string &toml, const toml::Table &expected)
+{
+    toml::Table actual;
+    std::vector<toml::Error> errors;
+    bool result = parse_toml(toml, actual, errors);
+
+    EXPECT_TRUE(result);
+    EXPECT_EQ(actual, expected);
+    EXPECT_EQ(errors, std::vector<toml::Error>{});
+}
+
+
+inline void
+assert_errors(const std::string &toml, const std::vector<toml::Error> &expected)
+{
+    toml::Table table;
+    std::vector<toml::Error> actual;
+    bool result = parse_toml(toml, table, actual);
+
+    ASSERT_FALSE(result);
+    ASSERT_EQ(actual, expected);
+}
 
 
 #endif // TOML_TEST_COMMON_HPP

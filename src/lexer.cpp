@@ -353,14 +353,38 @@ eat_newline(TomlIterator &iterator)
 
 
 bool
-eat_string(TomlIterator &iterator, const string &expected)
+eat_string(TomlIterator &iterator, const string &expected, u32 context)
 {
     bool result = false;
 
     string eaten;
-    while (!match_eol(iterator) && !match_whitespace(iterator))
+    bool eating = true;
+    while (eating && !match_eol(iterator) && !match_whitespace(iterator))
     {
-        eaten.push_back(eat_byte(iterator));
+        byte c = get_byte(iterator);
+        switch (c)
+        {
+            case ',':
+            {
+                eating = !(context & (LEX_ARRAY | LEX_TABLE));
+            } break;
+
+            case ']':
+            {
+                eating = !(context & LEX_ARRAY);
+            } break;
+
+            case '}':
+            {
+                eating = !(context & LEX_TABLE);
+            } break;
+        }
+
+        if (eating)
+        {
+            eaten.push_back(c);
+            eat_byte(iterator);
+        }
     }
 
     if (eaten == expected)
@@ -767,7 +791,8 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
             || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE))
             || ((c == ',') && ((context & LEX_ARRAY) || (context & LEX_TABLE)))
             || ((c == ']') && (context & LEX_ARRAY))
-            || ((c == '}') && (context & LEX_TABLE)))
+            || ((c == '}') && (context & LEX_TABLE))
+            || (c == '#'))
         {
             lexing = false;
         }
@@ -1071,6 +1096,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
             int seconds = atoi(value.c_str() + 6);
             int microseconds = 0;
             if (value.length() > 9) {
+                value.resize(15, '0');
                 microseconds = atoi(value.c_str() + 9);
             }
 
@@ -1780,12 +1806,12 @@ lex_value(TomlIterator &iterator, u32 context)
                 eat_byte(iterator);
                 if (match(iterator, 'i'))
                 {
-                    eat_string(iterator, "inf");
+                    eat_string(iterator, "inf", context);
                     add_value(iterator, new FloatValue(-INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
-                    eat_string(iterator, "nan");
+                    eat_string(iterator, "nan", context);
                     add_value(iterator, new FloatValue(-NAN64));
                 }
                 else
@@ -1799,12 +1825,12 @@ lex_value(TomlIterator &iterator, u32 context)
                 eat_byte(iterator);
                 if (match(iterator, 'i'))
                 {
-                    eat_string(iterator, "inf");
+                    eat_string(iterator, "inf", context);
                     add_value(iterator, new FloatValue(+INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
-                    eat_string(iterator, "nan");
+                    eat_string(iterator, "nan", context);
                     add_value(iterator, new FloatValue(+NAN64));
                 }
                 else
@@ -1815,26 +1841,26 @@ lex_value(TomlIterator &iterator, u32 context)
 
             case 'i':
             {
-                eat_string(iterator, "inf");
+                eat_string(iterator, "inf", context);
                 add_value(iterator, new FloatValue(INF64));
             } break;
 
             case 'n':
             {
-                eat_string(iterator, "nan");
+                eat_string(iterator, "nan", context);
                 add_value(iterator, new FloatValue(NAN64));
             } break;
 
 
             case 't':
             {
-                eat_string(iterator, "true");
+                eat_string(iterator, "true", context);
                 add_value(iterator, new BooleanValue(true));
             } break;
 
             case 'f':
             {
-                eat_string(iterator, "false");
+                eat_string(iterator, "false", context);
                 add_value(iterator, new BooleanValue(false));
             } break;
 
