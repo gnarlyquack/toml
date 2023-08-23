@@ -35,11 +35,7 @@ def main():
 
     files = []
     generate_valid_tests("valid", files)
-
-    '''
-    invalid_dir = os.path.join(SOURCE_DIR, "invalid")
-    generate_invalid_tests(os.path.join(TEST_DIR, "invalid"), invalid_dir)
-    '''
+    generate_invalid_tests("invalid", files)
 
     filename = os.path.join(TEST_DIR, "CMakeLists.txt")
     with open(filename, "w") as fh:
@@ -48,7 +44,7 @@ def main():
     sys.exit()
 
 
-VALID_TEST_FILE_TEMPLATE = b'''\
+TEST_FILE_TEMPLATE = b'''\
 #include "test_common.hpp"
 
 
@@ -62,7 +58,7 @@ VALID_TEST_TEMPLATE = b'''\
 
 TEST(%b, %b)
 {
-    const string toml = "%b";
+    const string toml{"%b", %d};
 
     const Table expected{%b};
 
@@ -72,43 +68,15 @@ TEST(%b, %b)
 
 
 INVALID_TEST_TEMPLATE = b'''\
-#include "test_common.hpp"
-
-#include <gtest/gtest.h>
-
-using namespace std;
-using namespace toml;
-
-
-namespace
-{
-
-
-void
-assert_parsed(const string &toml, const Table &expected)
-{
-    Table actual;
-    vector<Error> errors;
-    bool result = parse_toml(toml, actual, errors);
-
-    EXPECT_TRUE(result);
-    EXPECT_EQ(actual, expected);
-    EXPECT_EQ(errors, vector<Error>{});
-}
-
-
-}
 
 
 TEST(%b, %b)
 {
-    const string toml = R"TOML(
-%b
-)TOML";
+    const string toml{"%b", %d};
 
-    const Table expected = %b;
+    const vector<Error> expected{%b};
 
-    assert_parsed(toml, expected);
+    assert_errors(toml, expected);
 }
 '''
 
@@ -130,11 +98,13 @@ def generate_valid_tests(relative_src_dir, files):
     suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
     src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
 
-    result = VALID_TEST_FILE_TEMPLATE
+    result = TEST_FILE_TEMPLATE
+    count = 0
 
     with os.scandir(src_dir) as it:
         for entry in it:
             if should_include_test(entry.path):
+                count += 1
                 with open(entry.path, "rb") as fh:
                     toml = fh.read()
 
@@ -153,12 +123,13 @@ def generate_valid_tests(relative_src_dir, files):
             elif entry.is_dir():
                 generate_valid_tests(os.path.join(relative_src_dir, entry.name), files)
 
-    filename = f"{suitename}.cpp"
-    filepath = os.path.join(TEST_DIR, filename)
-    with open(filepath, "wb") as fh:
-        fh.write(result)
+    if count:
+        filename = f"{suitename}.cpp"
+        filepath = os.path.join(TEST_DIR, filename)
+        with open(filepath, "wb") as fh:
+            fh.write(result)
 
-    files.append(filename);
+        files.append(filename);
 
 
 def convert_result(value, child=False):
@@ -249,59 +220,60 @@ def convert_result(value, child=False):
     return result
 
 
-'''
-def generate_invalid_tests(output_dir, src_dir):
-    os.makedirs(output_dir, exist_ok=True)
-    Path(os.path.join(output_dir, "__init__.py")).touch()
+def generate_invalid_tests(relative_src_dir, files):
+    suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
+    src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
+
+    result = TEST_FILE_TEMPLATE
+    count = 0
+
     with os.scandir(src_dir) as it:
         for entry in it:
             if should_include_test(entry.path):
-                try:
-                    with open(entry.path, "r", newline="") as fh:
-                        toml = fh.read()
-                except UnicodeDecodeError:
-                    continue
+                count +=1
 
+                with open(entry.path, "rb") as fh:
+                    toml = fh.read()
+
+                expected = ''
                 basename = entry.name.rsplit('.', 1)[0]
 
                 jsonname = f"{basename}.json"
                 jsonfile = os.path.join(src_dir, jsonname)
                 if os.path.isfile(jsonfile):
-                    assert not os.path.islink(jsonfile)
                     with open(jsonfile, "r") as fh:
                         errors = fh.read()
                     errors = json.JSONDecoder().decode(errors)
-
-                    result = []
                     for error in errors:
-                        result.append(Error(**error))
-
+                        expected += convert_error(error)
                 else:
-                    print(f"Using parser to generate baseline for new(?) invalid test: {entry.path}")
-                    parsed, result = parse_toml(toml)
-                    assert parsed is None, f"File {entry.path} had valid toml? {toml!r}"
-                    assert result
-
-                    errors = []
-                    for error in result:
-                        errors.append(error.__dict__)
-                    output = json.JSONEncoder(indent=4, separators=(", ", ": ")).encode(errors)
-                    with open(jsonfile, "a") as fh:
-                        fh.write(output)
+                    # Let's write a sentinel error value to trigger a failed test
+                    expected = '{ 0, 0, "" }'
 
                 testname = "test_{}".format(basename.replace('-', '_'))
-                output = INVALID_TEST_TEMPLATE.format(
-                    testname=testname, toml=toml, result=result)
-
-                filename = os.path.join(output_dir, f"{testname}.py")
-                with open(filename, "w") as fh:
-                    fh.write(output)
+                result += INVALID_TEST_TEMPLATE % (
+                        suitename.encode("UTF-8"),
+                        testname.encode("UTF-8"),
+                        escape_bytes(toml),
+                        len(toml),
+                        expected.encode("UTF-8"),
+                    )
 
             elif entry.is_dir():
-                generate_invalid_tests(
-                    os.path.join(output_dir, entry.name),
-                    os.path.join(src_dir, entry.name))
-'''
+                generate_invalid_tests(os.path.join(relative_src_dir, entry.name), files)
+
+    if count:
+        filename = f"{suitename}.cpp"
+        filepath = os.path.join(TEST_DIR, filename)
+        with open(filepath, "wb") as fh:
+            fh.write(result)
+
+        files.append(filename);
+
+
+def convert_error(error):
+    result = "{{ {}, {}, \"{}\" }},".format(error['line'], error['char'], escape_string(error['message']))
+    return result;
 
 
 def should_include_test(path):
@@ -314,6 +286,7 @@ def format_valid_test(suitename, testname, toml, expected):
             suitename.encode("UTF-8"),
             testname.encode("UTF-8"),
             escape_bytes(toml),
+            len(toml),
             expected.encode("UTF-8")
         )
     return result
