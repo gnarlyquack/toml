@@ -29,7 +29,7 @@ TEST(invalid_table_tests, test_text_after_table)
 {
     const string toml{"[error] this shouldn't be here\n", 31};
 
-    const vector<Error> expected{{ 1, 9, "Expected a new line after expression." },};
+    const vector<Error> expected{{ 1, 9, "Expected the end of the line but got: this shouldn't be here" },};
 
     assert_errors(toml, expected);
 }
@@ -49,7 +49,7 @@ TEST(invalid_table_tests, test_nested_brackets_open)
 {
     const string toml{"[a[b]\nzyx = 42\n", 15};
 
-    const vector<Error> expected{{ 1, 2, "Invalid key: a[b." },};
+    const vector<Error> expected{{ 1, 2, "Invalid key: a[b" },};
 
     assert_errors(toml, expected);
 }
@@ -59,7 +59,7 @@ TEST(invalid_table_tests, test_array_missing_bracket)
 {
     const string toml{"[[albums]\nname = \"Born to Run\"\n", 31};
 
-    const vector<Error> expected{{ 1, 10, "Missing closing ']' for array of tables." },};
+    const vector<Error> expected{{ 1, 9, "Missing closing ']' for array of tables." },};
 
     assert_errors(toml, expected);
 }
@@ -69,7 +69,7 @@ TEST(invalid_table_tests, test_llbrace)
 {
     const string toml{"[ [table]]\n", 11};
 
-    const vector<Error> expected{{ 1, 3, "Invalid key: [table." },{ 1, 10, "Expected a new line after expression." },};
+    const vector<Error> expected{{ 1, 3, "Invalid key: [table" },{ 1, 10, "Expected the end of the line but got: ]" },};
 
     assert_errors(toml, expected);
 }
@@ -89,7 +89,7 @@ TEST(invalid_table_tests, test_rrbrace)
 {
     const string toml{"[[table] ]\n", 11};
 
-    const vector<Error> expected{{ 1, 9, "Missing closing ']' for array of tables." },{ 1, 10, "Expected a new line after expression." },};
+    const vector<Error> expected{{ 1, 8, "Missing closing ']' for array of tables." },{ 1, 10, "Expected the end of the line but got: ]" },};
 
     assert_errors(toml, expected);
 }
@@ -119,7 +119,7 @@ TEST(invalid_table_tests, test_whitespace)
 {
     const string toml{"[invalid key]\n", 14};
 
-    const vector<Error> expected{{ 1, 2, "Invalid key: invalid key." },};
+    const vector<Error> expected{{ 1, 2, "Invalid key: invalid key" },};
 
     assert_errors(toml, expected);
 }
@@ -159,7 +159,7 @@ TEST(invalid_table_tests, test_equals_sign)
 {
     const string toml{"[name=bad]\n", 11};
 
-    const vector<Error> expected{{ 1, 2, "Invalid key: name=bad." },};
+    const vector<Error> expected{{ 1, 2, "Invalid key: name=bad" },};
 
     assert_errors(toml, expected);
 }

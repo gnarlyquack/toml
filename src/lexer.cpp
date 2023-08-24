@@ -141,18 +141,24 @@ get_lexeme(const TomlIterator &iterator)
 
 
 void
-add_error(TomlIterator &iterator, string message)
+add_error(TomlIterator &iterator, string message, u64 line, u64 column)
 {
-    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    Error error = { line, column, move(message) };
     iterator.errors.push_back(move(error));
     advance(iterator);
+}
+
+void
+add_error(TomlIterator &iterator, string message)
+{
+    add_error(iterator, move(message), iterator.start_line, iterator.start_column);
 }
 
 
 void
 add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 {
-    Token token = { type, nullptr, move(lexeme), iterator.start_line, iterator.start_column };
+    Token token = { type, nullptr, move(lexeme), iterator.start_position, iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
@@ -161,7 +167,7 @@ add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 void
 add_value(TomlIterator &iterator, Value *value)
 {
-    Token token = { TOKEN_VALUE, value, get_lexeme(iterator), iterator.start_line, iterator.start_column };
+    Token token = { TOKEN_VALUE, value, get_lexeme(iterator), iterator.start_position, iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
@@ -544,6 +550,13 @@ invalid_unicode_escape(TomlIterator &iterator, u64 position)
 
     Error error = { iterator.start_line, iterator.start_column, move(message) };
     iterator.errors.push_back(move(error));
+}
+
+
+void
+missing_key(TomlIterator &iterator)
+{
+    add_error(iterator, "Missing key.");
 }
 
 
@@ -1895,7 +1908,7 @@ lex_value(TomlIterator &iterator, u32 context)
 }
 
 
-void
+bool
 lex_unquoted_key(TomlIterator &iterator)
 {
     string value;
@@ -1912,45 +1925,51 @@ lex_unquoted_key(TomlIterator &iterator)
         }
     }
 
-    if (!value.length())
-    {
-        add_error(iterator, "Missing key");
-    }
-
+    bool result = value.length();
     add_token(iterator, TOKEN_KEY, move(value));
+    return result;
 }
 
 
-void
+bool
 lex_simple_key(TomlIterator &iterator)
 {
     assert(!match_whitespace(iterator) && !match_eol(iterator));
 
+    bool result;
     byte c = get_byte(iterator);
     if ((c == '"') || (c == '\''))
     {
         string key = lex_string(iterator, c);
         add_token(iterator, TOKEN_KEY, move(key));
+        result = true;
     }
     else
     {
-        lex_unquoted_key(iterator);
+        result = lex_unquoted_key(iterator);
     }
+
+    return result;
 }
 
 
-void
+bool
 lex_key(TomlIterator &iterator)
 {
+    bool result;
     bool lexing = true;
     while (lexing)
     {
         advance(iterator);
-        lex_simple_key(iterator);
+        result = lex_simple_key(iterator);
 
         eat_whitespace(iterator);
         if (match(iterator, '.'))
         {
+            if (!result)
+            {
+                missing_key(iterator);
+            }
             eat_byte(iterator);
             eat_whitespace(iterator);
         }
@@ -1959,13 +1978,18 @@ lex_key(TomlIterator &iterator)
             lexing = false;
         }
     }
+
+    return result;
 }
 
 
 void
 lex_keyval(TomlIterator &iterator, u32 context)
 {
-    lex_key(iterator);
+    if (!lex_key(iterator))
+    {
+        missing_key(iterator);
+    }
 
     eat_whitespace(iterator);
     eat_byte(iterator, '=');
@@ -1981,12 +2005,11 @@ lex_table(TomlIterator &iterator)
     advance(iterator);
 
     eat_byte(iterator, '[');
-    bool table_array = false;
+    bool table_array = match(iterator, '[');
 
-    if (match(iterator, '['))
+    if (table_array)
     {
         eat_byte(iterator);
-        table_array = true;
         add_token(iterator, TOKEN_DOUBLE_LBRACKET);
     }
     else
@@ -1995,19 +2018,62 @@ lex_table(TomlIterator &iterator)
         eat_whitespace(iterator);
     }
 
-    lex_key(iterator);
+    bool lexed_key = lex_key(iterator);
 
     assert(!match_whitespace(iterator));
     advance(iterator);
-    eat_byte(iterator, ']');
-    if (table_array)
+
+    u64 position = iterator.current_position;
+    u64 line = iterator.current_line;
+    u64 column = iterator.current_column;
+    while (!match_eol(iterator) && !match(iterator, ']'))
     {
-        eat_byte(iterator, ']');
-        add_token(iterator, TOKEN_DOUBLE_RBRACKET);
+        eat_byte(iterator);
+    }
+
+    if (iterator.current_position > position)
+    {
+        if (lexed_key)
+        {
+            Token &key = iterator.tokens.back();
+            position = key.position;
+            line = key.line;
+            column = key.column;
+        }
+
+        u64 count = iterator.current_position - position;
+        string message = "Invalid key: " + iterator.toml.substr(position, count);
+        add_error(iterator, move(message), line, column);
+    }
+    else if (!lexed_key)
+    {
+        missing_key(iterator);
+    }
+
+    if (match(iterator, ']'))
+    {
+        eat_byte(iterator);
+        if (!table_array)
+        {
+            add_token(iterator, TOKEN_RBRACKET);
+        }
+        else if (match(iterator, ']'))
+        {
+            eat_byte(iterator);
+            add_token(iterator, TOKEN_DOUBLE_RBRACKET);
+        }
+        else
+        {
+            add_error(iterator, "Missing closing ']' for array of tables.");
+        }
+    }
+    else if (table_array)
+    {
+        add_error(iterator, "Missing closing ']]' for array of tables.");
     }
     else
     {
-        add_token(iterator, TOKEN_RBRACKET);
+        add_error(iterator, "Missing closing ']' for table.");
     }
 }
 
@@ -2050,7 +2116,7 @@ lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
 
         if (!end_of_file(iterator))
         {
-            resynchronize(iterator, "Expected new line but got: ");
+            resynchronize(iterator, "Expected the end of the line but got: ");
         }
     }
 

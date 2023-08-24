@@ -182,6 +182,7 @@ operator==(const Token &left, const Token &right)
 {
     bool result =
         (left.type == right.type)
+        && (left.position == right.position)
         && (left.line == right.line)
         && (left.column == right.column)
         && (left.lexeme == right.lexeme);
@@ -316,6 +317,7 @@ operator<<(std::ostream &os, const Token &token)
         os << "VALUE("
             << *token.value << ", "
             << token.lexeme << ", "
+            << token.position << ", "
             << token.line << ", "
             << token.column  << ")";
     }
@@ -323,6 +325,7 @@ operator<<(std::ostream &os, const Token &token)
     {
         os << TOKEN_NAMES[token.type] << '('
             << token.lexeme << ", "
+            << token.position << ", "
             << token.line << ", "
             << token.column  << ")";
     }

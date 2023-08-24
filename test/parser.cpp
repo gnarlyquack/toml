@@ -51,7 +51,7 @@ TEST(parse, invalid_keyvals)
 
     const vector<Error> errors = {
         { 1, 7, "Missing value" },
-        { 2, 15, "Expected new line but got: last = \"Preston-Werner\" # INVALID" },
+        { 2, 15, "Expected the end of the line but got: last = \"Preston-Werner\" # INVALID" },
     };
 
     assert_errors(toml, errors);
@@ -105,7 +105,7 @@ TEST(parse, empty_unqoted_key)
     const string toml = "= \"no key name\"  # INVALID";
 
     const vector<Error> errors = {
-        { 1, 1, "Missing key" },
+        { 1, 1, "Missing key." },
     };
 
     assert_errors(toml, errors);

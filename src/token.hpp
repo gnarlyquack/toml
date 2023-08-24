@@ -49,6 +49,7 @@ struct Token
     Value *value;
 
     std::string lexeme;
+    u64 position;
     u64 line;
     u64 column;
 };
