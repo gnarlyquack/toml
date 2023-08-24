@@ -862,7 +862,7 @@ TEST(parse, implicit_super_tables)
 }
 
 
-TEST(parse, cannot_redefine_tables)
+TEST(parse, cannot_redefine_table)
 {
     const string toml =
         "# DO NOT DO THIS\n"
@@ -872,16 +872,30 @@ TEST(parse, cannot_redefine_tables)
         "\n"
         "[fruit]\n"
         "orange = \"orange\"\n"
-        "\n"
+        ;
+
+    const vector<Error> errors = {
+        { 6, 2, "Key \"fruit\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, cannot_redefine_subtable)
+{
+    const string toml =
         "# DO NOT DO THIS EITHER\n"
+        "\n"
+        "[fruit]\n"
+        "apple = \"red\"\n"
         "\n"
         "[fruit.apple]\n"
         "texture = \"smooth\"\n"
         ;
 
     const vector<Error> errors = {
-        { 6, 2, "Key \"fruit\" has already been defined." },
-        { 11, 8, "Key \"apple\" has already been defined." },
+        { 6, 8, "Key \"apple\" has already been defined." },
     };
 
     assert_errors(toml, errors);
@@ -943,18 +957,60 @@ TEST(parse, dotted_keys_cannot_redefine_tables)
         "apple.taste.sweet = true\n"
         "\n"
         "[fruit.apple]  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+        { 5, 8, "Key \"apple\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, dotted_keys_cannot_redefine_subtables)
+{
+    const string toml =
+        "[fruit]\n"
+        "apple.color = \"red\"\n"
+        "apple.taste.sweet = true\n"
+        "\n"
         "[fruit.apple.taste]  # INVALID\n"
+        ;
+
+    const vector<Error> errors = {
+        { 5, 14, "Key \"taste\" has already been defined." },
+    };
+
+    assert_errors(toml, errors);
+}
+
+
+TEST(parse, dotted_keys_can_add_subtables)
+{
+    const string toml =
+        "[fruit]\n"
+        "apple.color = \"red\"\n"
+        "apple.taste.sweet = true\n"
         "\n"
         "[fruit.apple.texture]  # you can add sub-tables\n"
         "smooth = true\n"
         ;
 
-    const vector<Error> errors = {
-        { 5, 8, "Key \"apple\" has already been defined." },
-        { 6, 14, "Key \"taste\" has already been defined." },
+    const Table expected{
+        { "fruit", new TableValue({
+                { "apple", new TableValue({
+                        { "color", new StringValue("red") },
+                        { "taste", new TableValue({
+                                { "sweet", new BooleanValue(true) },
+                            }) },
+                        { "texture", new TableValue({
+                                { "smooth", new BooleanValue(true) },
+                            }) },
+                    }) },
+            }) },
     };
 
-    assert_errors(toml, errors);
+    assert_parsed(toml, expected);
 }
 
 
