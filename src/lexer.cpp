@@ -74,12 +74,12 @@ struct TomlIterator
     u64 length;
 
     u64 start_position;
-    u64 start_line;
-    u64 start_column;
+    u32 start_line;
+    u32 start_column;
 
     u64 current_position;
-    u64 current_line;
-    u64 current_column;
+    u32 current_line;
+    u32 current_column;
 
     vector<Token> &tokens;
     vector<Error> &errors;

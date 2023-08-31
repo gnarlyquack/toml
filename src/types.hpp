@@ -255,6 +255,76 @@ struct TableValue final : public Value
 };
 
 
+struct Definition;
+
+
+using Definitions = std::unordered_map<std::string, Definition *>;
+
+
+struct Key
+{
+    std::string value;
+    uint32_t line;
+    uint32_t column;
+};
+
+
+struct Record
+{
+    ValueType type;
+    uint32_t line;
+    uint32_t column;
+    union
+    {
+        Definitions *definitions;
+        std::vector<Record *> *records;
+        Value *value;
+    };
+
+    Record(ValueType t, uint32_t l, uint32_t c)
+        : type{t}
+        , line{l}
+        , column{c}
+    {
+        switch (type)
+        {
+            case TYPE_ARRAY:
+            {
+                records = new std::vector<Record *>;
+            } break;
+
+            case TYPE_TABLE:
+            {
+                definitions = new Definitions;
+            } break;
+
+            default:
+            {
+                assert(false);
+            } break;
+        }
+    }
+
+    Record(Value *v, uint32_t l, uint32_t c)
+        : type{v->type}
+        , line{l}
+        , column{c}
+        , value{v}
+    {
+        assert((type != TYPE_ARRAY) || (type != TYPE_TABLE));
+    }
+};
+
+
+struct Definition
+{
+    Key key;
+    Record *record;
+};
+
+
+
+
 } // namespace toml
 
 

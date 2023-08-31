@@ -171,21 +171,21 @@ struct Parser final
     u64 length;
     u64 position;
 
-    Table &result;
+    Definitions &table;
     MetaValue meta;
 
-    Table *current_value;
+    Definitions *current_table;
     MetaValue *current_meta;
 
     ErrorList &errors;
 
-    explicit Parser(TokenList &token_list, Table &table, ErrorList &error_list)
+    explicit Parser(TokenList &token_list, Definitions &definitions, ErrorList &error_list)
         : tokens{token_list}
         , length{tokens.size()}
         , position{0}
-        , result{table}
+        , table{definitions}
         , meta{META_TYPE_HEADER_TABLE}
-        , current_value{&result}
+        , current_table{&table}
         , current_meta{&meta}
         , errors{error_list}
     {
@@ -198,9 +198,9 @@ struct Parser final
 // Predeclarations
 //
 
-void parse_keyval(Parser &parser, Table *table, MetaValue *meta);
+void parse_keyval(Parser &parser, Definitions *table, MetaValue *meta);
 
-Value *parse_value(Parser &parser);
+Record *parse_value(Parser &parser);
 
 
 
@@ -226,18 +226,42 @@ eat(Parser &parser, TokenType expected = TOKEN_ERROR)
 
 
 void
-key_redefinition(Parser &parser, const Token &token)
+key_redefinition(Parser &parser, const Token &key, const Key &prev)
 {
-    Error error = {token.line, token.column, "Key \"" + token.lexeme + "\" has already been defined."};
+    Error error = {key.line, key.column, "Key '" + key.lexeme + "' has already been defined on line " + to_string(prev.line) + ", character " + to_string(prev.column) + "."};
     parser.errors.push_back(move(error));
 }
 
 
-ArrayValue *
+Record *
+array_record(const Token &token)
+{
+    Record *result = new Record{TYPE_ARRAY, token.line, token.column};
+    return result;
+}
+
+
+Record *
+table_record(const Token &token)
+{
+    Record *result = new Record{TYPE_TABLE, token.line, token.column};
+    return result;
+}
+
+
+Record *
+value_record(const Token &token)
+{
+    assert(token.type == TOKEN_VALUE);
+    Record *result = new Record{token.value, token.line, token.column};
+    return result;
+}
+
+
+Record *
 parse_array(Parser &parser)
 {
-    auto result = new ArrayValue{};
-    eat(parser, TOKEN_LBRACKET);
+    auto result = array_record(eat(parser, TOKEN_LBRACKET));
 
     bool parsing = true;
     while (parsing)
@@ -266,8 +290,8 @@ parse_array(Parser &parser)
 
             default:
             {
-                Value *value = parse_value(parser);
-                result->value.push_back(value);
+                Record *value = parse_value(parser);
+                result->records->push_back(value);
             } break;
         }
     }
@@ -276,13 +300,11 @@ parse_array(Parser &parser)
 }
 
 
-TableValue *
+Record *
 parse_inline_table(Parser &parser)
 {
-    auto result = new TableValue{};
+    auto result = table_record(eat(parser, TOKEN_LBRACE));
     MetaValue meta{META_TYPE_HEADER_TABLE};
-
-    eat(parser, TOKEN_LBRACE);
 
     bool parsing = true;
     while (parsing)
@@ -311,7 +333,7 @@ parse_inline_table(Parser &parser)
 
             default:
             {
-                parse_keyval(parser, &result->value, &meta);
+                parse_keyval(parser, result->definitions, &meta);
             } break;
         }
     }
@@ -320,10 +342,10 @@ parse_inline_table(Parser &parser)
 }
 
 
-Value *
+Record *
 parse_value(Parser &parser)
 {
-    Value *result;
+    Record *result;
 
     const Token &token = peek(parser);
     switch (token.type)
@@ -331,7 +353,7 @@ parse_value(Parser &parser)
         case TOKEN_VALUE:
         {
             eat(parser);
-            result = token.value;
+            result = value_record(token);
         } break;
 
         case TOKEN_LBRACKET:
@@ -347,7 +369,7 @@ parse_value(Parser &parser)
         default:
         {
             assert(false);
-            result = new Value{};
+            result = new Record{TYPE_INVALID, token.line, token.column};
         } break;
     }
 
@@ -356,16 +378,16 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser, Table *table, MetaValue *table_meta)
+parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
 {
     Token *key = &eat(parser, TOKEN_KEY);
     for ( ; peek(parser).type == TOKEN_KEY; key = &eat(parser))
     {
-        Value *&value = (*table)[key->lexeme];
+        Definition *&value = (*table)[key->lexeme];
         MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
         if (!value)
         {
-            value = new TableValue();
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
         else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -374,33 +396,34 @@ parse_keyval(Parser &parser, Table *table, MetaValue *table_meta)
         }
         else if (value_meta->type != META_TYPE_DOTTED_TABLE)
         {
-            key_redefinition(parser, *key);
+            key_redefinition(parser, *key, value->key);
             // Replacing the value and continuing on seems like maybe the
             // best way to mitigate cascading errors.
             delete value;
             delete value_meta;
-            value = new TableValue();
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
 
-        assert(value->type == TYPE_TABLE);
-        table = &static_cast<TableValue *>(value)->value;
+        assert(value->record->type == TYPE_TABLE);
+        table = value->record->definitions;
         table_meta = value_meta;
 
     }
 
-    Value *&value = (*table)[key->lexeme];
+    Definition *&value = (*table)[key->lexeme];
     MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
     if (value)
     {
-        key_redefinition(parser, *key);
+        key_redefinition(parser, *key, value->key);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
         delete value;
         delete value_meta;
     }
 
-    value = parse_value(parser);
+    Record *record = parse_value(parser);
+    value = new Definition{{key->lexeme, key->line, key->column}, record};
     value_meta = new MetaValue{};
 }
 
@@ -411,14 +434,14 @@ parse_table_header(Parser &parser)
     Token *key = &eat(parser, TOKEN_KEY);
     for ( ; peek(parser).type == TOKEN_KEY; key = &eat(parser))
     {
-        Value *&value = (*parser.current_value)[key->lexeme];
+        Definition *&value = (*parser.current_table)[key->lexeme];
         MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
         if (!value)
         {
-            value = new TableValue();
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
-            parser.current_value = &static_cast<TableValue *>(value)->value;
+            parser.current_table = value->record->definitions;
             parser.current_meta = value_meta;
         }
         else
@@ -427,10 +450,10 @@ parse_table_header(Parser &parser)
             {
                 case META_TYPE_TABLE_ARRAY:
                 {
-                    ArrayValue *array = static_cast<ArrayValue *>(value);
-                    assert(array->value.size());
+                    vector<Record *> *records = value->record->records;
+                    assert(records->size());
                     assert(value_meta->array->back()->type == META_TYPE_HEADER_TABLE);
-                    parser.current_value = &static_cast<TableValue *>(array->value.back())->value;
+                    parser.current_table = records->back()->definitions;
                     parser.current_meta = value_meta->array->back();
                 } break;
 
@@ -438,22 +461,22 @@ parse_table_header(Parser &parser)
                 case META_TYPE_DOTTED_TABLE:
                 case META_TYPE_HEADER_TABLE:
                 {
-                    assert(value->type == TYPE_TABLE);
-                    parser.current_value = &static_cast<TableValue *>(value)->value;
+                    assert(value->record->type == TYPE_TABLE);
+                    parser.current_table = value->record->definitions;
                     parser.current_meta = value_meta;
                 } break;
 
                 default:
                 {
-                    key_redefinition(parser, *key);
+                    key_redefinition(parser, *key, value->key);
                     // Replacing the value and continuing on seems like maybe the
                     // best way to mitigate cascading errors.
                     delete value;
                     delete value_meta;
-                    value = new TableValue();
+                    value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
                     value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
-                    parser.current_value = &static_cast<TableValue *>(value)->value;
+                    parser.current_table = value->record->definitions;
                     parser.current_meta = value_meta;
                 } break;
             }
@@ -469,15 +492,15 @@ parse_table(Parser &parser)
 {
     eat(parser, TOKEN_LBRACKET);
 
-    parser.current_value = &parser.result;
+    parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
     Token *key = parse_table_header(parser);
 
-    Value *&value = (*parser.current_value)[key->lexeme];
+    Definition *&value = (*parser.current_table)[key->lexeme];
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
     if (!value)
     {
-        value = new TableValue{};
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
         value_meta = new MetaValue{META_TYPE_HEADER_TABLE};
     }
     else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -486,16 +509,16 @@ parse_table(Parser &parser)
     }
     else
     {
-        key_redefinition(parser, *key);
+        key_redefinition(parser, *key, value->key);
         delete value;
         delete value_meta;
 
-        value = new TableValue();
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
     }
 
-    assert(value->type == TYPE_TABLE);
-    parser.current_value = &static_cast<TableValue *>(value)->value;
+    assert(value->record->type == TYPE_TABLE);
+    parser.current_table = value->record->definitions;
     parser.current_meta = value_meta;
 
     eat(parser, TOKEN_RBRACKET);
@@ -507,37 +530,37 @@ parse_table_array(Parser &parser)
 {
     eat(parser, TOKEN_DOUBLE_LBRACKET);
 
-    parser.current_value = &parser.result;
+    parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
     Token *key = parse_table_header(parser);
 
-    Value *&value = (*parser.current_value)[key->lexeme];
+    Definition *&value = (*parser.current_table)[key->lexeme];
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
     if (!value)
     {
-        value = new ArrayValue;
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_ARRAY, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
     else if (value_meta->type != META_TYPE_TABLE_ARRAY)
     {
-        key_redefinition(parser, *key);
+        key_redefinition(parser, *key, value->key);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
         delete value;
         delete value_meta;
-        value = new ArrayValue;
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_ARRAY, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
 
-    auto table = new TableValue;
+    auto table = new Record{TYPE_TABLE, key->line, key->column};
     auto table_meta = new MetaValue(META_TYPE_HEADER_TABLE);
 
-    assert(value->type == TYPE_ARRAY);
-    auto array = static_cast<ArrayValue *>(value);
-    array->value.push_back(table);
+    assert(value->record->type == TYPE_ARRAY);
+    auto array = value->record->records;
+    array->push_back(table);
     value_meta->array->push_back(table_meta);
 
-    parser.current_value = &table->value;
+    parser.current_table = table->definitions;
     parser.current_meta = table_meta;
 
     eat(parser, TOKEN_DOUBLE_RBRACKET);
@@ -551,7 +574,7 @@ parse_expression(Parser &parser)
     {
         case TOKEN_KEY:
         {
-            parse_keyval(parser, parser.current_value, parser.current_meta);
+            parse_keyval(parser, parser.current_table, parser.current_meta);
         } break;
 
         case TOKEN_LBRACKET:
@@ -572,24 +595,87 @@ parse_expression(Parser &parser)
 }
 
 
+Value *
+value_from_record(Record *record)
+{
+    Value *result;
+
+    switch (record->type)
+    {
+        case TYPE_TABLE:
+        {
+            TableValue *value = new TableValue{};
+            Definitions *definitions = record->definitions;
+            for (auto keyval : *definitions)
+            {
+                const string &k = keyval.first;
+                Definition *d = keyval.second;
+                value->value[k] = value_from_record(d->record);
+            }
+
+            result = value;
+        } break;
+
+        case TYPE_ARRAY:
+        {
+            ArrayValue *value = new ArrayValue{};
+            vector<Record *> *records = record->records;
+            for (auto r : *records)
+            {
+                value->value.push_back(value_from_record(r));
+            }
+
+            result = value;
+        } break;
+
+        default:
+        {
+            result = record->value;
+        } break;
+    }
+
+    return result;
+}
+
+
 } // namespace
 
 
 bool
-parse_toml(const string &toml, Table &table, vector<Error> &errors)
+parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> &errors)
 {
     vector<Token> tokens;
     bool result = lex_toml(toml, tokens, errors);
 
     if (result)
     {
-        Parser parser{tokens, table, errors};
+        Parser parser{tokens, definitions, errors};
         while (peek(parser).type != TOKEN_EOF)
         {
             parse_expression(parser);
         }
 
         result = errors.size() == 0;
+    }
+
+    return result;
+}
+
+
+bool
+parse_toml(const string &toml, Table &table, vector<Error> &errors)
+{
+    Definitions definitions;
+    bool result = parse_with_metadata(toml, definitions, errors);
+
+    if (result)
+    {
+        for (auto keyval : definitions)
+        {
+            const string &key = keyval.first;
+            Definition *definition = keyval.second;
+            table[key] = value_from_record(definition->record);
+        }
     }
 
     return result;

@@ -50,8 +50,8 @@ struct Token
 
     std::string lexeme;
     u64 position;
-    u64 line;
-    u64 column;
+    u32 line;
+    u32 column;
 };
 
 
