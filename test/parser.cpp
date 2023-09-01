@@ -513,9 +513,9 @@ TEST(parse, invalid_floats)
         ;
 
     const vector<Error> errors = {
-        { 2, 19, "Missing whole part of decimal number" },
-        { 3, 21, "Missing fractional part of decimal number" },
-        { 4, 21, "Missing fractional part of decimal number" },
+        { 2, 19, "Missing whole part of decimal number." },
+        { 3, 21, "Missing fractional part of decimal number." },
+        { 4, 21, "Missing fractional part of decimal number." },
     };
 
     assert_errors(toml, errors);

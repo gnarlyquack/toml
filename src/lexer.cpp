@@ -399,7 +399,7 @@ eat_string(TomlIterator &iterator, const string &expected, u32 context)
     }
     else
     {
-        add_error(iterator, "Invalid value: " + eaten);
+        add_error(iterator, "Invalid value: " + get_lexeme(iterator));
     }
 
     return result;
@@ -568,7 +568,7 @@ unterminated_string(TomlIterator &iterator)
 
 
 bool
-validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type)
+validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type, bool no_leading_zero)
 {
     bool valid = true;
 
@@ -584,7 +584,13 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
     }
     else if (result.digits.length() == 0)
     {
-        Error error = { iterator.current_line, iterator.current_column, "Missing " + type + " number" };
+        Error error = { iterator.current_line, iterator.current_column, "Missing " + type + " number." };
+        iterator.errors.push_back(move(error));
+        valid = false;
+    }
+    else if (no_leading_zero && (result.digits[0] == '0') && (result.digits.length() > 1))
+    {
+        Error error = { iterator.start_line, iterator.start_column, "Leading zero is not allowed in " + type + " number." };
         iterator.errors.push_back(move(error));
         valid = false;
     }
@@ -841,7 +847,7 @@ lex_exponent(TomlIterator &iterator, u32 context, string &value)
     }
 
     LexDigitResult exponent = lex_digits(iterator, is_decimal, context);
-    bool valid = validate_digits(iterator, exponent, "exponential part of decimal");
+    bool valid = validate_digits(iterator, exponent, "exponential part of decimal", false);
     value += move(exponent.digits);
 
     return valid;
@@ -852,7 +858,7 @@ bool
 lex_fraction(TomlIterator &iterator, u32 context, string &value)
 {
     LexDigitResult fraction = lex_digits(iterator, is_decimal, context | LEX_EXPONENT);
-    bool valid = validate_digits(iterator, fraction, "fractional part of decimal");
+    bool valid = validate_digits(iterator, fraction, "fractional part of decimal", false);
     value += move(fraction.digits);
 
     if (match(iterator, 'e') || match(iterator, 'E'))
@@ -1063,7 +1069,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
 
     if (match(iterator, '.'))
     {
-        bool valid = validate_digits(iterator, result, "whole part of decimal");
+        bool valid = validate_digits(iterator, result, "whole part of decimal", true);
         value += move(result.digits);
         value.push_back(eat_byte(iterator));
         valid = lex_fraction(iterator, context, value) && valid;
@@ -1078,7 +1084,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
     }
     else if (match(iterator, 'e') || match(iterator, 'E'))
     {
-        bool valid = validate_digits(iterator, result, "whole part of decimal");
+        bool valid = validate_digits(iterator, result, "whole part of decimal", true);
         value += move(result.digits);
         value.push_back(eat_byte(iterator));
         valid = lex_exponent(iterator, context, value) && valid;
@@ -1133,7 +1139,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
     }
     else
     {
-        if (validate_digits(iterator, result, "decimal"))
+        if (validate_digits(iterator, result, "decimal", true))
         {
             value += move(result.digits);
             add_value(iterator, new IntegerValue(string_to_s64(value)));
@@ -1157,7 +1163,7 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
     }
 
     LexDigitResult result = lex_digits(iterator, is_hexadecimal, context);
-    if (!validate_digits(iterator, result, "hexadecimal"))
+    if (!validate_digits(iterator, result, "hexadecimal", false))
     {
         valid = false;
     }
@@ -1185,7 +1191,7 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
     }
 
     LexDigitResult result = lex_digits(iterator, is_octal, context);
-    if (!validate_digits(iterator, result, "octal"))
+    if (!validate_digits(iterator, result, "octal", false))
     {
         valid = false;
     }
@@ -1213,7 +1219,7 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
     }
 
     LexDigitResult result = lex_digits(iterator, is_binary, context);
-    if (!validate_digits(iterator, result, "binary"))
+    if (!validate_digits(iterator, result, "binary", false))
     {
         valid = false;
     }

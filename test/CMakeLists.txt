@@ -13,7 +13,7 @@
         valid_comment_tests.cpp
         valid_tests.cpp
         invalid_table_tests.cpp
-        #invalid_float_tests.cpp
+        invalid_float_tests.cpp
         #invalid_encoding_tests.cpp
         #invalid_integer_tests.cpp
         #invalid_key_tests.cpp
