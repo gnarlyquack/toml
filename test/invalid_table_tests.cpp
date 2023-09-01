@@ -169,7 +169,7 @@ TEST(invalid_table_tests, test_quoted_no_close)
 {
     const string toml{"[\"where will it end]\nname = value\n", 34};
 
-    const vector<Error> expected{{ 1, 21, "Unterminated string." },{ 1, 21, "Missing closing ']' for table." },{ 2, 8, "Invalid value: value." },};
+    const vector<Error> expected{{ 1, 21, "Unterminated string." },{ 1, 21, "Missing closing ']' for table." },{ 2, 8, "Invalid value: value" },};
 
     assert_errors(toml, expected);
 }
@@ -199,7 +199,7 @@ TEST(invalid_table_tests, test_nested_brackets_close)
 {
     const string toml{"[a]b]\nzyx = 42\n", 15};
 
-    const vector<Error> expected{{ 1, 4, "Expected a new line after expression." },};
+    const vector<Error> expected{{ 1, 4, "Expected the end of the line but got: b]" },};
 
     assert_errors(toml, expected);
 }
@@ -219,7 +219,7 @@ TEST(invalid_table_tests, test_array_implicit)
 {
     const string toml{"# This test is a bit tricky. It should fail because the first use of\n# `[[albums.songs]]` without first declaring `albums` implies that `albums`\n# must be a table. The alternative would be quite weird. Namely, it wouldn't\n# comply with the TOML spec: \"Each double-bracketed sub-table will belong to \n# the most *recently* defined table element *above* it.\"\n#\n# This is in contrast to the *valid* test, table-array-implicit where\n# `[[albums.songs]]` works by itself, so long as `[[albums]]` isn't declared\n# later. (Although, `[albums]` could be.)\n[[albums.songs]]\nname = \"Glory Days\"\n\n[[albums]]\nname = \"Born in the USA\"\n", 622};
 
-    const vector<Error> expected{{ 13, 3, "Cannot define 'albums' as an array because it has already been defined as a table on line 10, character 3." },};
+    const vector<Error> expected{{ 13, 3, "Key 'albums' has already been defined on line 10, character 3." },};
 
     assert_errors(toml, expected);
 }
@@ -229,7 +229,7 @@ TEST(invalid_table_tests, test_with_pound)
 {
     const string toml{"[key#group]\nanswer = 42\n", 24};
 
-    const vector<Error> expected{{ 1, 2, "Invalid key: key#group." },};
+    const vector<Error> expected{{ 1, 2, "Invalid key: key#group" },};
 
     assert_errors(toml, expected);
 }

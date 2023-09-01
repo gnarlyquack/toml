@@ -560,6 +560,13 @@ missing_key(TomlIterator &iterator)
 }
 
 
+void
+unterminated_string(TomlIterator &iterator)
+{
+    add_error(iterator, "Unterminated string.", iterator.current_line, iterator.current_column);
+}
+
+
 bool
 validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type)
 {
@@ -1629,7 +1636,7 @@ lex_string(TomlIterator &iterator, byte delimiter)
     {
         if (match_eol(iterator))
         {
-            assert(false);
+            unterminated_string(iterator);
             lexing = false;
         }
         else
