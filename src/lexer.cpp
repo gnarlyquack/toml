@@ -28,6 +28,7 @@ using IsDigit = bool (*)(byte value);
 
 // No UTF-8 byte can be 0xff
 constexpr byte INVALID_BYTE = BYTE_MAX;
+constexpr byte BYTE_EOF = INVALID_BYTE;
 
 
 constexpr byte B10000000 = 0x80;
@@ -57,6 +58,7 @@ enum LexingContext
     LEX_TIMEZONE    = 1 << 5,
     LEX_ARRAY       = 1 << 6,
     LEX_TABLE       = 1 << 7,
+    LEX_HEADER      = 1 << 8,
 };
 
 
@@ -1921,68 +1923,118 @@ lex_value(TomlIterator &iterator, u32 context)
 }
 
 
-bool
-lex_unquoted_key(TomlIterator &iterator)
+void
+lex_unquoted_key(TomlIterator &iterator, u32 context)
 {
+    assert((context & (LEX_TABLE | LEX_HEADER)) == context);
+
     string value;
+    bool valid = true;
     bool lexing = true;
     while (lexing)
     {
-        if (end_of_file(iterator) || !is_key_char(get_byte(iterator)))
+        byte b = get_byte(iterator);
+        if (is_key_char(b))
         {
-            lexing = false;
+            value += eat_byte(iterator);
         }
         else
         {
-            value.push_back(eat_byte(iterator));
+            switch (b)
+            {
+                case BYTE_EOF:
+                case ' ':
+                case '\t':
+                case '\n':
+                case '.':
+                {
+                    lexing = false;
+                } break;
+
+                case '\r':
+                {
+                    lexing = !match(iterator, '\n', 1);
+                } break;
+
+                case '=':
+                {
+                    // headers don't have key-value pairs
+                    lexing = context & LEX_HEADER;
+                } break;
+
+                case '#':
+                {
+                    // headers and inline tables cannot have comments
+                    lexing = context & (LEX_TABLE | LEX_HEADER);
+                } break;
+
+                case ',':
+                {
+                    lexing = !(context & LEX_TABLE);
+                } break;
+
+                case ']':
+                {
+                    lexing = !(context & LEX_HEADER);
+                } break;
+
+                case '}':
+                {
+                    lexing = !(context & LEX_TABLE);
+                } break;
+            }
+
+            if (lexing)
+            {
+                value += eat_byte(iterator);
+                valid = false;
+            }
         }
     }
 
-    bool result = value.length();
+    if (!valid)
+    {
+        add_error(iterator, "Invalid key: " + value);
+    }
+    else if (value.length() == 0)
+    {
+        missing_key(iterator);
+    }
+
     add_token(iterator, TOKEN_KEY, move(value));
-    return result;
 }
 
 
-bool
-lex_simple_key(TomlIterator &iterator)
+void
+lex_simple_key(TomlIterator &iterator, u32 context)
 {
     assert(!match_whitespace(iterator) && !match_eol(iterator));
 
-    bool result;
     byte c = get_byte(iterator);
     if ((c == '"') || (c == '\''))
     {
         string key = lex_string(iterator, c);
         add_token(iterator, TOKEN_KEY, move(key));
-        result = true;
     }
     else
     {
-        result = lex_unquoted_key(iterator);
+        lex_unquoted_key(iterator, context);
     }
-
-    return result;
 }
 
 
-bool
-lex_key(TomlIterator &iterator)
+void
+lex_key(TomlIterator &iterator, u32 context)
 {
-    bool result;
     bool lexing = true;
     while (lexing)
     {
         advance(iterator);
-        result = lex_simple_key(iterator);
+        lex_simple_key(iterator, context);
 
         eat_whitespace(iterator);
         if (match(iterator, '.'))
         {
-            if (!result)
-            {
-                missing_key(iterator);
-            }
             eat_byte(iterator);
             eat_whitespace(iterator);
         }
@@ -1991,22 +2043,25 @@ lex_key(TomlIterator &iterator)
             lexing = false;
         }
     }
-
-    return result;
 }
 
 
 void
 lex_keyval(TomlIterator &iterator, u32 context)
 {
-    if (!lex_key(iterator))
-    {
-        missing_key(iterator);
-    }
+    lex_key(iterator, context);
 
     eat_whitespace(iterator);
-    eat_byte(iterator, '=');
+
+    if (match(iterator, '='))
+    {
+        eat_byte(iterator);
     eat_whitespace(iterator);
+    }
+    else
+    {
+        add_error(iterator, "Missing '=' between key and value.");
+    }
 
     lex_value(iterator, context);
 }
@@ -2031,37 +2086,10 @@ lex_table(TomlIterator &iterator)
         eat_whitespace(iterator);
     }
 
-    bool lexed_key = lex_key(iterator);
+    lex_key(iterator, LEX_HEADER);
 
     assert(!match_whitespace(iterator));
     advance(iterator);
-
-    u64 position = iterator.current_position;
-    u64 line = iterator.current_line;
-    u64 column = iterator.current_column;
-    while (!match_eol(iterator) && !match(iterator, ']'))
-    {
-        eat_byte(iterator);
-    }
-
-    if (iterator.current_position > position)
-    {
-        if (lexed_key)
-        {
-            Token &key = iterator.tokens.back();
-            position = key.position;
-            line = key.line;
-            column = key.column;
-        }
-
-        u64 count = iterator.current_position - position;
-        string message = "Invalid key: " + iterator.toml.substr(position, count);
-        add_error(iterator, move(message), line, column);
-    }
-    else if (!lexed_key)
-    {
-        missing_key(iterator);
-    }
 
     if (match(iterator, ']'))
     {
