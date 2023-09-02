@@ -1284,13 +1284,12 @@ lex_string_char(TomlIterator &iterator, string &result)
 
     u32 line = iterator.current_line;
     u32 column = iterator.current_column;
-
-    byte c = eat_byte(iterator);
-    result.push_back(c);
-
     u32 codepoint = 0;
     u32 nbytes = 0;
     bool valid = true;
+
+    byte c = eat_byte(iterator);
+    result.push_back(c);
 
     if ((c & B10000000) == 0)
     {
@@ -1322,16 +1321,15 @@ lex_string_char(TomlIterator &iterator, string &result)
     }
 
     u32 eaten = 1;
-    for ( ; (eaten < nbytes) && !end_of_file(iterator); ++eaten)
+    for ( ; (eaten < nbytes) && valid && !end_of_file(iterator); ++eaten)
     {
-        c = eat_byte(iterator);
-        result.push_back(c);
-
+        c = get_byte(iterator);
         if ((c & B11000000) == B10000000)
         {
             byte masked = c & B00111111;
             u32 shift = 6 * (nbytes - 1 - eaten);
             codepoint |= (masked << shift);
+            result.push_back(eat_byte(iterator));
         }
         else
         {
