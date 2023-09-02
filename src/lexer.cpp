@@ -106,6 +106,9 @@ struct LexDigitResult
 void
 lex_keyval(TomlIterator &iterator, u32 context);
 
+bool
+lex_string_char(TomlIterator &iterator, string &result);
+
 void
 lex_value(TomlIterator &iterator, u32 context);
 
@@ -332,10 +335,12 @@ eat_comment(TomlIterator &iterator)
 {
     if (match(iterator, '#'))
     {
-        do
+        eat_byte(iterator);
+        string eaten;
+        while (!match_eol(iterator))
         {
-            eat_byte(iterator);
-        } while (!match_eol(iterator));
+            lex_string_char(iterator, eaten);
+        };
     }
 }
 
@@ -515,7 +520,7 @@ invalid_escape(TomlIterator &iterator, byte value)
 void
 invalid_unicode(TomlIterator &iterator, u32 codepoint)
 {
-    string message = "Invalid Unicode character: U+";
+    string message = "Invalid Unicode codepoint: U+";
 
     u32 nchars = (codepoint / 0xf) + 1;
     for (u32 i = 4; i > nchars; --i)
@@ -1272,10 +1277,13 @@ lex_number(TomlIterator &iterator, u32 context)
 }
 
 
-void
+bool
 lex_string_char(TomlIterator &iterator, string &result)
 {
     assert(!end_of_file(iterator));
+
+    u32 line = iterator.current_line;
+    u32 column = iterator.current_column;
 
     byte c = eat_byte(iterator);
     result.push_back(c);
@@ -1308,7 +1316,7 @@ lex_string_char(TomlIterator &iterator, string &result)
     {
         string message = "Invalid UTF-8 byte: ";
         byte_to_hex(c, message);
-        add_error(iterator, move(message));
+        add_error(iterator, move(message), line, column);
         nbytes = 1; // Let's just eat the byte and (try to) keep going
         valid = false;
     }
@@ -1333,7 +1341,7 @@ lex_string_char(TomlIterator &iterator, string &result)
             byte_to_hex(0x80, message);
             message += "-";
             byte_to_hex(0xbf, message);
-            add_error(iterator, move(message));
+            add_error(iterator, move(message), line, column);
             valid = false;
         }
     }
@@ -1344,48 +1352,52 @@ lex_string_char(TomlIterator &iterator, string &result)
         if ((nbytes == 2) && (codepoint < 0x80))
         {
             ostringstream message;
-            message << "Overlong encoding of Unicode value: ";
+            message << "Overlong encoding of Unicode codepoint: ";
             format_unicode(message, codepoint);
-            message << " is a 1-byte value but was encoded in 2 bytes.";
-            add_error(iterator, message.str());
+            message << " should be encoded using 1 byte but was encoded using 2.";
+            add_error(iterator, message.str(), line, column);
+            valid = false;
         }
         else if ((nbytes == 3) && (codepoint < 0x800))
         {
-            u32 expected_bytes = (codepoint < 0x80) ? 1 : 2;
+            string expected_bytes = (codepoint < 0x80) ? "1 byte" : "2 bytes";
 
             ostringstream message;
-            message << "Overlong encoding of Unicode value: ";
+            message << "Overlong encoding of Unicode codepoint: ";
             format_unicode(message, codepoint);
-            message << " is a " << expected_bytes << "-byte value but was encoded in 3 bytes.";
-            add_error(iterator, message.str());
+            message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
+            add_error(iterator, message.str(), line, column);
+            valid = false;
         }
         else if ((nbytes == 4) && (codepoint < 0x10000))
         {
-            u32 expected_bytes = 1;
+            string expected_bytes = "1 byte";
             if (codepoint < 0x800)
             {
-                expected_bytes = 3;
+                expected_bytes = "3 bytes";
             }
             else if (codepoint < 0x80)
             {
-                expected_bytes = 2;
+                expected_bytes = "2 bytes";
             }
 
             ostringstream message;
-            message << "Overlong encoding of Unicode value: ";
+            message << "Overlong encoding of Unicode codepoint: ";
             format_unicode(message, codepoint);
-            message << " is a " << expected_bytes << "-byte value but was encoded in 4 bytes.";
-            add_error(iterator, message.str());
+            message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
+            add_error(iterator, message.str(), line, column);
+            valid = false;
         }
         else if (codepoint > 0x10ffff)
         {
             ostringstream message;
-            message << "Invalid Unicode value: ";
+            message << "Invalid Unicode codepoint: ";
             format_unicode(message, codepoint);
-            message << " (maximum allowed value is ";
+            message << " (maximum codepoint is ";
             format_unicode(message, 0x10ffff);
             message << ")";
-            add_error(iterator, message.str());
+            add_error(iterator, message.str(), line, column);
+            valid = false;
         }
         else if (!(
             (codepoint == 0x09)
@@ -1394,10 +1406,11 @@ lex_string_char(TomlIterator &iterator, string &result)
             || (codepoint >= 0xe000)))
         {
             ostringstream message;
-            message << "Unicode value ";
+            message << "Unicode codepoint ";
             format_unicode(message, codepoint);
-            message << " is not allowed in a string";
-            add_error(iterator, message.str());
+            message << " is not allowed.";
+            add_error(iterator, message.str(), line, column);
+            valid = false;
         }
 
         // Adjust the current column to reflect only 1 "character". Although
@@ -1405,6 +1418,8 @@ lex_string_char(TomlIterator &iterator, string &result)
         // requests accepted. :-)
         iterator.current_column -= (nbytes - 1);
     }
+
+    return valid;
 }
 
 
@@ -1910,7 +1925,7 @@ lex_value(TomlIterator &iterator, u32 context)
 
             case '#':
             {
-                add_error(iterator, "Missing value");
+                add_error(iterator, "Missing value.");
                 add_token(iterator, TOKEN_ERROR);
             } break;
 
@@ -1986,8 +2001,10 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
 
             if (lexing)
             {
-                value += eat_byte(iterator);
-                valid = false;
+                if (lex_string_char(iterator, value))
+                {
+                    valid = false;
+                }
             }
         }
     }

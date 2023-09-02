@@ -50,7 +50,7 @@ TEST(parse, invalid_keyvals)
         ;
 
     const vector<Error> errors = {
-        { 1, 7, "Missing value" },
+        { 1, 7, "Missing value." },
         { 2, 15, "Expected the end of the line but got: last = \"Preston-Werner\" # INVALID" },
     };
 
