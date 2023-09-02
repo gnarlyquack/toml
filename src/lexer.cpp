@@ -1560,7 +1560,7 @@ lex_multiline_string(TomlIterator &iterator, byte delimiter)
     {
         if (end_of_file(iterator))
         {
-            assert(false);
+            unterminated_string(iterator);
             lexing = false;
         }
         else if (eat_newline(iterator))
