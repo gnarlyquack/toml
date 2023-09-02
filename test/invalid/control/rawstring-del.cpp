@@ -1,0 +1,15 @@
+#include "../../test_common.hpp"
+
+
+using namespace std;
+using namespace toml;
+
+
+TEST(invalid_control_tests, test_rawstring_del)
+{
+    const string toml{"rawstring-del = 'null\177'\n", 24};
+
+    const vector<Error> expected{{ 1, 22, "Unicode character U+007F not allowed in string." },};
+
+    assert_errors(toml, expected);
+}

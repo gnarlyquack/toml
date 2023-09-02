@@ -3,11 +3,10 @@
 import datetime
 import json
 import os
+import re
 import sys
 
-from math import isnan
 from os.path import dirname
-from pathlib import Path
 
 
 ROOT_PATH = dirname(dirname(os.path.realpath(__file__)))
@@ -29,13 +28,19 @@ NAME_CONVERT = str.maketrans({
 })
 
 
+EXCLUDE = {
+    # These tests are no longer valid for TOML 1.0.0
+    os.path.join(SOURCE_DIR, "valid", "string", "escape-esc"),
+}
+
+
 def main():
     # ensure test directory exists
     os.makedirs(TEST_DIR, exist_ok=True)
 
     files = []
-    generate_valid_tests("valid", files)
-    generate_invalid_tests("invalid", files)
+    generate_valid_tests("valid", "../", files)
+    generate_invalid_tests("invalid", "../", files)
 
     filename = os.path.join(TEST_DIR, "CMakeLists.txt")
     with open(filename, "w") as fh:
@@ -44,16 +49,12 @@ def main():
     sys.exit()
 
 
-TEST_FILE_TEMPLATE = b'''\
-#include "test_common.hpp"
+VALID_TEST_TEMPLATE = b'''\
+#include "%btest_common.hpp"
 
 
 using namespace std;
 using namespace toml;
-'''
-
-
-VALID_TEST_TEMPLATE = b'''\
 
 
 TEST(%b, %b)
@@ -68,13 +69,20 @@ TEST(%b, %b)
 
 
 INVALID_TEST_TEMPLATE = b'''\
+#include "%btest_common.hpp"
+
+
+using namespace std;
+using namespace toml;
 
 
 TEST(%b, %b)
 {
     const string toml{"%b", %d};
 
-    const vector<Error> expected{%b};
+    const vector<Error> expected{
+        { 0, 0, "" },
+    };
 
     assert_errors(toml, expected);
 }
@@ -94,42 +102,212 @@ CMAKELISTS_TEMPLATE = '''\
 '''
 
 
-def generate_valid_tests(relative_src_dir, files):
+def generate_valid_tests(relative_src_dir, relative_root_dir, files):
     suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
     src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
+    test_dir = os.path.join(TEST_DIR, relative_src_dir)
+    os.makedirs(test_dir, exist_ok=True)
 
-    result = TEST_FILE_TEMPLATE
-    count = 0
+    sources = set()
+    tests = set()
 
     with os.scandir(src_dir) as it:
         for entry in it:
-            if should_include_test(entry.path):
-                count += 1
-                with open(entry.path, "rb") as fh:
-                    toml = fh.read()
+            if entry.is_dir():
+                # append directory separator to ensure no clashes with file names
+                name = entry.name + os.path.sep
+                sources.add(name)
+            elif entry.path.endswith(".toml"):
+                # use the base name so we can match TOML files to C++ files
+                name = entry.name.rsplit('.', 1)[0]
+                if os.path.join(src_dir, name) not in EXCLUDE:
+                    sources.add(name)
 
-                basename = entry.name.rsplit('.', 1)[0]
+    with os.scandir(test_dir) as it:
+        for entry in it:
+            if entry.is_dir():
+                # append directory separator to ensure no clashes with file names
+                name = entry.name + os.path.sep
+                tests.add(name)
+            else:
+                # use the base name so we can match TOML files to C++ files
+                name = entry.name.rsplit('.', 1)[0]
+                tests.add(name)
 
-                jsonname = f"{basename}.json"
-                jsonfile = os.path.join(src_dir, jsonname)
-                with open(jsonfile, "r") as fh:
-                    expected = fh.read()
-                expected = json.JSONDecoder().decode(expected)
-                expected = convert_result(expected)
+    for src in sources:
+        src_path = os.path.join(src_dir, src)
+        if os.path.isdir(src_path):
+            generate_valid_tests(
+                os.path.join(relative_src_dir, src.rstrip(os.path.sep)),
+                f"{relative_root_dir}../",
+                files)
+            tests.discard(src)
 
-                testname = "test_{}".format(basename.replace('-', '_'))
-                result += format_valid_test(suitename, testname, toml, expected)
+        else:
+            with open(f"{src_path}.toml", "rb") as fh:
+                toml = fh.read()
 
-            elif entry.is_dir():
-                generate_valid_tests(os.path.join(relative_src_dir, entry.name), files)
+            with open(f"{src_path}.json", "r") as fh:
+                expected = fh.read()
+            expected = json.JSONDecoder().decode(expected)
+            expected = convert_result(expected)
 
-    if count:
-        filename = f"{suitename}.cpp"
-        filepath = os.path.join(TEST_DIR, filename)
-        with open(filepath, "wb") as fh:
-            fh.write(result)
+            testname = f"test_{src.replace('-', '_')}"
+            result = VALID_TEST_TEMPLATE % (
+                    relative_root_dir.encode("UTF-8"),
+                    suitename.encode("UTF-8"),
+                    testname.encode("UTF-8"),
+                    escape_bytes(toml),
+                    len(toml),
+                    expected.encode("UTF-8"),
+                )
 
-        files.append(filename);
+            testfile = f"{src}.cpp"
+            testpath = os.path.join(test_dir, testfile)
+
+            if src in tests:
+                tests.remove(src)
+                with open(testpath, "rb") as fh:
+                    current = fh.read()
+            else:
+                current = None
+
+            if result != current:
+                if current is None:
+                    print(f"Adding test: {os.path.join(relative_src_dir, testfile)}")
+                else:
+                    print(f"Updating test: {os.path.join(relative_src_dir, testfile)}")
+
+                with open(testpath, "wb") as fh:
+                    fh.write(result)
+
+            files.append(os.path.join(relative_src_dir, testfile))
+
+    for test in tests:
+        test_path = os.path.join(test_dir, test)
+        if os.path.isdir(test_path):
+            print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
+            for root, dirs, files in os.walk(test_path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(test_path)
+
+        else:
+            test += ".cpp"
+            test_path += ".cpp"
+            print(f"Removing test: {os.path.join(relative_src_dir, test)}")
+            os.remove(test_path)
+
+
+def generate_invalid_tests(relative_src_dir, relative_root_dir, files):
+    suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
+    src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
+    test_dir = os.path.join(TEST_DIR, relative_src_dir)
+    os.makedirs(test_dir, exist_ok=True)
+
+    sources = set()
+    tests = set()
+
+    with os.scandir(src_dir) as it:
+        for entry in it:
+            if entry.is_dir():
+                # append directory separator to ensure no clashes with file names
+                name = entry.name + os.path.sep
+                sources.add(name)
+            elif entry.path.endswith(".toml"):
+                # use the base name so we can match TOML files to C++ files
+                name = entry.name.rsplit('.', 1)[0]
+                if os.path.join(src_dir, name) not in EXCLUDE:
+                    sources.add(name)
+
+    with os.scandir(test_dir) as it:
+        for entry in it:
+            if entry.is_dir():
+                # append directory separator to ensure no clashes with file names
+                name = entry.name + os.path.sep
+                tests.add(name)
+            else:
+                # use the base name so we can match TOML files to C++ files
+                name = entry.name.rsplit('.', 1)[0]
+                tests.add(name)
+
+    for src in sources:
+        src_path = os.path.join(src_dir, src)
+        if os.path.isdir(src_path):
+            generate_invalid_tests(
+                os.path.join(relative_src_dir, src.rstrip(os.path.sep)),
+                f"{relative_root_dir}../",
+                files)
+            tests.discard(src)
+
+        else:
+            with open(f"{src_path}.toml", "rb") as fh:
+                toml = fh.read()
+
+            '''
+            try:
+                with open(f"{src_path}.json", "r") as fh:
+                    errors = fh.read()
+                errors = json.JSONDecoder().decode(errors)
+                expected = ''
+                for error in errors:
+                    expected += convert_error(error)
+            except FileNotFoundError:
+                expected = '{ 0, 0, "" }'
+            '''
+
+            testname = f"test_{src.replace('-', '_')}"
+            result = INVALID_TEST_TEMPLATE % (
+                    relative_root_dir.encode("UTF-8"),
+                    suitename.encode("UTF-8"),
+                    testname.encode("UTF-8"),
+                    escape_bytes(toml),
+                    len(toml),
+                    #expected.encode("UTF-8"),
+                )
+
+            testfile = f"{src}.cpp"
+            testpath = os.path.join(test_dir, testfile)
+
+            if src in tests:
+                tests.remove(src)
+                with open(testpath, "rb") as fh:
+                    current = fh.read()
+
+                replacement = (b'toml{"%b", %d};\n' % (escape_bytes(toml), len(toml))).replace(b'\\', b'\\\\')
+                result = re.sub(b'toml\\{.*\\};\n', replacement, current)
+            else:
+                current = None
+
+            if result != current:
+                if current is None:
+                    print(f"Adding test: {os.path.join(relative_src_dir, testfile)}")
+                else:
+                    print(f"Updating test: {os.path.join(relative_src_dir, testfile)}")
+
+                with open(testpath, "wb") as fh:
+                    fh.write(result)
+
+            files.append(os.path.join(relative_src_dir, testfile))
+
+    for test in tests:
+        test_path = os.path.join(test_dir, test)
+        if os.path.isdir(test_path):
+            print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
+            for root, dirs, files in os.walk(test_path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(test_path)
+
+        else:
+            test += ".cpp"
+            test_path += ".cpp"
+            print(f"Removing test: {os.path.join(relative_src_dir, test)}")
+            os.remove(test_path)
 
 
 def convert_result(value, child=False):
@@ -220,76 +398,9 @@ def convert_result(value, child=False):
     return result
 
 
-def generate_invalid_tests(relative_src_dir, files):
-    suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
-    src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
-
-    result = TEST_FILE_TEMPLATE
-    count = 0
-
-    with os.scandir(src_dir) as it:
-        for entry in it:
-            if should_include_test(entry.path):
-                count +=1
-
-                with open(entry.path, "rb") as fh:
-                    toml = fh.read()
-
-                expected = ''
-                basename = entry.name.rsplit('.', 1)[0]
-
-                jsonname = f"{basename}.json"
-                jsonfile = os.path.join(src_dir, jsonname)
-                if os.path.isfile(jsonfile):
-                    with open(jsonfile, "r") as fh:
-                        errors = fh.read()
-                    errors = json.JSONDecoder().decode(errors)
-                    for error in errors:
-                        expected += convert_error(error)
-                else:
-                    # Let's write a sentinel error value to trigger a failed test
-                    expected = '{ 0, 0, "" }'
-
-                testname = "test_{}".format(basename.replace('-', '_'))
-                result += INVALID_TEST_TEMPLATE % (
-                        suitename.encode("UTF-8"),
-                        testname.encode("UTF-8"),
-                        escape_bytes(toml),
-                        len(toml),
-                        expected.encode("UTF-8"),
-                    )
-
-            elif entry.is_dir():
-                generate_invalid_tests(os.path.join(relative_src_dir, entry.name), files)
-
-    if count:
-        filename = f"{suitename}.cpp"
-        filepath = os.path.join(TEST_DIR, filename)
-        with open(filepath, "wb") as fh:
-            fh.write(result)
-
-        files.append(filename);
-
-
 def convert_error(error):
     result = "{{ {}, {}, \"{}\" }},".format(error['line'], error['char'], escape_string(error['message']))
     return result;
-
-
-def should_include_test(path):
-    result = path.endswith(".toml")
-    return result
-
-
-def format_valid_test(suitename, testname, toml, expected):
-    result = VALID_TEST_TEMPLATE % (
-            suitename.encode("UTF-8"),
-            testname.encode("UTF-8"),
-            escape_bytes(toml),
-            len(toml),
-            expected.encode("UTF-8")
-        )
-    return result
 
 
 def escape_bytes(value):

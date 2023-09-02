@@ -1,0 +1,15 @@
+#include "../../test_common.hpp"
+
+
+using namespace std;
+using namespace toml;
+
+
+TEST(invalid_datetime_tests, test_hour_over)
+{
+    const string toml{"# time-hour       = 2DIGIT  ; 00-23\nd = 2006-01-01T24:00:00-00:00\n", 66};
+
+    const vector<Error> expected{{ 2, 16, "Invalid value for hour: 24." },};
+
+    assert_errors(toml, expected);
+}
