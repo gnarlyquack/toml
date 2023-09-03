@@ -484,6 +484,7 @@ resynchronize(TomlIterator &iterator, string message, u32 context)
 {
     advance(iterator);
     u32 uneaten = 0;
+    bool valid = true;
     bool whitespace = false;
     bool eating = true;
     while (eating)
@@ -553,12 +554,15 @@ resynchronize(TomlIterator &iterator, string message, u32 context)
                 {
                     message += eat_byte(iterator);
                 }
-                lex_string_char(iterator, message);
+                valid = lex_string_char(iterator, message) && valid;
             }
         }
     }
 
-    add_error(iterator, move(message));
+    if (valid)
+    {
+        add_error(iterator, move(message));
+    }
 }
 
 
@@ -1905,9 +1909,9 @@ lex_inline_table(TomlIterator &iterator)
 void
 lex_value(TomlIterator &iterator, u32 context)
 {
-    assert(!match_whitespace(iterator) && !match_eol(iterator));
-    advance(iterator);
+    assert(!match_whitespace(iterator));
 
+    advance(iterator);
     byte c = get_byte(iterator);
 
     if (is_decimal(c))
@@ -2012,6 +2016,7 @@ lex_value(TomlIterator &iterator, u32 context)
                 lex_number(iterator, context);
             } break;
 
+            case BYTE_EOF:
             case '#':
             {
                 add_error(iterator, "Missing value.");
@@ -2162,7 +2167,7 @@ lex_keyval(TomlIterator &iterator, u32 context)
     if (match(iterator, '='))
     {
         eat_byte(iterator);
-    eat_whitespace(iterator);
+        eat_whitespace(iterator);
     }
     else
     {

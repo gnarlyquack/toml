@@ -145,32 +145,32 @@
         invalid/datetime/month-over.cpp
         invalid/datetime/hour-over.cpp
         invalid/datetime/no-secs.cpp
-        #invalid/control/rawstring-del.cpp
-        #invalid/control/bare-cr.cpp
-        #invalid/control/rawstring-lf.cpp
-        #invalid/control/bare-null.cpp
-        #invalid/control/multi-lf.cpp
-        #invalid/control/multi-del.cpp
-        #invalid/control/rawmulti-del.cpp
-        #invalid/control/comment-null.cpp
-        #invalid/control/string-us.cpp
-        #invalid/control/rawstring-null.cpp
-        #invalid/control/comment-del.cpp
-        #invalid/control/string-bs.cpp
-        #invalid/control/bare-formfeed.cpp
-        #invalid/control/comment-cr.cpp
-        #invalid/control/string-del.cpp
-        #invalid/control/bare-vertical-tab.cpp
-        #invalid/control/rawstring-us.cpp
-        #invalid/control/string-null.cpp
-        #invalid/control/comment-lf.cpp
-        #invalid/control/string-lf.cpp
-        #invalid/control/rawmulti-lf.cpp
-        #invalid/control/comment-us.cpp
-        #invalid/control/rawmulti-us.cpp
-        #invalid/control/multi-us.cpp
-        #invalid/control/rawmulti-null.cpp
-        #invalid/control/multi-null.cpp
+        invalid/control/rawstring-del.cpp
+        invalid/control/bare-cr.cpp
+        invalid/control/rawstring-lf.cpp
+        invalid/control/bare-null.cpp
+        invalid/control/multi-lf.cpp
+        invalid/control/multi-del.cpp
+        invalid/control/rawmulti-del.cpp
+        invalid/control/comment-null.cpp
+        invalid/control/string-us.cpp
+        invalid/control/rawstring-null.cpp
+        invalid/control/comment-del.cpp
+        invalid/control/string-bs.cpp
+        invalid/control/bare-formfeed.cpp
+        invalid/control/comment-cr.cpp
+        invalid/control/string-del.cpp
+        invalid/control/bare-vertical-tab.cpp
+        invalid/control/rawstring-us.cpp
+        invalid/control/string-null.cpp
+        invalid/control/comment-lf.cpp
+        invalid/control/string-lf.cpp
+        invalid/control/rawmulti-lf.cpp
+        invalid/control/comment-us.cpp
+        invalid/control/rawmulti-us.cpp
+        invalid/control/multi-us.cpp
+        invalid/control/rawmulti-null.cpp
+        invalid/control/multi-null.cpp
         #invalid/integer/leading-us-oct.cpp
         #invalid/integer/capital-hex.cpp
         #invalid/integer/invalid-bin.cpp
