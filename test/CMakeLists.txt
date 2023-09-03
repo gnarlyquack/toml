@@ -131,20 +131,20 @@
         invalid/float/trailing-us-exp.cpp
         invalid/float/exp-point-2.cpp
         invalid/float/exp-double-e-1.cpp
-        #invalid/datetime/time-no-leads-2.cpp
-        #invalid/datetime/time-no-leads.cpp
-        #invalid/datetime/minute-over.cpp
-        #invalid/datetime/trailing-t.cpp
-        #invalid/datetime/second-over.cpp
-        #invalid/datetime/no-leads.cpp
-        #invalid/datetime/no-leads-with-milli.cpp
-        #invalid/datetime/mday-under.cpp
-        #invalid/datetime/mday-over.cpp
-        #invalid/datetime/month-under.cpp
-        #invalid/datetime/no-t.cpp
-        #invalid/datetime/month-over.cpp
-        #invalid/datetime/hour-over.cpp
-        #invalid/datetime/no-secs.cpp
+        invalid/datetime/time-no-leads-2.cpp
+        invalid/datetime/time-no-leads.cpp
+        invalid/datetime/minute-over.cpp
+        invalid/datetime/trailing-t.cpp
+        invalid/datetime/second-over.cpp
+        invalid/datetime/no-leads.cpp
+        invalid/datetime/no-leads-with-milli.cpp
+        invalid/datetime/mday-under.cpp
+        invalid/datetime/mday-over.cpp
+        invalid/datetime/month-under.cpp
+        invalid/datetime/no-t.cpp
+        invalid/datetime/month-over.cpp
+        invalid/datetime/hour-over.cpp
+        invalid/datetime/no-secs.cpp
         #invalid/control/rawstring-del.cpp
         #invalid/control/bare-cr.cpp
         #invalid/control/rawstring-lf.cpp
