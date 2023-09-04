@@ -230,39 +230,39 @@
         invalid/array/no-close-2.cpp
         invalid/array/no-close-table-2.cpp
         invalid/array/no-close.cpp
-        #invalid/string/bad-uni-esc-1.cpp
-        #invalid/string/basic-out-of-range-unicode-escape-1.cpp
-        #invalid/string/basic-byte-escapes.cpp
-        #invalid/string/literal-multiline-quotes-1.cpp
+        invalid/string/bad-uni-esc-1.cpp
+        invalid/string/basic-out-of-range-unicode-escape-1.cpp
+        invalid/string/basic-byte-escapes.cpp
+        invalid/string/literal-multiline-quotes-1.cpp
         invalid/string/multiline-no-close-2.cpp
-        #invalid/string/literal-multiline-quotes-2.cpp
-        #invalid/string/multiline-quotes-1.cpp
-        #invalid/string/multiline-bad-escape-3.cpp
-        #invalid/string/bad-concat.cpp
+        invalid/string/literal-multiline-quotes-2.cpp
+        invalid/string/multiline-quotes-1.cpp
+        invalid/string/multiline-bad-escape-3.cpp
+        invalid/string/bad-concat.cpp
         invalid/string/wrong-close.cpp
-        #invalid/string/bad-multiline.cpp
-        #invalid/string/multiline-escape-space.cpp
-        #invalid/string/bad-uni-esc-2.cpp
-        #invalid/string/bad-uni-esc-4.cpp
-        #invalid/string/bad-uni-esc-5.cpp
-        #invalid/string/basic-multiline-out-of-range-unicode-escape-2.cpp
-        #invalid/string/multiline-bad-escape-1.cpp
-        #invalid/string/basic-out-of-range-unicode-escape-2.cpp
-        #invalid/string/bad-escape-2.cpp
-        #invalid/string/bad-byte-escape.cpp
-        #invalid/string/bad-escape-1.cpp
-        #invalid/string/bad-uni-esc-3.cpp
-        #invalid/string/basic-unknown-escape.cpp
+        invalid/string/bad-multiline.cpp
+        invalid/string/multiline-escape-space.cpp
+        invalid/string/bad-uni-esc-2.cpp
+        invalid/string/bad-uni-esc-4.cpp
+        invalid/string/bad-uni-esc-5.cpp
+        invalid/string/basic-multiline-out-of-range-unicode-escape-2.cpp
+        invalid/string/multiline-bad-escape-1.cpp
+        invalid/string/basic-out-of-range-unicode-escape-2.cpp
+        invalid/string/bad-escape-2.cpp
+        invalid/string/bad-byte-escape.cpp
+        invalid/string/bad-escape-1.cpp
+        invalid/string/bad-uni-esc-3.cpp
+        invalid/string/basic-unknown-escape.cpp
         invalid/string/multiline-no-close.cpp
-        #invalid/string/basic-multiline-unknown-escape.cpp
+        invalid/string/basic-multiline-unknown-escape.cpp
         invalid/string/no-close.cpp
-        #invalid/string/basic-multiline-out-of-range-unicode-escape-1.cpp
-        #invalid/string/basic-multiline-quotes.cpp
-        #invalid/string/text-after-string.cpp
-        #invalid/string/multiline-bad-escape-2.cpp
-        #invalid/string/bad-codepoint.cpp
-        #invalid/string/missing-quotes.cpp
-        #invalid/string/bad-slash-escape.cpp
+        invalid/string/basic-multiline-out-of-range-unicode-escape-1.cpp
+        invalid/string/basic-multiline-quotes.cpp
+        invalid/string/text-after-string.cpp
+        invalid/string/multiline-bad-escape-2.cpp
+        invalid/string/bad-codepoint.cpp
+        invalid/string/missing-quotes.cpp
+        invalid/string/bad-slash-escape.cpp
         invalid/table/array-implicit.cpp
         invalid/table/with-pound.cpp
         invalid/table/redefine.cpp

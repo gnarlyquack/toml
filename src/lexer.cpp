@@ -250,14 +250,6 @@ is_octal(byte value)
 
 
 bool
-is_printable(byte value)
-{
-    bool result = (value >= 0x20) && (value <= 0x7e); // ASCII printable range
-    return result;
-}
-
-
-bool
 match(const TomlIterator &iterator, byte value, u64 ahead = 0)
 {
     assert(iterator.current_position <= iterator.length);
@@ -565,64 +557,36 @@ resynchronize(TomlIterator &iterator, string message, u32 context)
 
 
 void
-invalid_escape(TomlIterator &iterator, byte value)
+invalid_escape(TomlIterator &iterator, u32 line, u32 column)
 {
-    string message = "Invalid escape: ";
-    if (is_printable(value))
-    {
-        message.push_back(value);
-    }
-    else
-    {
-        byte_to_hex(value, message);
-    }
-
-    Error error = { iterator.current_line, iterator.current_column, move(message) };
-    iterator.errors.push_back(move(error));
-
-    eat_byte(iterator);
-}
-
-
-void
-invalid_unicode(TomlIterator &iterator, u32 codepoint)
-{
-    string message = "Invalid Unicode codepoint: U+";
-
-    u32 nchars = (codepoint / 0xf) + 1;
-    for (u32 i = 4; i > nchars; --i)
-    {
-        message.push_back('0');
-    }
-
-    for( ; nchars; --nchars)
-    {
-        u32 shift = 4 * (nchars - 1);
-        message.push_back(HEX2CHAR[(codepoint >> shift) & 0xf]);
-    }
-
-    Error error = { iterator.start_line, iterator.start_column, move(message) };
+    string message = "Invalid escape sequence.";
+    Error error = { line, column, move(message) };
     iterator.errors.push_back(move(error));
 }
 
 
 void
-invalid_unicode_escape(TomlIterator &iterator, u64 position)
+invalid_escape(TomlIterator &iterator)
 {
-    string message = "Unicode escape sequence contains non-hexadecimal value: ";
-    byte value = get_byte(iterator, position);
-
-    if (is_printable(value))
-    {
-        message.push_back(value);
-    }
-    else
-    {
-        byte_to_hex(value, message);
-    }
+    assert(iterator.current_column > 2);
+    invalid_escape(iterator, iterator.current_line, iterator.current_column - 1);
+}
 
 
-    Error error = { iterator.start_line, iterator.start_column, move(message) };
+void
+invalid_unicode(TomlIterator &iterator, u32 line, u32 column)
+{
+    string message = "Unicode escape sequence specified an invalid or non-allowed codepoint.";
+    Error error = { line, column, move(message) };
+    iterator.errors.push_back(move(error));
+}
+
+
+void
+invalid_unicode_escape(TomlIterator &iterator, u32 lexed, u32 count, u32 line, u32 column)
+{
+    string message = "Invalid or incomplete Unicode escape sequence: expected " + to_string(count) + " hexadecimal characters but parsed " + to_string(lexed) + ".";
+    Error error = { line, column, move(message) };
     iterator.errors.push_back(move(error));
 }
 
@@ -1528,16 +1492,19 @@ lex_string_char(TomlIterator &iterator, string &result)
 
 
 void
-lex_unicode(TomlIterator &iterator, string &result, u64 count)
+lex_unicode(TomlIterator &iterator, string &result, u32 count)
 {
     assert((count == 4) || (count == 8));
+    assert(iterator.current_column >= 3);
 
+    u32 line = iterator.current_line;
+    u32 column = iterator.current_column - 2;
     u32 codepoint = 0;
     bool valid = true;
-    u64 lexed = 0;
-    for ( ; (lexed < count) && !end_of_file(iterator, lexed); ++lexed)
+    u32 lexed = 0;
+    for ( ; (lexed < count) && !end_of_file(iterator); ++lexed)
     {
-        byte c = get_byte(iterator, lexed);
+        byte c = get_byte(iterator);
 
         if ((c >= '0') && (c <= '9'))
         {
@@ -1561,6 +1528,7 @@ lex_unicode(TomlIterator &iterator, string &result, u64 count)
 
         u64 shift = 4 * (count - 1 - lexed);
         codepoint |= (c << shift);
+        eat_byte(iterator);
     }
 
     if (valid && (lexed == count))
@@ -1571,15 +1539,13 @@ lex_unicode(TomlIterator &iterator, string &result, u64 count)
         }
         else
         {
-            invalid_unicode(iterator, codepoint);
+            invalid_unicode(iterator, line, column);
         }
     }
     else if (!valid)
     {
-        invalid_unicode_escape(iterator, lexed);
+        invalid_unicode_escape(iterator, lexed, count, line, column);
     }
-
-    eat_bytes(iterator, lexed);
 }
 
 
@@ -1643,7 +1609,7 @@ lex_escape(TomlIterator &iterator, string &result)
 
         default:
         {
-            invalid_escape(iterator, c);
+            invalid_escape(iterator);
             eat_byte(iterator);
             result.push_back(c);
         }
@@ -1714,10 +1680,11 @@ lex_multiline_string(TomlIterator &iterator, byte delimiter)
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
+                u32 line = iterator.current_line;
+                u32 column = iterator.current_column;
                 eat_byte(iterator);
                 if (!end_of_file(iterator))
                 {
-                    c = get_byte(iterator);
                     if (eat_whitespace(iterator) || match_eol(iterator))
                     {
                         bool eating = eat_newline(iterator);
@@ -1731,7 +1698,7 @@ lex_multiline_string(TomlIterator &iterator, byte delimiter)
                         }
                         else
                         {
-                            invalid_escape(iterator, c);
+                            invalid_escape(iterator, line, column);
                         }
                     }
                     else
@@ -2190,6 +2157,7 @@ lex_keyval(TomlIterator &iterator, u32 context)
     }
     else
     {
+        advance(iterator);
         add_error(iterator, "Missing '=' between key and value.");
     }
 
