@@ -1027,7 +1027,7 @@ void
 lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 context)
 {
     bool valid = true;
-    ValueType type = TYPE_LOCAL_DATE;
+    Value::Type type = Value::Type::LOCAL_DATE;
 
     if (value.length())
     {
@@ -1061,7 +1061,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
     if (match(iterator, 'T') || match(iterator, 't')
         || (match(iterator, ' ') && !match_eol(iterator, 1) && is_decimal(get_byte(iterator, 1))))
     {
-        type = TYPE_LOCAL_DATETIME;
+        type = Value::Type::LOCAL_DATETIME;
         eat_byte(iterator);
         value += ' ';
 
@@ -1072,13 +1072,13 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
 
         if (match(iterator, 'Z') ||match(iterator, 'z'))
         {
-            type = TYPE_OFFSET_DATETIME;
+            type = Value::Type::OFFSET_DATETIME;
             eat_byte(iterator);
             value += "+0000";
         }
         else if (match(iterator, '+') || match(iterator, '-'))
         {
-            type = TYPE_OFFSET_DATETIME;
+            type = Value::Type::OFFSET_DATETIME;
             if (!lex_timezone(iterator, value, context))
             {
                 valid = false;
@@ -1091,23 +1091,23 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
         istringstream in{value};
         switch (type)
         {
-            case TYPE_LOCAL_DATE:
+            case Value::Type::LOCAL_DATE:
             {
                 LocalDate result;
                 in >> date::parse("%Y-%m-%d", result);
                 add_value(iterator, new LocalDateValue(move(result)));
             } break;
 
-            case TYPE_LOCAL_DATETIME:
+            case Value::Type::LOCAL_DATETIME:
             {
                 LocalDateTime result;
                 in >> date::parse("%Y-%m-%d %T", result);
                 add_value(iterator, new LocalDateTimeValue(move(result)));
             } break;
 
-            case TYPE_OFFSET_DATETIME:
+            case Value::Type::OFFSET_DATETIME:
             {
-                assert(type == TYPE_OFFSET_DATETIME);
+                assert(type == Value::Type::OFFSET_DATETIME);
                 OffsetDateTime result;
                 in >> date::parse("%Y-%m-%d %T%z", result);
                 add_value(iterator, new OffsetDateTimeValue(move(result)));

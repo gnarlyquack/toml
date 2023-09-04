@@ -68,19 +68,19 @@ operator==(const Value &left, const Value &right)
     {
         switch (left.type)
         {
-            case TYPE_ARRAY:
+            case Value::Type::ARRAY:
             {
                 result = static_cast<const ArrayValue &>(left).value
                     == static_cast<const ArrayValue &>(right).value;
             } break;
 
-            case TYPE_BOOL:
+            case Value::Type::BOOL:
             {
                 result = static_cast<const BooleanValue &>(left).value
                     == static_cast<const BooleanValue &>(right).value;
             } break;
 
-            case TYPE_FLOAT:
+            case Value::Type::FLOAT:
             {
                 f64 l = static_cast<const FloatValue &>(left).value;
                 f64 r = static_cast<const FloatValue &>(right).value;
@@ -88,49 +88,49 @@ operator==(const Value &left, const Value &right)
                 result = (l == r) || (std::isnan(l) && std::isnan(r));
             } break;
 
-            case TYPE_INTEGER:
+            case Value::Type::INTEGER:
             {
                 result = static_cast<const IntegerValue &>(left).value
                     == static_cast<const IntegerValue &>(right).value;
             } break;
 
-            case TYPE_LOCAL_DATE:
+            case Value::Type::LOCAL_DATE:
             {
                 result = static_cast<const LocalDateValue &>(left).value
                     == static_cast<const LocalDateValue &>(right).value;
             } break;
 
-            case TYPE_LOCAL_DATETIME:
+            case Value::Type::LOCAL_DATETIME:
             {
                 result = static_cast<const LocalDateTimeValue &>(left).value
                     == static_cast<const LocalDateTimeValue &>(right).value;
             } break;
 
-            case TYPE_LOCAL_TIME:
+            case Value::Type::LOCAL_TIME:
             {
                 result = static_cast<const LocalTimeValue &>(left).value
                     == static_cast<const LocalTimeValue &>(right).value;
             } break;
 
-            case TYPE_OFFSET_DATETIME:
+            case Value::Type::OFFSET_DATETIME:
             {
                 result = static_cast<const OffsetDateTimeValue &>(left).value
                     == static_cast<const OffsetDateTimeValue &>(right).value;
             } break;
 
-            case TYPE_STRING:
+            case Value::Type::STRING:
             {
                 result = static_cast<const StringValue &>(left).value
                     == static_cast<const StringValue &>(right).value;
             } break;
 
-            case TYPE_TABLE:
+            case Value::Type::TABLE:
             {
                 result = static_cast<const TableValue &>(left).value
                     == static_cast<const TableValue &>(right).value;
             } break;
 
-            case TYPE_INVALID:
+            case Value::Type::INVALID:
             {
                 assert(false);
             } break;
@@ -207,57 +207,57 @@ operator<<(std::ostream &os, const Value &value)
 {
     switch (value.type)
     {
-        case TYPE_ARRAY:
+        case Value::Type::ARRAY:
         {
             os << "Array(" << static_cast<const ArrayValue &>(value).value << ')';
         } break;
 
-        case TYPE_BOOL:
+        case Value::Type::BOOL:
         {
             os << "Boolean(" << std::boolalpha << static_cast<const BooleanValue &>(value).value << ')';
         } break;
 
-        case TYPE_FLOAT:
+        case Value::Type::FLOAT:
         {
             os << "Float(" << static_cast<const FloatValue &>(value).value << ')';
         } break;
 
-        case TYPE_INTEGER:
+        case Value::Type::INTEGER:
         {
             os << "Integer(" << static_cast<const IntegerValue &>(value).value << ')';
         } break;
 
-        case TYPE_LOCAL_DATE:
+        case Value::Type::LOCAL_DATE:
         {
             os << "LocalDate(" << static_cast<const LocalDateValue &>(value).value << ')';
         } break;
 
-        case TYPE_LOCAL_DATETIME:
+        case Value::Type::LOCAL_DATETIME:
         {
             os << "LocalDateTime(" << static_cast<const LocalDateTimeValue &>(value).value << ')';
         } break;
 
-        case TYPE_LOCAL_TIME:
+        case Value::Type::LOCAL_TIME:
         {
             os << "LocalTime(" << static_cast<const LocalTimeValue &>(value).value << ')';
         } break;
 
-        case TYPE_OFFSET_DATETIME:
+        case Value::Type::OFFSET_DATETIME:
         {
             os << "OffsetDateTime(" << date::format("%Y-%m-%d %T %Z", static_cast<const OffsetDateTimeValue &>(value).value) << ')';
         } break;
 
-        case TYPE_STRING:
+        case Value::Type::STRING:
         {
             os << "String(" << static_cast<const StringValue &>(value).value << ')';
         } break;
 
-        case TYPE_TABLE:
+        case Value::Type::TABLE:
         {
             os << "Table(" << static_cast<const TableValue &>(value).value << ')';
         } break;
 
-        case TYPE_INVALID:
+        case Value::Type::INVALID:
         {
             assert(false);
         } break;

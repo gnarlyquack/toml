@@ -236,7 +236,7 @@ key_redefinition(Parser &parser, const Token &key, const Key &prev)
 Record *
 array_record(const Token &token)
 {
-    Record *result = new Record{TYPE_ARRAY, token.line, token.column};
+    Record *result = new Record{Value::Type::ARRAY, token.line, token.column};
     return result;
 }
 
@@ -244,7 +244,7 @@ array_record(const Token &token)
 Record *
 table_record(const Token &token)
 {
-    Record *result = new Record{TYPE_TABLE, token.line, token.column};
+    Record *result = new Record{Value::Type::TABLE, token.line, token.column};
     return result;
 }
 
@@ -369,7 +369,7 @@ parse_value(Parser &parser)
         default:
         {
             assert(false);
-            result = new Record{TYPE_INVALID, token.line, token.column};
+            result = new Record{Value::Type::INVALID, token.line, token.column};
         } break;
     }
 
@@ -387,7 +387,7 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
         MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
         if (!value)
         {
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
         else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -401,11 +401,11 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
             // best way to mitigate cascading errors.
             delete value;
             delete value_meta;
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
 
-        assert(value->record->type == TYPE_TABLE);
+        assert(value->record->type == Value::Type::TABLE);
         table = value->record->definitions;
         table_meta = value_meta;
 
@@ -438,7 +438,7 @@ parse_table_header(Parser &parser)
         MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
         if (!value)
         {
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
             value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
             parser.current_table = value->record->definitions;
@@ -461,7 +461,7 @@ parse_table_header(Parser &parser)
                 case META_TYPE_DOTTED_TABLE:
                 case META_TYPE_HEADER_TABLE:
                 {
-                    assert(value->record->type == TYPE_TABLE);
+                    assert(value->record->type == Value::Type::TABLE);
                     parser.current_table = value->record->definitions;
                     parser.current_meta = value_meta;
                 } break;
@@ -473,7 +473,7 @@ parse_table_header(Parser &parser)
                     // best way to mitigate cascading errors.
                     delete value;
                     delete value_meta;
-                    value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+                    value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
                     value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
                     parser.current_table = value->record->definitions;
@@ -500,7 +500,7 @@ parse_table(Parser &parser)
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
     if (!value)
     {
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
         value_meta = new MetaValue{META_TYPE_HEADER_TABLE};
     }
     else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -513,11 +513,11 @@ parse_table(Parser &parser)
         delete value;
         delete value_meta;
 
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_TABLE, key->line, key->column}};
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
     }
 
-    assert(value->record->type == TYPE_TABLE);
+    assert(value->record->type == Value::Type::TABLE);
     parser.current_table = value->record->definitions;
     parser.current_meta = value_meta;
 
@@ -538,7 +538,7 @@ parse_table_array(Parser &parser)
     MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
     if (!value)
     {
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_ARRAY, key->line, key->column}};
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::ARRAY, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
     else if (value_meta->type != META_TYPE_TABLE_ARRAY)
@@ -548,14 +548,14 @@ parse_table_array(Parser &parser)
         // to mitigate cascading errors.
         delete value;
         delete value_meta;
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{TYPE_ARRAY, key->line, key->column}};
+        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::ARRAY, key->line, key->column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
 
-    auto table = new Record{TYPE_TABLE, key->line, key->column};
+    auto table = new Record{Value::Type::TABLE, key->line, key->column};
     auto table_meta = new MetaValue(META_TYPE_HEADER_TABLE);
 
-    assert(value->record->type == TYPE_ARRAY);
+    assert(value->record->type == Value::Type::ARRAY);
     auto array = value->record->records;
     array->push_back(table);
     value_meta->array->push_back(table_meta);
@@ -602,7 +602,7 @@ value_from_record(Record *record)
 
     switch (record->type)
     {
-        case TYPE_TABLE:
+        case Value::Type::TABLE:
         {
             TableValue *value = new TableValue{};
             Definitions *definitions = record->definitions;
@@ -616,7 +616,7 @@ value_from_record(Record *record)
             result = value;
         } break;
 
-        case TYPE_ARRAY:
+        case Value::Type::ARRAY:
         {
             ArrayValue *value = new ArrayValue{};
             vector<Record *> *records = record->records;
@@ -644,6 +644,23 @@ value_from_record(Record *record)
 bool
 parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> &errors)
 {
+#if 0
+    cout << "sizeof(string) = " << sizeof(string) << '\n';
+    cout << "sizeof(integer) = " << sizeof(s64) << '\n';
+    cout << "sizeof(float) = " << sizeof(f64) << '\n';
+    cout << "sizeof(boolean) = " << sizeof(bool) << '\n';
+    cout << "sizeof(OffsetDateTime) = " << sizeof(OffsetDateTime) << '\n';
+    cout << "sizeof(LocalDateTime) = " << sizeof(LocalDateTime) << '\n';
+    cout << "sizeof(LocalDate) = " << sizeof(LocalDate) << '\n';
+    cout << "sizeof(LocalTime) = " << sizeof(LocalTime) << '\n';
+    cout << "sizeof(Array) = " << sizeof(Array) << '\n';
+    cout << "sizeof(Table) = " << sizeof(Table) << '\n';
+    cout << "sizeof(void *) = " << sizeof(void *) << '\n';
+    cout << "sizeof(unique_ptr<string>) = " << sizeof(unique_ptr<string>) << '\n';
+    cout << "sizeof(unique_ptr<Array>) = " << sizeof(unique_ptr<Array>) << '\n';
+    cout << "sizeof(unique_ptr<Table>) = " << sizeof(unique_ptr<Table>) << '\n';
+#endif
+
     vector<Token> tokens;
     bool result = lex_toml(toml, tokens, errors);
 
