@@ -308,35 +308,35 @@
         invalid/bool/wrong-case-false.cpp
         invalid/bool/starting-same-true.cpp
         invalid/bool/almost-false-with-extra.cpp
-        #invalid/key/dotted-redefine-table.cpp
+        invalid/key/dotted-redefine-table.cpp
         invalid/key/start-dot.cpp
         invalid/key/duplicate-keys.cpp
-        #invalid/key/start-bracket.cpp
-        #invalid/key/escape.cpp
-        #invalid/key/two-equals3.cpp
+        invalid/key/start-bracket.cpp
+        invalid/key/escape.cpp
+        invalid/key/two-equals3.cpp
         invalid/key/hash.cpp
-        #invalid/key/single-open-bracket.cpp
-        #invalid/key/two-equals.cpp
-        #invalid/key/two-equals2.cpp
+        invalid/key/single-open-bracket.cpp
+        invalid/key/two-equals.cpp
+        invalid/key/two-equals2.cpp
         invalid/key/empty.cpp
-        #invalid/key/without-value-2.cpp
+        invalid/key/without-value-2.cpp
         invalid/key/duplicate.cpp
-        #invalid/key/without-value-3.cpp
-        #invalid/key/special-character.cpp
-        #invalid/key/bare-invalid-character.cpp
-        #invalid/key/after-table.cpp
-        #invalid/key/without-value-1.cpp
-        #invalid/key/after-value.cpp
-        #invalid/key/no-eol.cpp
-        #invalid/key/newline.cpp
-        #invalid/key/quoted-unclosed-1.cpp
-        #invalid/key/partial-quoted.cpp
-        #invalid/key/open-bracket.cpp
-        #invalid/key/quoted-unclosed-2.cpp
-        #invalid/key/without-value-4.cpp
-        #invalid/key/multiline.cpp
-        #invalid/key/after-array.cpp
-        #invalid/key/space.cpp
+        invalid/key/without-value-3.cpp
+        invalid/key/special-character.cpp
+        invalid/key/bare-invalid-character.cpp
+        invalid/key/after-table.cpp
+        invalid/key/without-value-1.cpp
+        invalid/key/after-value.cpp
+        invalid/key/no-eol.cpp
+        invalid/key/newline.cpp
+        invalid/key/quoted-unclosed-1.cpp
+        invalid/key/partial-quoted.cpp
+        invalid/key/open-bracket.cpp
+        invalid/key/quoted-unclosed-2.cpp
+        invalid/key/without-value-4.cpp
+        invalid/key/multiline.cpp
+        invalid/key/after-array.cpp
+        invalid/key/space.cpp
         )
     target_include_directories(test_toml PRIVATE ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)

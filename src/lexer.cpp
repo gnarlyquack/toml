@@ -2132,17 +2132,25 @@ lex_key(TomlIterator &iterator, u32 context)
     while (lexing)
     {
         advance(iterator);
-        lex_simple_key(iterator, context);
-
-        eat_whitespace(iterator);
-        if (match(iterator, '.'))
+        if (match_eol(iterator))
         {
-            eat_byte(iterator);
-            eat_whitespace(iterator);
+            missing_key(iterator);
+            lexing = false;
         }
         else
         {
-            lexing = false;
+            lex_simple_key(iterator, context);
+
+            eat_whitespace(iterator);
+            if (match(iterator, '.'))
+            {
+                eat_byte(iterator);
+                eat_whitespace(iterator);
+            }
+            else
+            {
+                lexing = false;
+            }
         }
     }
 }
@@ -2208,16 +2216,16 @@ lex_table(TomlIterator &iterator)
         }
         else
         {
-            add_error(iterator, "Missing closing ']' for array of tables.");
+            add_error(iterator, "Missing closing ']' for table array header.");
         }
     }
     else if (table_array)
     {
-        add_error(iterator, "Missing closing ']]' for array of tables.");
+        add_error(iterator, "Missing closing ']]' for table array header.");
     }
     else
     {
-        add_error(iterator, "Missing closing ']' for table.");
+        add_error(iterator, "Missing closing ']' for table header.");
     }
 }
 
