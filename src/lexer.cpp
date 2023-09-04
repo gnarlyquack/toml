@@ -665,7 +665,7 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
     }
     else if (no_leading_zero && (result.digits[0] == '0') && (result.digits.length() > 1))
     {
-        add_error(iterator, "Leading zero is not allowed in " + type + " number.", result.line, result.column);
+        add_error(iterator, "Leading zeros are not allowed in " + type + " number.", result.line, result.column);
         valid = false;
     }
 
@@ -1169,7 +1169,11 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
 {
     LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
-    if (match(iterator, '.'))
+    if (result.digits.length() == 0)
+    {
+        resynchronize(iterator, "Invalid decimal value: ", context);
+    }
+    else if (match(iterator, '.'))
     {
         bool valid = validate_digits(iterator, result, "whole part of decimal", true);
         value += move(result.digits);
@@ -1260,7 +1264,7 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
     bool valid = true;
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' sign not allowed for hexadecimal integer");
+        add_error(iterator, "A leading '" + value + "' is not allowed in a hexadecimal integer.");
         valid = false;
     }
 
@@ -1288,7 +1292,7 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
 
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' sign not allowed for octal integer");
+        add_error(iterator, "'" + value + "' is not allowed in an octal integer.");
         valid = false;
     }
 
@@ -1316,7 +1320,7 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
 
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' sign not allowed for binary integer");
+        add_error(iterator, "'" + value + "' is not allowed in a binary integer.");
         valid = false;
     }
 

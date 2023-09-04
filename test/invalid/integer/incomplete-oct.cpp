@@ -9,7 +9,7 @@ TEST(invalid_integer_tests, test_incomplete_oct)
 {
     const string toml{"incomplete-oct = 0o\n", 20};
 
-    const vector<Error> expected{{ 1, 20, "Missing value for octal integer." },};
+    const vector<Error> expected{{ 1, 20, "Missing octal number." },};
 
     assert_errors(toml, expected);
 }

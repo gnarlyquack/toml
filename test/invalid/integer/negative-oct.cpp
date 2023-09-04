@@ -9,7 +9,10 @@ TEST(invalid_integer_tests, test_negative_oct)
 {
     const string toml{"negative-oct = -0o99\n", 21};
 
-    const vector<Error> expected{{ 1, 16, "A leading '+' or '-' is not allowed in octal integer: 0o99." },{ 1, 17, "Invalid value for octal integer: 0o99." },};
+    const vector<Error> expected{
+        { 1, 16, "'-' is not allowed in an octal integer." },
+        { 1, 19, "Invalid octal number: 99" },
+    };
 
     assert_errors(toml, expected);
 }
