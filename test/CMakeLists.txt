@@ -207,16 +207,16 @@
         invalid/integer/leading-zero-sign-1.cpp
         invalid/integer/leading-us-hex.cpp
         invalid/integer/positive-oct.cpp
-        #invalid/encoding/bad-utf8-in-string-literal.cpp
-        #invalid/encoding/bom-not-at-start-2.cpp
-        #invalid/encoding/bom-not-at-start-1.cpp
-        #invalid/encoding/bad-utf8-in-comment.cpp
-        #invalid/encoding/utf16-bom.cpp
-        #invalid/encoding/bad-utf8-in-multiline.cpp
-        #invalid/encoding/bad-utf8-in-string.cpp
-        #invalid/encoding/bad-utf8-in-multiline-literal.cpp
+        invalid/encoding/bad-utf8-in-string-literal.cpp
+        invalid/encoding/bom-not-at-start-2.cpp
+        invalid/encoding/bom-not-at-start-1.cpp
+        invalid/encoding/bad-utf8-in-comment.cpp
+        invalid/encoding/utf16-bom.cpp
+        invalid/encoding/bad-utf8-in-multiline.cpp
+        invalid/encoding/bad-utf8-in-string.cpp
+        invalid/encoding/bad-utf8-in-multiline-literal.cpp
         invalid/encoding/utf16.cpp
-        #invalid/encoding/bad-utf8-at-end.cpp
+        invalid/encoding/bad-utf8-at-end.cpp
         #invalid/array/extending-table.cpp
         #invalid/array/missing-separator.cpp
         #invalid/array/double-comma-1.cpp

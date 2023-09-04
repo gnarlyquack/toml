@@ -28,7 +28,6 @@ using IsDigit = bool (*)(byte value);
 
 // No UTF-8 byte can be 0xff
 constexpr byte INVALID_BYTE = BYTE_MAX;
-constexpr byte BYTE_EOF = INVALID_BYTE;
 
 
 constexpr byte B10000000 = 0x80;
@@ -487,13 +486,12 @@ resynchronize(TomlIterator &iterator, string message, u32 context)
     bool valid = true;
     bool whitespace = false;
     bool eating = true;
-    while (eating)
+    while (eating && !end_of_file(iterator, uneaten))
     {
         byte b = get_byte(iterator, uneaten);
 
         switch (b)
         {
-            case BYTE_EOF:
             case '\n':
             {
                 eating = false;
@@ -1432,88 +1430,97 @@ lex_string_char(TomlIterator &iterator, string &result)
         }
         else
         {
-            string message = "Invalid UTF-8 byte: ";
+            string message = "Invalid UTF-8 continuation byte: ";
             byte_to_hex(c, message);
-            message += ". Expected a continuation byte in the range of ";
+            message += ". Expected a byte in the range of ";
             byte_to_hex(0x80, message);
-            message += "-";
+            message += '-';
             byte_to_hex(0xbf, message);
+            message += '.';
             add_error(iterator, move(message), line, column);
             valid = false;
         }
     }
 
     // if eaten < nbytes, then we'll err on an unterminated string
-    if (valid && (eaten == nbytes))
+    if (valid)
     {
-        if ((nbytes == 2) && (codepoint < 0x80))
+        if (eaten == nbytes)
         {
-            ostringstream message;
-            message << "Overlong encoding of Unicode codepoint: ";
-            format_unicode(message, codepoint);
-            message << " should be encoded using 1 byte but was encoded using 2.";
-            add_error(iterator, message.str(), line, column);
-            valid = false;
-        }
-        else if ((nbytes == 3) && (codepoint < 0x800))
-        {
-            string expected_bytes = (codepoint < 0x80) ? "1 byte" : "2 bytes";
-
-            ostringstream message;
-            message << "Overlong encoding of Unicode codepoint: ";
-            format_unicode(message, codepoint);
-            message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
-            add_error(iterator, message.str(), line, column);
-            valid = false;
-        }
-        else if ((nbytes == 4) && (codepoint < 0x10000))
-        {
-            string expected_bytes = "1 byte";
-            if (codepoint < 0x800)
+            if ((nbytes == 2) && (codepoint < 0x80))
             {
-                expected_bytes = "3 bytes";
+                ostringstream message;
+                message << "Overlong encoding of Unicode codepoint: ";
+                format_unicode(message, codepoint);
+                message << " should be encoded using 1 byte but was encoded using 2.";
+                add_error(iterator, message.str(), line, column);
+                valid = false;
             }
-            else if (codepoint < 0x80)
+            else if ((nbytes == 3) && (codepoint < 0x800))
             {
-                expected_bytes = "2 bytes";
+                string expected_bytes = (codepoint < 0x80) ? "1 byte" : "2 bytes";
+
+                ostringstream message;
+                message << "Overlong encoding of Unicode codepoint: ";
+                format_unicode(message, codepoint);
+                message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
+                add_error(iterator, message.str(), line, column);
+                valid = false;
+            }
+            else if ((nbytes == 4) && (codepoint < 0x10000))
+            {
+                string expected_bytes = "1 byte";
+                if (codepoint < 0x800)
+                {
+                    expected_bytes = "3 bytes";
+                }
+                else if (codepoint < 0x80)
+                {
+                    expected_bytes = "2 bytes";
+                }
+
+                ostringstream message;
+                message << "Overlong encoding of Unicode codepoint: ";
+                format_unicode(message, codepoint);
+                message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
+                add_error(iterator, message.str(), line, column);
+                valid = false;
+            }
+            else if (codepoint > 0x10ffff)
+            {
+                ostringstream message;
+                message << "Invalid Unicode codepoint: ";
+                format_unicode(message, codepoint);
+                message << " (maximum codepoint is ";
+                format_unicode(message, 0x10ffff);
+                message << ")";
+                add_error(iterator, message.str(), line, column);
+                valid = false;
+            }
+            else if (!(
+                (codepoint == 0x09)
+                || ((codepoint >= 0x20) && (codepoint <= 0x7e))
+                || ((codepoint >= 0x80) && (codepoint <= 0xd7ff))
+                || (codepoint >= 0xe000)))
+            {
+                ostringstream message;
+                message << "Unicode codepoint ";
+                format_unicode(message, codepoint);
+                message << " is not allowed.";
+                add_error(iterator, message.str(), line, column);
+                valid = false;
             }
 
-            ostringstream message;
-            message << "Overlong encoding of Unicode codepoint: ";
-            format_unicode(message, codepoint);
-            message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
-            add_error(iterator, message.str(), line, column);
-            valid = false;
+            // Adjust the current column to reflect only 1 "character". Although
+            // this probably falls apart with combining characters, etc. Pull
+            // requests accepted. :-)
+            iterator.current_column -= (nbytes - 1);
         }
-        else if (codepoint > 0x10ffff)
+        else
         {
-            ostringstream message;
-            message << "Invalid Unicode codepoint: ";
-            format_unicode(message, codepoint);
-            message << " (maximum codepoint is ";
-            format_unicode(message, 0x10ffff);
-            message << ")";
-            add_error(iterator, message.str(), line, column);
             valid = false;
+            add_error(iterator, "Unable to decode UTF-8 codepoint: unexpected end of file after decoding " + to_string(eaten) + " of " + to_string(nbytes) + " bytes.");
         }
-        else if (!(
-            (codepoint == 0x09)
-            || ((codepoint >= 0x20) && (codepoint <= 0x7e))
-            || ((codepoint >= 0x80) && (codepoint <= 0xd7ff))
-            || (codepoint >= 0xe000)))
-        {
-            ostringstream message;
-            message << "Unicode codepoint ";
-            format_unicode(message, codepoint);
-            message << " is not allowed.";
-            add_error(iterator, message.str(), line, column);
-            valid = false;
-        }
-
-        // Adjust the current column to reflect only 1 "character". Although
-        // this probably falls apart with combining characters, etc. Pull
-        // requests accepted. :-)
-        iterator.current_column -= (nbytes - 1);
     }
 
     return valid;
@@ -1916,9 +1923,14 @@ lex_value(TomlIterator &iterator, u32 context)
     assert(!match_whitespace(iterator));
 
     advance(iterator);
-    byte c = get_byte(iterator);
 
-    if (is_decimal(c))
+    byte c = get_byte(iterator);
+    if (match_eol(iterator))
+    {
+        add_error(iterator, "Missing value.");
+        add_token(iterator, TOKEN_ERROR);
+    }
+    else if (is_decimal(c))
     {
         lex_number(iterator, context);
     }
@@ -2020,7 +2032,6 @@ lex_value(TomlIterator &iterator, u32 context)
                 lex_number(iterator, context);
             } break;
 
-            case BYTE_EOF:
             case '#':
             {
                 add_error(iterator, "Missing value.");
@@ -2044,9 +2055,10 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
     string value;
     bool valid = true;
     bool lexing = true;
-    while (lexing)
+    while (lexing && !end_of_file(iterator))
     {
         byte b = get_byte(iterator);
+
         if (is_key_char(b))
         {
             value += eat_byte(iterator);
@@ -2055,7 +2067,6 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
         {
             switch (b)
             {
-                case BYTE_EOF:
                 case ' ':
                 case '\t':
                 case '\n':
