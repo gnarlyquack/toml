@@ -286,17 +286,17 @@
         invalid/table/array-missing-bracket.cpp
         invalid/table/text-after-table.cpp
         invalid/table/duplicate-key-table.cpp
-        #invalid/inline-table/add.cpp
-        #invalid/inline-table/linebreak-4.cpp
+        invalid/inline-table/add.cpp
+        invalid/inline-table/linebreak-4.cpp
         invalid/inline-table/overwrite.cpp
-        #invalid/inline-table/linebreak-1.cpp
-        #invalid/inline-table/linebreak-3.cpp
+        invalid/inline-table/linebreak-1.cpp
+        invalid/inline-table/linebreak-3.cpp
         invalid/inline-table/duplicate-key.cpp
-        #invalid/inline-table/double-comma.cpp
-        #invalid/inline-table/empty.cpp
-        #invalid/inline-table/linebreak-2.cpp
-        #invalid/inline-table/trailing-comma.cpp
-        #invalid/inline-table/no-comma.cpp
+        invalid/inline-table/double-comma.cpp
+        invalid/inline-table/empty.cpp
+        invalid/inline-table/linebreak-2.cpp
+        invalid/inline-table/trailing-comma.cpp
+        invalid/inline-table/no-comma.cpp
         #invalid/bool/starting-same-false.cpp
         #invalid/bool/just-f.cpp
         #invalid/bool/almost-true-with-extra.cpp

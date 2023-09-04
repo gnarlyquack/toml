@@ -1835,6 +1835,8 @@ lex_inline_table(TomlIterator &iterator)
     add_token(iterator, TOKEN_LBRACE);
 
     ContainerState state = CONTAINER_START;
+    u32 comma_line = 0;
+    u32 comma_offset = 0;
     bool lexing = true;
     while (lexing)
     {
@@ -1846,7 +1848,7 @@ lex_inline_table(TomlIterator &iterator)
                 advance(iterator);
                 if (state == CONTAINER_SEPARATOR)
                 {
-                    add_error(iterator, "Trailing ',' is not allowed for an inline table");
+                    add_error(iterator, "Trailing ',' is not allowed in an inline table.", comma_line, comma_offset);
                 }
                 eat_byte(iterator);
                 add_token(iterator, TOKEN_RBRACE);
@@ -1858,8 +1860,10 @@ lex_inline_table(TomlIterator &iterator)
                 advance(iterator);
                 if (state != CONTAINER_VALUE)
                 {
-                    add_error(iterator, "Missing value for inline table");
+                    add_error(iterator, "Missing value for inline table.");
                 }
+                comma_line = iterator.current_line;
+                comma_offset = iterator.current_column;
                 eat_byte(iterator);
                 add_token(iterator, TOKEN_COMMA);
                 state = CONTAINER_SEPARATOR;
@@ -1869,6 +1873,7 @@ lex_inline_table(TomlIterator &iterator)
             {
                 if (match_eol(iterator))
                 {
+                    advance(iterator);
                     add_error(iterator, "Unterminated inline table.");
                     lexing = false;
                 }
