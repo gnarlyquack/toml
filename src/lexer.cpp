@@ -1806,7 +1806,9 @@ lex_array(TomlIterator &iterator)
         eat_whitespace(iterator);
         if (end_of_file(iterator))
         {
-            add_error(iterator, "Unterminated array");
+            advance(iterator);
+            add_error(iterator, "Unterminated array.");
+            lexing = false;
         }
         else if (match_eol(iterator))
         {
@@ -1828,7 +1830,7 @@ lex_array(TomlIterator &iterator)
                 {
                     if (state != CONTAINER_VALUE)
                     {
-                        add_error(iterator, "Missing value for array");
+                        add_error(iterator, "Missing value for array.");
                     }
 
                     advance(iterator);
@@ -1847,7 +1849,8 @@ lex_array(TomlIterator &iterator)
                 {
                     if (state == CONTAINER_VALUE)
                     {
-                        add_error(iterator, "Missing ',' between array values");
+                        advance(iterator);
+                        add_error(iterator, "Missing ',' between array values.");
                     }
                     lex_value(iterator, LEX_ARRAY);
                     state = CONTAINER_VALUE;
@@ -1899,14 +1902,15 @@ lex_inline_table(TomlIterator &iterator)
             {
                 if (match_eol(iterator))
                 {
-                    add_error(iterator, "Unterminated inline table");
+                    add_error(iterator, "Unterminated inline table.");
                     lexing = false;
                 }
                 else
                 {
                     if (state == CONTAINER_VALUE)
                     {
-                        add_error(iterator, "Missing ',' between inline table values");
+                        advance(iterator);
+                        add_error(iterator, "Missing ',' between inline table values.");
                     }
                     lex_keyval(iterator, LEX_TABLE);
                     state = CONTAINER_VALUE;

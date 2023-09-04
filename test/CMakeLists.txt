@@ -217,19 +217,19 @@
         invalid/encoding/bad-utf8-in-multiline-literal.cpp
         invalid/encoding/utf16.cpp
         invalid/encoding/bad-utf8-at-end.cpp
-        #invalid/array/extending-table.cpp
-        #invalid/array/missing-separator.cpp
-        #invalid/array/double-comma-1.cpp
-        #invalid/array/text-after-array-entries.cpp
+        invalid/array/extending-table.cpp
+        invalid/array/missing-separator.cpp
+        invalid/array/double-comma-1.cpp
+        invalid/array/text-after-array-entries.cpp
         invalid/array/tables-1.cpp
-        #invalid/array/double-comma-2.cpp
-        #invalid/array/text-in-array.cpp
-        #invalid/array/tables-2.cpp
-        #invalid/array/no-close-table.cpp
-        #invalid/array/text-before-array-separator.cpp
-        #invalid/array/no-close-2.cpp
-        #invalid/array/no-close-table-2.cpp
-        #invalid/array/no-close.cpp
+        invalid/array/double-comma-2.cpp
+        invalid/array/text-in-array.cpp
+        invalid/array/tables-2.cpp
+        invalid/array/no-close-table.cpp
+        invalid/array/text-before-array-separator.cpp
+        invalid/array/no-close-2.cpp
+        invalid/array/no-close-table-2.cpp
+        invalid/array/no-close.cpp
         #invalid/string/bad-uni-esc-1.cpp
         #invalid/string/basic-out-of-range-unicode-escape-1.cpp
         #invalid/string/basic-byte-escapes.cpp
