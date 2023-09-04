@@ -297,17 +297,17 @@
         invalid/inline-table/linebreak-2.cpp
         invalid/inline-table/trailing-comma.cpp
         invalid/inline-table/no-comma.cpp
-        #invalid/bool/starting-same-false.cpp
-        #invalid/bool/just-f.cpp
-        #invalid/bool/almost-true-with-extra.cpp
-        #invalid/bool/just-t.cpp
-        #invalid/bool/wrong-case-true.cpp
-        #invalid/bool/almost-false.cpp
-        #invalid/bool/almost-true.cpp
-        #invalid/bool/mixed-case.cpp
-        #invalid/bool/wrong-case-false.cpp
-        #invalid/bool/starting-same-true.cpp
-        #invalid/bool/almost-false-with-extra.cpp
+        invalid/bool/starting-same-false.cpp
+        invalid/bool/just-f.cpp
+        invalid/bool/almost-true-with-extra.cpp
+        invalid/bool/just-t.cpp
+        invalid/bool/wrong-case-true.cpp
+        invalid/bool/almost-false.cpp
+        invalid/bool/almost-true.cpp
+        invalid/bool/mixed-case.cpp
+        invalid/bool/wrong-case-false.cpp
+        invalid/bool/starting-same-true.cpp
+        invalid/bool/almost-false-with-extra.cpp
         #invalid/key/dotted-redefine-table.cpp
         invalid/key/start-dot.cpp
         invalid/key/duplicate-keys.cpp
