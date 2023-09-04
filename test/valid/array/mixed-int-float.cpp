@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_mixed_int_float)
 {
     const string toml{"ints-and-floats = [1, 1.1]\n", 27};

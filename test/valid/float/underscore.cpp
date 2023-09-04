@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_float_tests, test_underscore)
 {
     const string toml{"before = 3_141.5927\nafter = 3141.592_7\nexponent = 3e1_4\n", 56};

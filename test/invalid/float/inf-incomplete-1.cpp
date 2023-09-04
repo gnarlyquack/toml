@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_inf_incomplete_1)
 {
     const string toml{"inf-incomplete-1 = in\n", 22};

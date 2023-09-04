@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_trailing_us_exp)
 {
     const string toml{"# trailing underscore in integer part is not allowed\ntrailing-us-exp = 1_e2\n# trailing underscore in float part is not allowed\ntrailing-us-exp2 = 1.2_e2\n", 153};

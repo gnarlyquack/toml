@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_mixed_int_string)
 {
     const string toml{"strings-and-ints = [\"hi\", 42]\n", 30};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_hetergeneous)
 {
     const string toml{"mixed = [[1, 2], [\"a\", \"b\"], [1.1, 2.1]]\n", 41};

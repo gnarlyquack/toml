@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_leading_us_hex)
 {
     const string toml{"leading-us-hex = _0o1\n", 22};

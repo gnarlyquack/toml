@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_nan_incomplete_3)
 {
     const string toml{"nan-incomplete-3 = -na\n", 23};

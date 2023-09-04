@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_leading_zero)
 {
     const string toml{"leading-zero = 03.14\n", 21};

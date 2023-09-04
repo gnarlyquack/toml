@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_basic_byte_escapes)
 {
     const string toml{"answer = \"\\x33\"\n", 16};

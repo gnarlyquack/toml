@@ -1,10 +1,3 @@
-#include "../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_tests, test_implicit_groups)
 {
     const string toml{"[a.b.c]\nanswer = 42\n", 20};

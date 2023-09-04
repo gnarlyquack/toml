@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_strings)
 {
     const string toml{"string_array = [ \"all\", 'strings', \"\"\"are the same\"\"\", '''type''']\n", 67};

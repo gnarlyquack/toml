@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_datetime_tests, test_milliseconds)
 {
     const string toml{"utc1  = 1987-07-05T17:45:56.1234Z\nutc2  = 1987-07-05T17:45:56.6Z\nwita1 = 1987-07-05T17:45:56.1234+08:00\nwita2 = 1987-07-05T17:45:56.6+08:00\n", 140};

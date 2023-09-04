@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_string_tests, test_empty)
 {
     const string toml{"answer = \"\"\n", 12};

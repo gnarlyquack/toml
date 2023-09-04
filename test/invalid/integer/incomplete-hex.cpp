@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_incomplete_hex)
 {
     const string toml{"incomplete-hex = 0x\n", 20};

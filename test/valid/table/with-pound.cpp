@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_table_tests, test_with_pound)
 {
     const string toml{"[\"key#group\"]\nanswer = 42\n", 26};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_duplicate_table_array2)
 {
     const string toml{"[[tbl]]\n[tbl]\n", 14};

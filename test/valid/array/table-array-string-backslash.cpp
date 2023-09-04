@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_table_array_string_backslash)
 {
     const string toml{"foo = [ { bar=\"\\\"{{baz}}\\\"\"} ]\n", 31};

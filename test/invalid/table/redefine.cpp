@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_redefine)
 {
     const string toml{"# Define b as int, and try to use it as a table: error\n[a]\nb = 1\n\n[a.b]\nc = 2\n", 78};

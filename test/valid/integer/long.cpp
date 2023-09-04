@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_integer_tests, test_long)
 {
     const string toml{"int64-max = 9223372036854775807\nint64-max-neg = -9223372036854775808\n", 69};

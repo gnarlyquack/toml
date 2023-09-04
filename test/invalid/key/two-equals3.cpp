@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_two_equals3)
 {
     const string toml{"a=b=1\n", 6};

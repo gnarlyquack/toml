@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_invalid_hex)
 {
     const string toml{"invalid-hex = 0xaafz\n", 21};

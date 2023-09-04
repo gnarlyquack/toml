@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_exp_double_us)
 {
     const string toml{"exp-double-us = 1e__23\n", 23};

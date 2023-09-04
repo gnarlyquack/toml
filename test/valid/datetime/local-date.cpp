@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_datetime_tests, test_local_date)
 {
     const string toml{"bestdayever = 1987-07-05\n", 25};

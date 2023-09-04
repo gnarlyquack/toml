@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_key_tests, test_numeric)
 {
     const string toml{"1 = 1\n", 6};

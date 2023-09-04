@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_bad_uni_esc_5)
 {
     const string toml{"str = \"val\\Ugggggggg\"\n", 22};

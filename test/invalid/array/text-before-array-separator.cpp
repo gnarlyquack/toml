@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_array_tests, test_text_before_array_separator)
 {
     const string toml{"array = [\n  \"Is there life before an array separator?\" No,\n  \"Entry\"\n]\n", 71};

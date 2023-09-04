@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_array_tests, test_double_comma_1)
 {
     const string toml{"array = [1,,2]\n", 15};

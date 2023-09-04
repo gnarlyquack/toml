@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_inline_table_tests, test_duplicate_key)
 {
     const string toml{"# Duplicate keys within an inline table are invalid\na={b=1, b=2}\n", 65};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_inline_table_tests, test_bool)
 {
     const string toml{"a = {a = true, b = false}\n", 26};

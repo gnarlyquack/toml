@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_control_tests, test_rawstring_null)
 {
     const string toml{"rawstring-null = 'null\000'\n", 25};

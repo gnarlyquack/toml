@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_array_tests, test_no_close_table)
 {
     const string toml{"x = [{ key = 42\n", 16};

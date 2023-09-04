@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_double_us)
 {
     const string toml{"double-us = 1__23\n", 18};

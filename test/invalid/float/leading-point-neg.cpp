@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_leading_point_neg)
 {
     const string toml{"leading-point-neg = -.12345\n", 28};

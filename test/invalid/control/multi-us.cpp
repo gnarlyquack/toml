@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_control_tests, test_multi_us)
 {
     const string toml{"multi-us = \"\"\"null\037\"\"\"\n", 23};

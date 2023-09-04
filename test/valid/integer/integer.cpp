@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_integer_tests, test_integer)
 {
     const string toml{"answer = 42\nposanswer = +42\nneganswer = -42\nzero = 0\n", 53};

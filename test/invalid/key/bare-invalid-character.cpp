@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_bare_invalid_character)
 {
     const string toml{"bare!key = 123\n", 15};

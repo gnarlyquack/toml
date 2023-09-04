@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_nospaces)
 {
     const string toml{"ints = [1,2,3]\n", 15};

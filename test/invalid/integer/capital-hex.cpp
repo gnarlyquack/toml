@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_capital_hex)
 {
     const string toml{"capital-hex = 0X1\n", 18};

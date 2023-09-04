@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_key_tests, test_special_chars)
 {
     const string toml{"\"=~!@$^&*()_+-`1234567890[]|/?><.,;:'=\" = 1\n", 44};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_string_tests, test_unicode_escape)
 {
     const string toml{"answer4 = \"\\u03B4\"\nanswer8 = \"\\U000003B4\"\n", 42};

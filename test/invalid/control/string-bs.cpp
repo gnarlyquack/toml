@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_control_tests, test_string_bs)
 {
     const string toml{"string-bs = \"backspace\b\"\n", 25};

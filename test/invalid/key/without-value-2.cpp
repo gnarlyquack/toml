@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_without_value_2)
 {
     const string toml{"key = \n", 7};

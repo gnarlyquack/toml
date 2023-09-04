@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_array_tests, test_missing_separator)
 {
     const string toml{"wrong = [ 1 2 3 ]\n", 18};

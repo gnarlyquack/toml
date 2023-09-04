@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_negative_oct)
 {
     const string toml{"negative-oct = -0o99\n", 21};

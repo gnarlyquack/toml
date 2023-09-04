@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_basic_multiline_out_of_range_unicode_escape_2)
 {
     const string toml{"a = \"\"\"\\U00D80000\"\"\"\n", 21};

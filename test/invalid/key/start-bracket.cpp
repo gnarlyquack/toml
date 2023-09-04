@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_start_bracket)
 {
     const string toml{"[a]\n[xyz = 5\n[b]\n", 17};

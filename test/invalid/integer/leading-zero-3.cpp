@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_leading_zero_3)
 {
     const string toml{"leading-zero-3 = 0_0\n", 21};

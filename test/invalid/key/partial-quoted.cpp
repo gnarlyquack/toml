@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_partial_quoted)
 {
     const string toml{"partial\"quoted\" = 5\n", 20};

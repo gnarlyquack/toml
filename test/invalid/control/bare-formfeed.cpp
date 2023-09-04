@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_control_tests, test_bare_formfeed)
 {
     const string toml{"bare-formfeed = \f\n", 18};

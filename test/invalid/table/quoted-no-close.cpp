@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_quoted_no_close)
 {
     const string toml{"[\"where will it end]\nname = value\n", 34};

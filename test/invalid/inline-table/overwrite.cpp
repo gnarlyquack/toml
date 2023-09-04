@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_inline_table_tests, test_overwrite)
 {
     const string toml{"a.b=0\n# Since table \"a\" is already defined, it can't be replaced by an inline table.\na={}\n", 90};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_control_tests, test_comment_lf)
 {
     const string toml{"comment-lf = \"ctrl-P\" # \020\n", 26};

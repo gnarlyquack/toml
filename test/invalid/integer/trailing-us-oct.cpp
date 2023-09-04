@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_trailing_us_oct)
 {
     const string toml{"trailing-us-oct = 0o1_\n", 23};

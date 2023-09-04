@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_missing_quotes)
 {
     const string toml{"name = value\n", 13};

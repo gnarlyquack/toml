@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_inline_table_tests, test_linebreak_4)
 {
     const string toml{"json_like = {\n          first = \"Tom\",\n          last = \"Preston-Werner\"\n}\n", 75};

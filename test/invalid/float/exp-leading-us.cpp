@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_exp_leading_us)
 {
     const string toml{"exp-leading-us = 1e_23\n", 23};

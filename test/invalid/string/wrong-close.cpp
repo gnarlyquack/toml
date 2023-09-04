@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_wrong_close)
 {
     const string toml{"bad-ending-quote = \"double and single'\n", 39};

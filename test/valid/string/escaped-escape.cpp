@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_string_tests, test_escaped_escape)
 {
     const string toml{"answer = \"\\\\x64\"\n", 17};

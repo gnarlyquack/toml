@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_bool_tests, test_wrong_case_true)
 {
     const string toml{"a = TRUE\n", 9};

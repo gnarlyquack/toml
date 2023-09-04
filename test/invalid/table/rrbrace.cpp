@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_rrbrace)
 {
     const string toml{"[[table] ]\n", 11};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_string_tests, test_no_close)
 {
     const string toml{"no-ending-quote = \"One time, at band camp\n", 42};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_float_tests, test_us_after_point)
 {
     const string toml{"us-after-point = 1._2\n", 22};

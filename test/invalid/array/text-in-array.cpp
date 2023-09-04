@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_array_tests, test_text_in_array)
 {
     const string toml{"array = [\n  \"Entry 1\",\n  I don't belong,\n  \"Entry 2\",\n]\n", 56};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_float_tests, test_long)
 {
     const string toml{"longpi = 3.141592653589793\nneglongpi = -3.141592653589793\n", 58};

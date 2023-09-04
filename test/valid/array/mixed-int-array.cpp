@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_array_tests, test_mixed_int_array)
 {
     const string toml{"arrays-and-ints =  [1, [\"Arrays are not integers.\"]]\n", 53};

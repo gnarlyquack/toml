@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_datetime_tests, test_local_time)
 {
     const string toml{"besttimeever = 17:45:00\nmilliseconds = 10:32:00.555\n", 52};

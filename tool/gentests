@@ -39,24 +39,34 @@ def main():
     os.makedirs(TEST_DIR, exist_ok=True)
 
     files = []
-    generate_valid_tests("valid", "../", files)
-    generate_invalid_tests("invalid", "../", files)
+    updated_files = generate_valid_tests("valid", files)
 
-    filename = os.path.join(TEST_DIR, "CMakeLists.txt")
-    with open(filename, "w") as fh:
-        fh.write(CMAKELISTS_TEMPLATE.format("\n        ".join(files)))
+    testfile = os.path.join(TEST_DIR, "valid_tests.cpp")
+    if updated_files or not os.path.exists(testfile):
+        with open(testfile, "w") as fh:
+            fh.write(TEST_FILE_TEMPLATE.format('"\n#include "'.join(files)))
+
+    files.clear()
+    updated_files = generate_invalid_tests("invalid", files)
+    testfile = os.path.join(TEST_DIR, "invalid_tests.cpp")
+    if updated_files or not os.path.exists(testfile):
+        with open(testfile, "w") as fh:
+            fh.write(TEST_FILE_TEMPLATE.format('"\n#include "'.join(files)))
 
     sys.exit()
 
 
-VALID_TEST_TEMPLATE = b'''\
-#include "%btest_common.hpp"
-
+TEST_FILE_TEMPLATE = '''\
+#include "test_common.hpp"
 
 using namespace std;
 using namespace toml;
 
+#include "{}"
+'''
 
+
+VALID_TEST_TEMPLATE = b'''\
 TEST(%b, %b)
 {
     const string toml{"%b", %d};
@@ -69,13 +79,6 @@ TEST(%b, %b)
 
 
 INVALID_TEST_TEMPLATE = b'''\
-#include "%btest_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(%b, %b)
 {
     const string toml{"%b", %d};
@@ -89,25 +92,13 @@ TEST(%b, %b)
 '''
 
 
-CMAKELISTS_TEMPLATE = '''\
-    add_executable(test_toml
-        lexer.cpp
-        parser.cpp
-        {}
-        )
-    target_include_directories(test_toml PRIVATE ${{PROJECT_SOURCE_DIR}}/src)
-    target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)
-
-    add_custom_target(run_toml_tests COMMAND test_toml)
-'''
-
-
-def generate_valid_tests(relative_src_dir, relative_root_dir, files):
+def generate_valid_tests(relative_src_dir, files):
     suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
     src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
     test_dir = os.path.join(TEST_DIR, relative_src_dir)
     os.makedirs(test_dir, exist_ok=True)
 
+    updated_files = False
     sources = set()
     tests = set()
 
@@ -137,10 +128,8 @@ def generate_valid_tests(relative_src_dir, relative_root_dir, files):
     for src in sources:
         src_path = os.path.join(src_dir, src)
         if os.path.isdir(src_path):
-            generate_valid_tests(
-                os.path.join(relative_src_dir, src.rstrip(os.path.sep)),
-                f"{relative_root_dir}../",
-                files)
+            if generate_valid_tests(os.path.join(relative_src_dir, src.rstrip(os.path.sep)), files):
+                updated_files = True
             tests.discard(src)
 
         else:
@@ -154,7 +143,6 @@ def generate_valid_tests(relative_src_dir, relative_root_dir, files):
 
             testname = f"test_{src.replace('-', '_')}"
             result = VALID_TEST_TEMPLATE % (
-                    relative_root_dir.encode("UTF-8"),
                     suitename.encode("UTF-8"),
                     testname.encode("UTF-8"),
                     escape_bytes(toml),
@@ -175,6 +163,7 @@ def generate_valid_tests(relative_src_dir, relative_root_dir, files):
             if result != current:
                 if current is None:
                     print(f"Adding test: {os.path.join(relative_src_dir, testfile)}")
+                    updated_files = True
                 else:
                     print(f"Updating test: {os.path.join(relative_src_dir, testfile)}")
 
@@ -183,30 +172,35 @@ def generate_valid_tests(relative_src_dir, relative_root_dir, files):
 
             files.append(os.path.join(relative_src_dir, testfile))
 
-    for test in tests:
-        test_path = os.path.join(test_dir, test)
-        if os.path.isdir(test_path):
-            print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
-            for root, dirs, files in os.walk(test_path, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(test_path)
+    if tests:
+        updated_files = True
+        for test in tests:
+            test_path = os.path.join(test_dir, test)
+            if os.path.isdir(test_path):
+                print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
+                for root, dirs, files in os.walk(test_path, topdown=False):
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        os.rmdir(os.path.join(root, name))
+                os.rmdir(test_path)
 
-        else:
-            test += ".cpp"
-            test_path += ".cpp"
-            print(f"Removing test: {os.path.join(relative_src_dir, test)}")
-            os.remove(test_path)
+            else:
+                test += ".cpp"
+                test_path += ".cpp"
+                print(f"Removing test: {os.path.join(relative_src_dir, test)}")
+                os.remove(test_path)
+
+    return updated_files
 
 
-def generate_invalid_tests(relative_src_dir, relative_root_dir, files):
+def generate_invalid_tests(relative_src_dir, files):
     suitename = relative_src_dir.translate(NAME_CONVERT) + "_tests"
     src_dir = os.path.join(SOURCE_DIR, relative_src_dir)
     test_dir = os.path.join(TEST_DIR, relative_src_dir)
     os.makedirs(test_dir, exist_ok=True)
 
+    updated_files = False
     sources = set()
     tests = set()
 
@@ -236,36 +230,20 @@ def generate_invalid_tests(relative_src_dir, relative_root_dir, files):
     for src in sources:
         src_path = os.path.join(src_dir, src)
         if os.path.isdir(src_path):
-            generate_invalid_tests(
-                os.path.join(relative_src_dir, src.rstrip(os.path.sep)),
-                f"{relative_root_dir}../",
-                files)
+            if generate_invalid_tests(os.path.join(relative_src_dir, src.rstrip(os.path.sep)), files):
+                updated_files = True
             tests.discard(src)
 
         else:
             with open(f"{src_path}.toml", "rb") as fh:
                 toml = fh.read()
 
-            '''
-            try:
-                with open(f"{src_path}.json", "r") as fh:
-                    errors = fh.read()
-                errors = json.JSONDecoder().decode(errors)
-                expected = ''
-                for error in errors:
-                    expected += convert_error(error)
-            except FileNotFoundError:
-                expected = '{ 0, 0, "" }'
-            '''
-
             testname = f"test_{src.replace('-', '_')}"
             result = INVALID_TEST_TEMPLATE % (
-                    relative_root_dir.encode("UTF-8"),
                     suitename.encode("UTF-8"),
                     testname.encode("UTF-8"),
                     escape_bytes(toml),
                     len(toml),
-                    #expected.encode("UTF-8"),
                 )
 
             testfile = f"{src}.cpp"
@@ -284,6 +262,7 @@ def generate_invalid_tests(relative_src_dir, relative_root_dir, files):
             if result != current:
                 if current is None:
                     print(f"Adding test: {os.path.join(relative_src_dir, testfile)}")
+                    updated_files = True
                 else:
                     print(f"Updating test: {os.path.join(relative_src_dir, testfile)}")
 
@@ -292,22 +271,26 @@ def generate_invalid_tests(relative_src_dir, relative_root_dir, files):
 
             files.append(os.path.join(relative_src_dir, testfile))
 
-    for test in tests:
-        test_path = os.path.join(test_dir, test)
-        if os.path.isdir(test_path):
-            print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
-            for root, dirs, files in os.walk(test_path, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(test_path)
+    if tests:
+        updated_files = True
+        for test in tests:
+            test_path = os.path.join(test_dir, test)
+            if os.path.isdir(test_path):
+                print(f"Removing test directory: {os.path.join(relative_src_dir, test)}")
+                for root, dirs, files in os.walk(test_path, topdown=False):
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        os.rmdir(os.path.join(root, name))
+                os.rmdir(test_path)
 
-        else:
-            test += ".cpp"
-            test_path += ".cpp"
-            print(f"Removing test: {os.path.join(relative_src_dir, test)}")
-            os.remove(test_path)
+            else:
+                test += ".cpp"
+                test_path += ".cpp"
+                print(f"Removing test: {os.path.join(relative_src_dir, test)}")
+                os.remove(test_path)
+
+    return updated_files
 
 
 def convert_result(value, child=False):

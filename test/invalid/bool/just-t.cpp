@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_bool_tests, test_just_t)
 {
     const string toml{"a = t\n", 6};

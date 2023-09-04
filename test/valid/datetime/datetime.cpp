@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_datetime_tests, test_datetime)
 {
     const string toml{"space = 1987-07-05 17:45:00Z\nlower = 1987-07-05t17:45:00z\n", 58};

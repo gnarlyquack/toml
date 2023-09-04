@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_after_value)
 {
     const string toml{"first = \"Tom\" last = \"Preston-Werner\" # INVALID\n", 48};

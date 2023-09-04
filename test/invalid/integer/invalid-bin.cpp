@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_integer_tests, test_invalid_bin)
 {
     const string toml{"invalid-bin = 0b0012\n", 21};

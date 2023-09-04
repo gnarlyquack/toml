@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(valid_table_tests, test_array_implicit)
 {
     const string toml{"[[albums.songs]]\nname = \"Glory Days\"\n", 37};

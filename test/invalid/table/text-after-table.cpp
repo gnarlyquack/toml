@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_text_after_table)
 {
     const string toml{"[error] this shouldn't be here\n", 31};

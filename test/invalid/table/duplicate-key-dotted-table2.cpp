@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_table_tests, test_duplicate_key_dotted_table2)
 {
     const string toml{"[fruit]\napple.taste.sweet = true\n\n[fruit.apple.taste] # INVALID\n", 64};

@@ -1,10 +1,3 @@
-#include "../../test_common.hpp"
-
-
-using namespace std;
-using namespace toml;
-
-
 TEST(invalid_key_tests, test_multiline)
 {
     const string toml{"\"\"\"long\nkey\"\"\" = 1\n", 19};
