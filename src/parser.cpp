@@ -610,7 +610,7 @@ value_from_record(Record *record)
             {
                 const string &k = keyval.first;
                 Definition *d = keyval.second;
-                value->value[k] = value_from_record(d->record);
+                value->as_table()[k] = value_from_record(d->record);
             }
 
             result = value;
@@ -622,7 +622,7 @@ value_from_record(Record *record)
             vector<Record *> *records = record->records;
             for (auto r : *records)
             {
-                value->value.push_back(value_from_record(r));
+                value->as_array().push_back(value_from_record(r));
             }
 
             result = value;
