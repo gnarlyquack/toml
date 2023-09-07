@@ -595,22 +595,22 @@ parse_expression(Parser &parser)
 }
 
 
-Value *
+Value
 value_from_record(Record *record)
 {
-    Value *result;
+    Value result;
 
     switch (record->type)
     {
         case Value::Type::TABLE:
         {
-            Value *value = Value::of_table();
+            Value value = Value::of_table();
             Definitions *definitions = record->definitions;
             for (auto keyval : *definitions)
             {
                 const string &k = keyval.first;
                 Definition *d = keyval.second;
-                value->as_table()[k] = value_from_record(d->record);
+                value.as_table()[k] = value_from_record(d->record);
             }
 
             result = value;
@@ -618,11 +618,11 @@ value_from_record(Record *record)
 
         case Value::Type::ARRAY:
         {
-            Value *value = Value::of_array();
+            Value value = Value::of_array();
             vector<Record *> *records = record->records;
             for (auto r : *records)
             {
-                value->as_array().push_back(value_from_record(r));
+                value.as_array().push_back(value_from_record(r));
             }
 
             result = value;
@@ -659,6 +659,7 @@ parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> 
     cout << "sizeof(unique_ptr<string>) = " << sizeof(unique_ptr<string>) << '\n';
     cout << "sizeof(unique_ptr<Array>) = " << sizeof(unique_ptr<Array>) << '\n';
     cout << "sizeof(unique_ptr<Table>) = " << sizeof(unique_ptr<Table>) << '\n';
+    cout << "sizeof(Value) = " << sizeof(Value) << '\n';
 #endif
 
     vector<Token> tokens;

@@ -46,8 +46,7 @@ enum TokenType
 struct Token
 {
     TokenType type;
-    Value *value;
-
+    Value value;
     std::string lexeme;
     u64 position;
     u32 line;

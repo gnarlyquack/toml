@@ -165,16 +165,16 @@ add_error(TomlIterator &iterator, string message)
 void
 add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 {
-    Token token = { type, nullptr, move(lexeme), iterator.start_position, iterator.start_line, iterator.start_column };
+    Token token = { type, Value(), move(lexeme), iterator.start_position, iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
 
 
 void
-add_value(TomlIterator &iterator, Value *value)
+add_value(TomlIterator &iterator, Value &&value)
 {
-    Token token = { TOKEN_VALUE, value, get_lexeme(iterator), iterator.start_position, iterator.start_line, iterator.start_column };
+    Token token = { TOKEN_VALUE, std::move(value), get_lexeme(iterator), iterator.start_position, iterator.start_line, iterator.start_column };
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
@@ -1121,7 +1121,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
     }
     else
     {
-        add_value(iterator, new Value{});
+        add_value(iterator, Value());
     }
 }
 
@@ -1147,7 +1147,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         }
         else
         {
-            add_value(iterator, new Value());
+            add_value(iterator, Value());
         }
     }
     else if (match(iterator, 'e') || match(iterator, 'E'))
@@ -1162,7 +1162,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         }
         else
         {
-            add_value(iterator, new Value());
+            add_value(iterator, Value());
         }
     }
     else if (match(iterator, '-'))
@@ -1202,7 +1202,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         }
         else
         {
-            add_value(iterator, new Value());
+            add_value(iterator, Value());
         }
     }
     else
@@ -1214,7 +1214,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         }
         else
         {
-            add_value(iterator, new Value());
+            add_value(iterator, Value());
         }
     }
 }
@@ -1242,7 +1242,7 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
     }
     else
     {
-        add_value(iterator, new Value());
+        add_value(iterator, Value());
     }
 }
 
@@ -1270,7 +1270,7 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
     }
     else
     {
-        add_value(iterator, new Value());
+        add_value(iterator, Value());
     }
 }
 
@@ -1298,7 +1298,7 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
     }
     else
     {
-        add_value(iterator, new Value());
+        add_value(iterator, Value());
     }
 }
 

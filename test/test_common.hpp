@@ -137,9 +137,7 @@ operator==(const Array &left, const Array &right)
 
     for (size_t i = 0; result && i < left.size(); ++i)
     {
-        Value *lvalue = left[i];
-        Value *rvalue = right[i];
-        result = *lvalue == *rvalue;
+        result = left[i] == right[i];
     }
 
     return result;
@@ -155,7 +153,7 @@ operator==(const Table &left, const Table &right)
         for (auto i : left)
         {
             result = (right.find(i.first) != right.end())
-                && (*i.second == *right.at(i.first));
+                && (i.second == right.at(i.first));
             if (!result)
             {
                 break;
@@ -178,7 +176,7 @@ operator==(const Token &left, const Token &right)
         && (left.lexeme == right.lexeme);
     if (result && (left.type == TOKEN_VALUE))
     {
-        result = *left.value == *right.value;
+        result = left.value == right.value;
     }
     return result;
 }
@@ -305,7 +303,7 @@ operator<<(std::ostream &os, const Token &token)
     if (token.type == TOKEN_VALUE)
     {
         os << "VALUE("
-            << *token.value << ", "
+            << token.value << ", "
             << token.lexeme << ", "
             << token.position << ", "
             << token.line << ", "
