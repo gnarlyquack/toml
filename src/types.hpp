@@ -32,7 +32,7 @@ using OffsetDateTime = date::sys_time<std::chrono::microseconds>;
 using Table = std::unordered_map<std::string, Value *>;
 
 
-struct Value
+struct Value final
 {
     enum class Type
     {
@@ -51,12 +51,282 @@ struct Value
     };
 
 
-    explicit Value() : _type(Type::INVALID)
+    explicit Value()
+        : _type(Type::INVALID)
     {
     }
 
 
-    virtual ~Value() = default;
+    ~Value()
+    {
+        switch (_type)
+        {
+            case Type::ARRAY:
+            {
+                delete _array;
+            } break;
+
+            case Type::STRING:
+            {
+                delete _string;
+            } break;
+
+            case Type::TABLE:
+            {
+                delete _table;
+            } break;
+
+            default:
+            {
+                // do nothing
+            } break;
+        }
+    }
+
+
+    static Value *
+    of_array()
+    {
+        auto result = new Value(Type::ARRAY);
+        result->_array = new Array;
+        return result;
+    }
+
+
+    static Value *
+    of_array(const Array &value)
+    {
+        auto result = new Value(Type::ARRAY);
+        result->_array = new Array(value);
+        return result;
+    }
+
+
+    static Value *
+    of_array(Array &&value)
+    {
+        auto result = new Value(Type::ARRAY);
+        result->_array = new Array(std::move(value));
+        return result;
+    }
+
+
+    static Value *
+    of_boolean()
+    {
+        auto result = new Value(Type::BOOLEAN);
+        result->_boolean = {};
+        return result;
+    }
+
+
+    static Value *
+    of_boolean(bool value)
+    {
+        auto result = new Value(Type::BOOLEAN);
+        result->_boolean = value;
+        return result;
+    }
+
+
+    static Value *
+    of_float()
+    {
+        auto result = new Value(Type::FLOAT);
+        result->_float = {};
+        return result;
+    }
+
+
+    static Value *
+    of_float(double value)
+    {
+        auto result = new Value(Type::FLOAT);
+        result->_float = value;
+        return result;
+    }
+
+
+    static Value *
+    of_integer()
+    {
+        auto result = new Value(Type::INTEGER);
+        result->_integer = {};
+        return result;
+    }
+
+
+    static Value *
+    of_integer(int64_t value)
+    {
+        auto result = new Value(Type::INTEGER);
+        result->_integer = value;
+        return result;
+    }
+
+
+    static Value *
+    of_string()
+    {
+        auto result = new Value(Type::STRING);
+        result->_string = new std::string;
+        return result;
+    }
+
+
+    static Value *
+    of_string(const std::string &value)
+    {
+        auto result = new Value(Type::STRING);
+        result->_string = new std::string(value);
+        return result;
+    }
+
+
+    static Value *
+    of_string(std::string &&value)
+    {
+        auto result = new Value(Type::STRING);
+        result->_string = new std::string(std::move(value));
+        return result;
+    }
+
+
+    static Value *
+    of_local_date()
+    {
+        auto result = new Value(Type::LOCAL_DATE);
+        result->_local_date = {};
+        return result;
+    }
+
+
+    static Value *
+    of_local_date(const LocalDate &value)
+    {
+        auto result = new Value(Type::LOCAL_DATE);
+        result->_local_date = value;
+        return result;
+    }
+
+
+    static Value *
+    of_local_date(LocalDate &&value)
+    {
+        auto result = new Value(Type::LOCAL_DATE);
+        result->_local_date = std::move(value);
+        return result;
+    }
+
+
+    static Value *
+    of_local_datetime()
+    {
+        auto result = new Value(Type::LOCAL_DATETIME);
+        result->_local_datetime = {};
+        return result;
+    }
+
+
+    static Value *
+    of_local_datetime(const LocalDateTime &value)
+    {
+        auto result = new Value(Type::LOCAL_DATETIME);
+        result->_local_datetime = value;
+        return result;
+    }
+
+
+    static Value *
+    of_local_datetime(LocalDateTime &&value)
+    {
+        auto result = new Value(Type::LOCAL_DATETIME);
+        result->_local_datetime = std::move(value);
+        return result;
+    }
+
+
+    static Value *
+    of_local_time()
+    {
+        auto result = new Value(Type::LOCAL_TIME);
+        result->_local_time = {};
+        return result;
+    }
+
+
+    static Value *
+    of_local_time(const LocalTime &value)
+    {
+        auto result = new Value(Type::LOCAL_TIME);
+        result->_local_time = value;
+        return result;
+    }
+
+
+    static Value *
+    of_local_time(LocalTime &&value)
+    {
+        auto result = new Value(Type::LOCAL_TIME);
+        result->_local_time = std::move(value);
+        return result;
+    }
+
+
+    static Value *
+    of_offset_datetime()
+    {
+        auto result = new Value(Type::OFFSET_DATETIME);
+        result->_offset_datetime = {};
+        return result;
+    }
+
+
+
+    static Value *
+    of_offset_datetime(const OffsetDateTime &value)
+    {
+        auto result = new Value(Type::OFFSET_DATETIME);
+        result->_offset_datetime = value;
+        return result;
+    }
+
+
+    static Value *
+    of_offset_datetime(OffsetDateTime &&value)
+    {
+        auto result = new Value(Type::OFFSET_DATETIME);
+        result->_offset_datetime = std::move(value);
+        return result;
+    }
+
+
+    static Value *
+    of_table()
+    {
+        auto result = new Value(Type::TABLE);
+        result->_table = new Table;
+        return result;
+    }
+
+
+
+    static Value *
+    of_table(const Table &value)
+    {
+        auto result = new Value(Type::TABLE);
+        result->_table = new Table(value);
+        return result;
+    }
+
+
+    static Value *
+    of_table(Table &&value)
+    {
+        auto result = new Value(Type::TABLE);
+        result->_table = new Table(std::move(value));
+        return result;
+    }
 
 
     Type
@@ -201,7 +471,7 @@ struct Value
     }
 
 
-protected:
+private:
     explicit Value(Type type) : _type(type)
     {
     }
@@ -222,219 +492,6 @@ protected:
         Array *_array;
         Table *_table;
     };
-};
-
-
-struct ArrayValue final : public Value
-{
-    explicit ArrayValue()
-        : Value{Type::ARRAY}
-    {
-        _array = new Array;
-    }
-
-
-    explicit ArrayValue(const Array &array)
-        : Value{Type::ARRAY}
-    {
-        _array = new Array{array};
-    }
-
-
-    explicit ArrayValue(Array &&array)
-        : Value{Type::ARRAY}
-    {
-        _array = new Array{std::move(array)};
-    }
-
-
-    ~ArrayValue()
-    {
-        delete _array;
-    }
-};
-
-
-struct BooleanValue final : public Value
-{
-    explicit BooleanValue() : Value(Type::BOOLEAN)
-    {
-        _boolean = {};
-    }
-
-
-    explicit BooleanValue(bool boolean) : Value(Type::BOOLEAN)
-    {
-        _boolean = boolean;
-    }
-};
-
-
-struct FloatValue final : public Value
-{
-    explicit FloatValue() : Value(Type::FLOAT)
-    {
-        _float = {};
-    }
-
-
-    explicit FloatValue(double number) : Value(Type::FLOAT)
-    {
-        _float = number;
-    }
-};
-
-
-struct IntegerValue final : public Value
-{
-    explicit IntegerValue() : Value(Type::INTEGER)
-    {
-        _integer = {};
-    }
-
-
-    explicit IntegerValue(int64_t integer) : Value(Type::INTEGER)
-    {
-        _integer = integer;
-    }
-};
-
-
-struct StringValue final : public Value
-{
-    explicit StringValue() : Value(Type::STRING)
-    {
-        _string = new std::string;
-    }
-
-
-    explicit StringValue(const std::string &str) : Value(Type::STRING)
-    {
-        _string = new std::string{str};
-    }
-
-
-    explicit StringValue(std::string &&str) : Value(Type::STRING)
-    {
-        _string = new std::string{std::move(str)};
-    }
-
-
-    ~StringValue()
-    {
-        delete _string;
-    }
-};
-
-
-struct LocalDateValue final : public Value
-{
-    explicit LocalDateValue() : Value(Type::LOCAL_DATE)
-    {
-        _local_date = {};
-    }
-
-
-    explicit LocalDateValue(const LocalDate &date) : Value(Type::LOCAL_DATE)
-    {
-        _local_date = date;
-    }
-
-
-    explicit LocalDateValue(LocalDate &&date) : Value(Type::LOCAL_DATE)
-    {
-        _local_date = std::move(date);
-    }
-};
-
-
-struct LocalDateTimeValue final : public Value
-{
-    explicit LocalDateTimeValue() : Value(Type::LOCAL_DATETIME)
-    {
-        _local_datetime = {};
-    }
-
-
-    explicit LocalDateTimeValue(const LocalDateTime &datetime) : Value(Type::LOCAL_DATETIME)
-    {
-        _local_datetime = datetime;
-    }
-
-
-    explicit LocalDateTimeValue(LocalDateTime &&datetime) : Value(Type::LOCAL_DATETIME)
-    {
-        _local_datetime = std::move(datetime);
-    }
-};
-
-
-struct LocalTimeValue final : public Value
-{
-    explicit LocalTimeValue() : Value(Type::LOCAL_TIME)
-    {
-        _local_time = {};
-    }
-
-
-    explicit LocalTimeValue(const LocalTime &time) : Value(Type::LOCAL_TIME)
-    {
-        _local_time = time;
-    }
-
-
-    explicit LocalTimeValue(LocalTime &&time) : Value(Type::LOCAL_TIME)
-    {
-        _local_time = std::move(time);
-    }
-};
-
-
-struct OffsetDateTimeValue final : public Value
-{
-    explicit OffsetDateTimeValue() : Value(Type::OFFSET_DATETIME)
-    {
-        _offset_datetime = {};
-    }
-
-
-    explicit OffsetDateTimeValue(const OffsetDateTime &datetime) : Value(Type::OFFSET_DATETIME)
-    {
-        _offset_datetime = datetime;
-    }
-
-
-    explicit OffsetDateTimeValue(OffsetDateTime &&datetime) : Value(Type::OFFSET_DATETIME)
-    {
-        _offset_datetime = std::move(datetime);
-    }
-};
-
-
-struct TableValue final : public Value
-{
-    explicit TableValue() : Value(Type::TABLE)
-    {
-        _table = new Table;
-    }
-
-
-    explicit TableValue(const Table &table) : Value(Type::TABLE)
-    {
-        _table = new Table{table};
-    }
-
-
-    explicit TableValue(Table &&table) : Value(Type::TABLE)
-    {
-        _table = new Table{std::move(table)};
-    }
-
-
-    ~TableValue()
-    {
-        delete _table;
-    }
 };
 
 

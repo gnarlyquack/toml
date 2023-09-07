@@ -1095,14 +1095,14 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
             {
                 LocalDate result;
                 in >> date::parse("%Y-%m-%d", result);
-                add_value(iterator, new LocalDateValue(move(result)));
+                add_value(iterator, Value::of_local_date(move(result)));
             } break;
 
             case Value::Type::LOCAL_DATETIME:
             {
                 LocalDateTime result;
                 in >> date::parse("%Y-%m-%d %T", result);
-                add_value(iterator, new LocalDateTimeValue(move(result)));
+                add_value(iterator, Value::of_local_datetime(move(result)));
             } break;
 
             case Value::Type::OFFSET_DATETIME:
@@ -1110,7 +1110,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
                 assert(type == Value::Type::OFFSET_DATETIME);
                 OffsetDateTime result;
                 in >> date::parse("%Y-%m-%d %T%z", result);
-                add_value(iterator, new OffsetDateTimeValue(move(result)));
+                add_value(iterator, Value::of_offset_datetime(move(result)));
             } break;
 
             default:
@@ -1143,7 +1143,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         valid = lex_fraction(iterator, context, value) && valid;
         if (valid)
         {
-            add_value(iterator, new FloatValue(string_to_f64(value)));
+            add_value(iterator, Value::of_float(string_to_f64(value)));
         }
         else
         {
@@ -1158,7 +1158,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         valid = lex_exponent(iterator, context, value) && valid;
         if (valid)
         {
-            add_value(iterator, new FloatValue(string_to_f64(value)));
+            add_value(iterator, Value::of_float(string_to_f64(value)));
         }
         else
         {
@@ -1198,7 +1198,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
                 chrono::hours{hours}
                 + chrono::minutes{minutes}
                 + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
-            add_value(iterator, new LocalTimeValue(move(lexed)));
+            add_value(iterator, Value::of_local_time(move(lexed)));
         }
         else
         {
@@ -1210,7 +1210,7 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         if (validate_digits(iterator, result, "decimal", true))
         {
             value += move(result.digits);
-            add_value(iterator, new IntegerValue(string_to_s64(value)));
+            add_value(iterator, Value::of_integer(string_to_s64(value)));
         }
         else
         {
@@ -1238,7 +1238,7 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
 
     if (valid)
     {
-        add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 16)));
+        add_value(iterator, Value::of_integer(string_to_s64(result.digits, nullptr, 16)));
     }
     else
     {
@@ -1266,7 +1266,7 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
 
     if (valid)
     {
-        add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 8)));
+        add_value(iterator, Value::of_integer(string_to_s64(result.digits, nullptr, 8)));
     }
     else
     {
@@ -1294,7 +1294,7 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
 
     if (valid)
     {
-        add_value(iterator, new IntegerValue(string_to_s64(result.digits, nullptr, 2)));
+        add_value(iterator, Value::of_integer(string_to_s64(result.digits, nullptr, 2)));
     }
     else
     {
@@ -1920,12 +1920,12 @@ lex_value(TomlIterator &iterator, u32 context)
                 if (match(iterator, c, 1) && match(iterator, c, 2))
                 {
                     string value = lex_multiline_string(iterator, c);
-                    add_value(iterator, new StringValue(move(value)));
+                    add_value(iterator, Value::of_string(move(value)));
                 }
                 else
                 {
                     string value = lex_string(iterator, c);
-                    add_value(iterator, new StringValue(move(value)));
+                    add_value(iterator, Value::of_string(move(value)));
                 }
             } break;
 
@@ -1935,12 +1935,12 @@ lex_value(TomlIterator &iterator, u32 context)
                 if (match(iterator, 'i'))
                 {
                     eat_string(iterator, "inf", context);
-                    add_value(iterator, new FloatValue(-INF64));
+                    add_value(iterator, Value::of_float(-INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
                     eat_string(iterator, "nan", context);
-                    add_value(iterator, new FloatValue(-NAN64));
+                    add_value(iterator, Value::of_float(-NAN64));
                 }
                 else
                 {
@@ -1954,12 +1954,12 @@ lex_value(TomlIterator &iterator, u32 context)
                 if (match(iterator, 'i'))
                 {
                     eat_string(iterator, "inf", context);
-                    add_value(iterator, new FloatValue(+INF64));
+                    add_value(iterator, Value::of_float(+INF64));
                 }
                 else if (match(iterator, 'n'))
                 {
                     eat_string(iterator, "nan", context);
-                    add_value(iterator, new FloatValue(+NAN64));
+                    add_value(iterator, Value::of_float(+NAN64));
                 }
                 else
                 {
@@ -1970,26 +1970,26 @@ lex_value(TomlIterator &iterator, u32 context)
             case 'i':
             {
                 eat_string(iterator, "inf", context);
-                add_value(iterator, new FloatValue(INF64));
+                add_value(iterator, Value::of_float(INF64));
             } break;
 
             case 'n':
             {
                 eat_string(iterator, "nan", context);
-                add_value(iterator, new FloatValue(NAN64));
+                add_value(iterator, Value::of_float(NAN64));
             } break;
 
 
             case 't':
             {
                 eat_string(iterator, "true", context);
-                add_value(iterator, new BooleanValue(true));
+                add_value(iterator, Value::of_boolean(true));
             } break;
 
             case 'f':
             {
                 eat_string(iterator, "false", context);
-                add_value(iterator, new BooleanValue(false));
+                add_value(iterator, Value::of_boolean(false));
             } break;
 
             case '[':

@@ -295,18 +295,18 @@ def generate_invalid_tests(relative_src_dir, files):
 
 def convert_result(value, child=False):
     if type(value) is list:
-        result = "new ArrayValue({"
+        result = "Value::of_array({"
+        elements = []
         for element in value:
-            converted = convert_result(element, True)
-            result += converted + ','
-        result += "})"
+            elements.append(convert_result(element, True))
+        result += ','.join(elements) + "})"
 
     else:
         assert type(value) is dict
 
         if (*value.keys(), ) == ("type", "value"):
             if value['type'] == "integer":
-                result = "new IntegerValue({}ULL)".format(value['value'])
+                result = "Value::of_integer({}ULL)".format(value['value'])
 
             elif value['type'] == "float":
                 converted = value['value']
@@ -314,11 +314,11 @@ def convert_result(value, child=False):
                     converted = converted.replace("nan", "NAN64")
                 elif "inf" in converted:
                     converted = converted.replace("inf", "INF64")
-                result = "new FloatValue({})".format(converted)
+                result = "Value::of_float({})".format(converted)
 
             elif value['type'] == "bool":
                 assert value['value'] in {"true", "false"}
-                result = "new BooleanValue({})".format(value['value'])
+                result = "Value::of_boolean({})".format(value['value'])
 
             elif value['type'] == "datetime":
                 dt_format = "%Y-%m-%dT%H:%M:%S"
@@ -330,7 +330,7 @@ def convert_result(value, child=False):
                     dt_format += "%z"
                 converted = datetime.datetime.strptime(value['value'], dt_format)
                 converted = converted.astimezone(datetime.timezone(datetime.timedelta(0)))
-                result = ("new OffsetDateTimeValue("
+                result = ("Value::of_offset_datetime("
                             "date::sys_days(date::year({}) / date::month({}) / date::day({})) "
                             "+ chrono::hours({}) "
                             "+ chrono::minutes({}) "
@@ -342,7 +342,7 @@ def convert_result(value, child=False):
 
             elif value['type'] == "datetime-local":
                 converted = datetime.datetime.fromisoformat(value['value'])
-                result = ("new LocalDateTimeValue("
+                result = ("Value::of_local_datetime("
                             "LocalDate(date::year({}) / date::month({}) / date::day({})) "
                             "+ chrono::hours({}) "
                             "+ chrono::minutes({}) "
@@ -354,26 +354,28 @@ def convert_result(value, child=False):
 
             elif value['type'] == "date-local":
                 converted = datetime.date.fromisoformat(value['value'])
-                result = "new LocalDateValue(LocalDate(date::year({}) / date::month({}) / date::day({})))".format(
+                result = "Value::of_local_date(LocalDate(date::year({}) / date::month({}) / date::day({})))".format(
                         converted.year, converted.month, converted.day)
 
             elif value['type'] == "time-local":
                 converted = datetime.time.fromisoformat(value['value'])
-                result = "new LocalTimeValue(LocalTime(chrono::hours({}) + chrono::minutes({}) + chrono::seconds({}) + chrono::microseconds({})))".format(
+                result = "Value::of_local_time(LocalTime(chrono::hours({}) + chrono::minutes({}) + chrono::seconds({}) + chrono::microseconds({})))".format(
                         converted.hour, converted.minute, converted.second, converted.microsecond)
 
             else:
                 assert value['type'] == "string"
-                result = "new StringValue(\"{}\")".format(escape_string(value['value']))
+                result = "Value::of_string(\"{}\")".format(escape_string(value['value']))
 
         else:
             result = ""
             if child:
-                result = "new TableValue({"
+                result = "Value::of_table({"
 
+            children = []
             for k, v in value.items():
                 converted = convert_result(v, True)
-                result += "{{ \"{}\", {} }},".format(k.translate(STRING_CONVERT), converted)
+                children.append("{{ \"{}\", {} }}".format(k.translate(STRING_CONVERT), converted))
+            result += ','.join(children)
 
             if child:
                 result += "})"

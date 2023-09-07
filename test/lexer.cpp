@@ -68,9 +68,9 @@ TEST(lex, comments)
 
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "key", 30, 2, 1 },
-        { TOKEN_VALUE, new StringValue("value"), "\"value\"", 36, 2, 7 },
+        { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 36, 2, 7 },
         { TOKEN_KEY, nullptr, "another", 86, 3, 1 },
-        { TOKEN_VALUE, new StringValue("# This is not a comment"), "\"# This is not a comment\"", 96, 3, 11 } ,
+        { TOKEN_VALUE, Value::of_string("# This is not a comment"), "\"# This is not a comment\"", 96, 3, 11 } ,
         { TOKEN_EOF, nullptr, "", 122, 4, 1 },
     };
 
@@ -83,7 +83,7 @@ TEST(lex, keyvals)
     const string toml = "key = \"value\"";
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "key", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 6, 1, 7 },
+        { TOKEN_KEY, nullptr, "key", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 6, 1, 7 },
         { TOKEN_EOF, nullptr, "", 13, 1, 14 },
     };
 
@@ -117,10 +117,10 @@ TEST(lex, bare_keys)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "key", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 6, 1, 7 },
-        { TOKEN_KEY, nullptr, "bare_key", 14, 2, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 25, 2, 12 },
-        { TOKEN_KEY, nullptr, "bare-key", 33, 3, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 44, 3, 12 },
-        { TOKEN_KEY, nullptr, "1234", 52, 4, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 59, 4, 8 },
+        { TOKEN_KEY, nullptr, "key", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 6, 1, 7 },
+        { TOKEN_KEY, nullptr, "bare_key", 14, 2, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 25, 2, 12 },
+        { TOKEN_KEY, nullptr, "bare-key", 33, 3, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 44, 3, 12 },
+        { TOKEN_KEY, nullptr, "1234", 52, 4, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 59, 4, 8 },
         { TOKEN_EOF, nullptr, "", 67, 5, 1 },
     };
 
@@ -139,11 +139,11 @@ TEST(lex, quoted_keys)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "127.0.0.1", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 14, 1, 15 },
-        { TOKEN_KEY, nullptr, "character encoding", 22, 2, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 45, 2, 24 },
-        { TOKEN_KEY, nullptr, "ʎǝʞ", 53, 3, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 64, 3, 9 },
-        { TOKEN_KEY, nullptr, "key2", 72, 4, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 81, 4, 10 },
-        { TOKEN_KEY, nullptr, "quoted \"value\"", 89, 5, 1 }, { TOKEN_VALUE, new StringValue("value"), "\"value\"", 108, 5, 20 },
+        { TOKEN_KEY, nullptr, "127.0.0.1", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 14, 1, 15 },
+        { TOKEN_KEY, nullptr, "character encoding", 22, 2, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 45, 2, 24 },
+        { TOKEN_KEY, nullptr, "ʎǝʞ", 53, 3, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 64, 3, 9 },
+        { TOKEN_KEY, nullptr, "key2", 72, 4, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 81, 4, 10 },
+        { TOKEN_KEY, nullptr, "quoted \"value\"", 89, 5, 1 }, { TOKEN_VALUE, Value::of_string("value"), "\"value\"", 108, 5, 20 },
         { TOKEN_EOF, nullptr, "", 116, 6, 1 },
     };
 
@@ -168,7 +168,7 @@ TEST(lex, empty_string_key)
     const string toml = "\"\" = \"blank\"     # VALID but discouraged";
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("blank"), "\"blank\"", 5, 1, 6 },
+        { TOKEN_KEY, nullptr, "", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("blank"), "\"blank\"", 5, 1, 6 },
         { TOKEN_EOF, nullptr, "", 40, 1, 41 },
     };
 
@@ -181,7 +181,7 @@ TEST(lex, empty_literal_key)
     const string toml = "'' = 'blank'     # VALID but discouraged";
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("blank"), "'blank'", 5, 1, 6 },
+        { TOKEN_KEY, nullptr, "", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("blank"), "'blank'", 5, 1, 6 },
         { TOKEN_EOF, nullptr, "", 40, 1, 41 },
     };
 
@@ -203,14 +203,14 @@ TEST(lex, dotted_keys)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "name", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("Orange"), "\"Orange\"", 7, 1, 8 },
-        { TOKEN_KEY, nullptr, "physical", 16, 2, 1 }, { TOKEN_KEY, nullptr, "color", 25, 2, 10 }, { TOKEN_VALUE, new StringValue("orange"), "\"orange\"", 33, 2, 18 },
-        { TOKEN_KEY, nullptr, "physical", 42, 3, 1 }, { TOKEN_KEY, nullptr, "shape", 51, 3, 10 }, { TOKEN_VALUE, new StringValue("round"), "\"round\"", 59, 3, 18 },
-        { TOKEN_KEY, nullptr, "site", 67, 4, 1 }, { TOKEN_KEY, nullptr, "google.com", 72, 4, 6 }, { TOKEN_VALUE, new BooleanValue(true), "true", 87, 4, 21 },
-        { TOKEN_KEY, nullptr, "fruit", 92, 5, 1 }, { TOKEN_KEY, nullptr, "name", 98, 5, 7 }, { TOKEN_VALUE, new StringValue("banana"), "\"banana\"", 105, 5, 14 },
-        { TOKEN_KEY, nullptr, "fruit", 142, 6, 1 }, { TOKEN_KEY, nullptr, "color", 149, 6, 8 }, { TOKEN_VALUE, new StringValue("yellow"), "\"yellow\"", 157, 6, 16 },
-        { TOKEN_KEY, nullptr, "fruit", 191, 7, 1 }, { TOKEN_KEY, nullptr, "flavor", 199, 7, 9 }, { TOKEN_VALUE, new StringValue("banana"), "\"banana\"", 208, 7, 18 },
-        { TOKEN_KEY, nullptr, "3", 242, 8, 1 }, { TOKEN_KEY, nullptr, "14159", 244, 8, 3 }, { TOKEN_VALUE, new StringValue("pi"), "\"pi\"", 252, 8, 11 },
+        { TOKEN_KEY, nullptr, "name", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("Orange"), "\"Orange\"", 7, 1, 8 },
+        { TOKEN_KEY, nullptr, "physical", 16, 2, 1 }, { TOKEN_KEY, nullptr, "color", 25, 2, 10 }, { TOKEN_VALUE, Value::of_string("orange"), "\"orange\"", 33, 2, 18 },
+        { TOKEN_KEY, nullptr, "physical", 42, 3, 1 }, { TOKEN_KEY, nullptr, "shape", 51, 3, 10 }, { TOKEN_VALUE, Value::of_string("round"), "\"round\"", 59, 3, 18 },
+        { TOKEN_KEY, nullptr, "site", 67, 4, 1 }, { TOKEN_KEY, nullptr, "google.com", 72, 4, 6 }, { TOKEN_VALUE, Value::of_boolean(true), "true", 87, 4, 21 },
+        { TOKEN_KEY, nullptr, "fruit", 92, 5, 1 }, { TOKEN_KEY, nullptr, "name", 98, 5, 7 }, { TOKEN_VALUE, Value::of_string("banana"), "\"banana\"", 105, 5, 14 },
+        { TOKEN_KEY, nullptr, "fruit", 142, 6, 1 }, { TOKEN_KEY, nullptr, "color", 149, 6, 8 }, { TOKEN_VALUE, Value::of_string("yellow"), "\"yellow\"", 157, 6, 16 },
+        { TOKEN_KEY, nullptr, "fruit", 191, 7, 1 }, { TOKEN_KEY, nullptr, "flavor", 199, 7, 9 }, { TOKEN_VALUE, Value::of_string("banana"), "\"banana\"", 208, 7, 18 },
+        { TOKEN_KEY, nullptr, "3", 242, 8, 1 }, { TOKEN_KEY, nullptr, "14159", 244, 8, 3 }, { TOKEN_VALUE, Value::of_string("pi"), "\"pi\"", 252, 8, 11 },
         { TOKEN_EOF, nullptr, "", 257, 9, 1 },
     };
 
@@ -230,10 +230,10 @@ TEST(lex, multiple_keys)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "name", 17, 2, 1 }, { TOKEN_VALUE, new StringValue("Tom"), "\"Tom\"", 24, 2, 8 },
-        { TOKEN_KEY, nullptr, "name", 30, 3, 1 }, { TOKEN_VALUE, new StringValue("Pradyun"), "\"Pradyun\"", 37, 3, 8 },
-        { TOKEN_KEY, nullptr, "spelling", 68, 5, 1 }, { TOKEN_VALUE, new StringValue("favorite"), "\"favorite\"", 79, 5, 12 },
-        { TOKEN_KEY, nullptr, "spelling", 90, 6, 1 }, { TOKEN_VALUE, new StringValue("favourite"), "\"favourite\"", 103, 6, 14 },
+        { TOKEN_KEY, nullptr, "name", 17, 2, 1 }, { TOKEN_VALUE, Value::of_string("Tom"), "\"Tom\"", 24, 2, 8 },
+        { TOKEN_KEY, nullptr, "name", 30, 3, 1 }, { TOKEN_VALUE, Value::of_string("Pradyun"), "\"Pradyun\"", 37, 3, 8 },
+        { TOKEN_KEY, nullptr, "spelling", 68, 5, 1 }, { TOKEN_VALUE, Value::of_string("favorite"), "\"favorite\"", 79, 5, 12 },
+        { TOKEN_KEY, nullptr, "spelling", 90, 6, 1 }, { TOKEN_VALUE, Value::of_string("favourite"), "\"favourite\"", 103, 6, 14 },
         { TOKEN_EOF, nullptr, "", 115, 7, 1 },
     };
 
@@ -252,8 +252,8 @@ TEST(lex, extend_implicit_key)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "fruit", 43, 2, 1 }, { TOKEN_KEY, nullptr, "apple", 49, 2, 7 }, { TOKEN_KEY, nullptr, "smooth", 55, 2, 13 }, { TOKEN_VALUE, new BooleanValue(true), "true", 64, 2, 22 },
-        { TOKEN_KEY, nullptr, "fruit", 122, 5, 1 }, { TOKEN_KEY, nullptr, "orange", 128, 5, 7 }, { TOKEN_VALUE, new IntegerValue(2), "2", 137, 5, 16 },
+        { TOKEN_KEY, nullptr, "fruit", 43, 2, 1 }, { TOKEN_KEY, nullptr, "apple", 49, 2, 7 }, { TOKEN_KEY, nullptr, "smooth", 55, 2, 13 }, { TOKEN_VALUE, Value::of_boolean(true), "true", 64, 2, 22 },
+        { TOKEN_KEY, nullptr, "fruit", 122, 5, 1 }, { TOKEN_KEY, nullptr, "orange", 128, 5, 7 }, { TOKEN_VALUE, Value::of_integer(2), "2", 137, 5, 16 },
         { TOKEN_EOF, nullptr, "", 139, 6, 1 },
     };
 
@@ -275,8 +275,8 @@ TEST(lex, key_redefinition)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "fruit", 86, 4, 1 }, { TOKEN_KEY, nullptr, "apple", 92, 4, 7 }, { TOKEN_VALUE, new IntegerValue(1), "1", 100, 4, 15 },
-        { TOKEN_KEY, nullptr, "fruit", 199, 8, 1 }, { TOKEN_KEY, nullptr, "apple", 205, 8, 7 }, { TOKEN_KEY, nullptr, "smooth", 211, 8, 13 }, { TOKEN_VALUE, new BooleanValue(true), "true", 220, 8, 22 },
+        { TOKEN_KEY, nullptr, "fruit", 86, 4, 1 }, { TOKEN_KEY, nullptr, "apple", 92, 4, 7 }, { TOKEN_VALUE, Value::of_integer(1), "1", 100, 4, 15 },
+        { TOKEN_KEY, nullptr, "fruit", 199, 8, 1 }, { TOKEN_KEY, nullptr, "apple", 205, 8, 7 }, { TOKEN_KEY, nullptr, "smooth", 211, 8, 13 }, { TOKEN_VALUE, Value::of_boolean(true), "true", 220, 8, 22 },
         { TOKEN_EOF, nullptr, "", 225, 9, 1 },
     };
 
@@ -300,12 +300,12 @@ TEST(lex, out_of_order_keys)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "apple", 25, 3, 1 }, { TOKEN_KEY, nullptr, "type", 31, 3, 7 }, { TOKEN_VALUE, new StringValue("fruit"), "\"fruit\"", 38, 3, 14 },
-        { TOKEN_KEY, nullptr, "orange", 46, 4, 1 }, { TOKEN_KEY, nullptr, "type", 53, 4, 8 }, { TOKEN_VALUE, new StringValue("fruit"), "\"fruit\"", 60, 4, 15 },
-        { TOKEN_KEY, nullptr, "apple", 69, 6, 1 }, { TOKEN_KEY, nullptr, "skin", 75, 6, 7 }, { TOKEN_VALUE, new StringValue("thin"), "\"thin\"", 82, 6, 14 },
-        { TOKEN_KEY, nullptr, "orange", 89, 7, 1 }, { TOKEN_KEY, nullptr, "skin", 96, 7, 8 }, { TOKEN_VALUE, new StringValue("thick"), "\"thick\"", 103, 7, 15 },
-        { TOKEN_KEY, nullptr, "apple", 112, 9, 1 }, { TOKEN_KEY, nullptr, "color", 118, 9, 7 }, { TOKEN_VALUE, new StringValue("red"), "\"red\"", 126, 9, 15 },
-        { TOKEN_KEY, nullptr, "orange", 132, 10, 1 }, { TOKEN_KEY, nullptr, "color", 139, 10, 8 }, { TOKEN_VALUE, new StringValue("orange"), "\"orange\"", 147, 10, 16 },
+        { TOKEN_KEY, nullptr, "apple", 25, 3, 1 }, { TOKEN_KEY, nullptr, "type", 31, 3, 7 }, { TOKEN_VALUE, Value::of_string("fruit"), "\"fruit\"", 38, 3, 14 },
+        { TOKEN_KEY, nullptr, "orange", 46, 4, 1 }, { TOKEN_KEY, nullptr, "type", 53, 4, 8 }, { TOKEN_VALUE, Value::of_string("fruit"), "\"fruit\"", 60, 4, 15 },
+        { TOKEN_KEY, nullptr, "apple", 69, 6, 1 }, { TOKEN_KEY, nullptr, "skin", 75, 6, 7 }, { TOKEN_VALUE, Value::of_string("thin"), "\"thin\"", 82, 6, 14 },
+        { TOKEN_KEY, nullptr, "orange", 89, 7, 1 }, { TOKEN_KEY, nullptr, "skin", 96, 7, 8 }, { TOKEN_VALUE, Value::of_string("thick"), "\"thick\"", 103, 7, 15 },
+        { TOKEN_KEY, nullptr, "apple", 112, 9, 1 }, { TOKEN_KEY, nullptr, "color", 118, 9, 7 }, { TOKEN_VALUE, Value::of_string("red"), "\"red\"", 126, 9, 15 },
+        { TOKEN_KEY, nullptr, "orange", 132, 10, 1 }, { TOKEN_KEY, nullptr, "color", 139, 10, 8 }, { TOKEN_VALUE, Value::of_string("orange"), "\"orange\"", 147, 10, 16 },
         { TOKEN_EOF, nullptr, "", 156, 11, 1 },
     };
 
@@ -320,7 +320,7 @@ TEST(lex, basic_strings)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "str", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF."), "\"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"", 6, 1, 7 },
+        { TOKEN_KEY, nullptr, "str", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF."), "\"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00e9\\nLocation\\tSF.\"", 6, 1, 7 },
         { TOKEN_EOF, nullptr, "", 75, 2, 1 },
     };
 
@@ -337,7 +337,7 @@ TEST(lex, multiline_basic_strings)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "str1", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("Roses are red\nViolets are blue"), "\"\"\"\nRoses are red\nViolets are blue\"\"\"", 7, 1, 8 },
+        { TOKEN_KEY, nullptr, "str1", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("Roses are red\nViolets are blue"), "\"\"\"\nRoses are red\nViolets are blue\"\"\"", 7, 1, 8 },
         { TOKEN_EOF, nullptr, "", 45, 4, 1 },
     };
 
@@ -366,9 +366,9 @@ TEST(lex, line_ending_backslash)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "str1", 54, 2, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"The quick brown fox jumps over the lazy dog.\"", 61, 2, 8 },
-        { TOKEN_KEY, nullptr, "str2", 109, 4, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"\"\"\nThe quick brown \\\n\n\n  fox jumps over \\\n    the lazy dog.\"\"\"", 116, 4, 8 },
-        { TOKEN_KEY, nullptr, "str3", 181, 11, 1 }, { TOKEN_VALUE, new StringValue("The quick brown fox jumps over the lazy dog."), "\"\"\"\\\n       The quick brown \\\n       fox jumps over \\\n       the lazy dog.\\\n       \"\"\"", 188, 11, 8 },
+        { TOKEN_KEY, nullptr, "str1", 54, 2, 1 }, { TOKEN_VALUE, Value::of_string("The quick brown fox jumps over the lazy dog."), "\"The quick brown fox jumps over the lazy dog.\"", 61, 2, 8 },
+        { TOKEN_KEY, nullptr, "str2", 109, 4, 1 }, { TOKEN_VALUE, Value::of_string("The quick brown fox jumps over the lazy dog."), "\"\"\"\nThe quick brown \\\n\n\n  fox jumps over \\\n    the lazy dog.\"\"\"", 116, 4, 8 },
+        { TOKEN_KEY, nullptr, "str3", 181, 11, 1 }, { TOKEN_VALUE, Value::of_string("The quick brown fox jumps over the lazy dog."), "\"\"\"\\\n       The quick brown \\\n       fox jumps over \\\n       the lazy dog.\\\n       \"\"\"", 188, 11, 8 },
         { TOKEN_EOF, nullptr, "", 275, 16, 1 },
     };
 
@@ -389,10 +389,10 @@ TEST(lex, multiline_basic_string_escapes)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "str4", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("Here are two quotation marks: \"\". Simple enough."), "\"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"", 7, 1, 8 },
-        { TOKEN_KEY, nullptr, "str5", 125, 3, 1 }, { TOKEN_VALUE, new StringValue("Here are three quotation marks: \"\"\"."), "\"\"\"Here are three quotation marks: \"\"\\\".\"\"\"", 132, 3, 8 },
-        { TOKEN_KEY, nullptr, "str6", 176, 4, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"."), "\"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"", 183, 4, 8 },
-        { TOKEN_KEY, nullptr, "str7", 299, 7, 1 }, { TOKEN_VALUE, new StringValue("\"This,\" she said, \"is just a pointless statement.\""), "\"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"", 306, 7, 8 },
+        { TOKEN_KEY, nullptr, "str4", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("Here are two quotation marks: \"\". Simple enough."), "\"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"", 7, 1, 8 },
+        { TOKEN_KEY, nullptr, "str5", 125, 3, 1 }, { TOKEN_VALUE, Value::of_string("Here are three quotation marks: \"\"\"."), "\"\"\"Here are three quotation marks: \"\"\\\".\"\"\"", 132, 3, 8 },
+        { TOKEN_KEY, nullptr, "str6", 176, 4, 1 }, { TOKEN_VALUE, Value::of_string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"."), "\"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"", 183, 4, 8 },
+        { TOKEN_KEY, nullptr, "str7", 299, 7, 1 }, { TOKEN_VALUE, Value::of_string("\"This,\" she said, \"is just a pointless statement.\""), "\"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"", 306, 7, 8 },
         { TOKEN_EOF, nullptr, "", 363, 8, 1 },
     };
 
@@ -411,10 +411,10 @@ TEST(lex, literal_strings)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "winpath", 32, 2, 1 }, { TOKEN_VALUE, new StringValue("C:\\Users\\nodejs\\templates"), "'C:\\Users\\nodejs\\templates'", 43, 2, 12 },
-        { TOKEN_KEY, nullptr, "winpath2", 71, 3, 1 }, { TOKEN_VALUE, new StringValue("\\\\ServerX\\admin$\\system32\\"), "'\\\\ServerX\\admin$\\system32\\'", 82, 3, 12 },
-        { TOKEN_KEY, nullptr, "quoted", 111, 4, 1 }, { TOKEN_VALUE, new StringValue("Tom \"Dubs\" Preston-Werner"), "'Tom \"Dubs\" Preston-Werner'", 122, 4, 12 },
-        { TOKEN_KEY, nullptr, "regex", 150, 5, 1 }, { TOKEN_VALUE, new StringValue("<\\i\\c*\\s*>"), "'<\\i\\c*\\s*>'", 161, 5, 12 },
+        { TOKEN_KEY, nullptr, "winpath", 32, 2, 1 }, { TOKEN_VALUE, Value::of_string("C:\\Users\\nodejs\\templates"), "'C:\\Users\\nodejs\\templates'", 43, 2, 12 },
+        { TOKEN_KEY, nullptr, "winpath2", 71, 3, 1 }, { TOKEN_VALUE, Value::of_string("\\\\ServerX\\admin$\\system32\\"), "'\\\\ServerX\\admin$\\system32\\'", 82, 3, 12 },
+        { TOKEN_KEY, nullptr, "quoted", 111, 4, 1 }, { TOKEN_VALUE, Value::of_string("Tom \"Dubs\" Preston-Werner"), "'Tom \"Dubs\" Preston-Werner'", 122, 4, 12 },
+        { TOKEN_KEY, nullptr, "regex", 150, 5, 1 }, { TOKEN_VALUE, Value::of_string("<\\i\\c*\\s*>"), "'<\\i\\c*\\s*>'", 161, 5, 12 },
         { TOKEN_EOF, nullptr, "", 174, 6, 1 },
     };
 
@@ -435,8 +435,8 @@ TEST(lex, multiline_literal_strings)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "regex2", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("I [dw]on't need \\d{2} apples"), "'''I [dw]on't need \\d{2} apples'''", 9, 1, 10 },
-        { TOKEN_KEY, nullptr, "lines", 44, 2, 1 }, { TOKEN_VALUE, new StringValue("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n"), "'''\nThe first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n'''", 53, 2, 10 },
+        { TOKEN_KEY, nullptr, "regex2", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("I [dw]on't need \\d{2} apples"), "'''I [dw]on't need \\d{2} apples'''", 9, 1, 10 },
+        { TOKEN_KEY, nullptr, "lines", 44, 2, 1 }, { TOKEN_VALUE, Value::of_string("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n"), "'''\nThe first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n'''", 53, 2, 10 },
         { TOKEN_EOF, nullptr, "", 147, 8, 1 },
     };
 
@@ -457,9 +457,9 @@ TEST(lex, multiline_literal_string_escapes)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "quot15", 0, 1, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\""), "'''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''", 9, 1, 10 },
-        { TOKEN_KEY, nullptr, "apos15", 140, 4, 1 }, { TOKEN_VALUE, new StringValue("Here are fifteen apostrophes: '''''''''''''''"), "\"Here are fifteen apostrophes: '''''''''''''''\"", 149, 4, 10 },
-        { TOKEN_KEY, nullptr, "str", 240, 7, 1}, { TOKEN_VALUE, new StringValue("'That,' she said, 'is still pointless.'"), "''''That,' she said, 'is still pointless.''''", 246, 7, 7 },
+        { TOKEN_KEY, nullptr, "quot15", 0, 1, 1 }, { TOKEN_VALUE, Value::of_string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\""), "'''Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"'''", 9, 1, 10 },
+        { TOKEN_KEY, nullptr, "apos15", 140, 4, 1 }, { TOKEN_VALUE, Value::of_string("Here are fifteen apostrophes: '''''''''''''''"), "\"Here are fifteen apostrophes: '''''''''''''''\"", 149, 4, 10 },
+        { TOKEN_KEY, nullptr, "str", 240, 7, 1}, { TOKEN_VALUE, Value::of_string("'That,' she said, 'is still pointless.'"), "''''That,' she said, 'is still pointless.''''", 246, 7, 7 },
         { TOKEN_EOF, nullptr, "", 292, 8, 1 },
     };
 
@@ -493,20 +493,20 @@ TEST(lex, integers)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "int1", 0, 1, 1 }, { TOKEN_VALUE, new IntegerValue(99), "+99", 7, 1, 8 },
-        { TOKEN_KEY, nullptr, "int2", 11, 2, 1 }, { TOKEN_VALUE, new IntegerValue(42), "42", 18, 2, 8 },
-        { TOKEN_KEY, nullptr, "int3", 21, 3, 1 }, { TOKEN_VALUE, new IntegerValue(0), "0", 28, 3, 8 },
-        { TOKEN_KEY, nullptr, "int4", 30, 4, 1 }, { TOKEN_VALUE, new IntegerValue(-17), "-17", 37, 4, 8 },
-        { TOKEN_KEY, nullptr, "int5", 41, 5, 1 }, { TOKEN_VALUE, new IntegerValue(1000), "1_000", 48, 5, 8 },
-        { TOKEN_KEY, nullptr, "int6", 54, 6, 1 }, { TOKEN_VALUE, new IntegerValue(5349221), "5_349_221", 61, 6, 8 },
-        { TOKEN_KEY, nullptr, "int7", 71, 7, 1 }, { TOKEN_VALUE, new IntegerValue(5349221), "53_49_221", 78, 7, 8 },
-        { TOKEN_KEY, nullptr, "int8", 121, 8, 1 }, { TOKEN_VALUE, new IntegerValue(12345), "1_2_3_4_5", 128, 8, 8 },
-        { TOKEN_KEY, nullptr, "hex1", 195, 11, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xDEADBEEF", 202, 11, 8 },
-        { TOKEN_KEY, nullptr, "hex2", 213, 12, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xdeadbeef", 220, 12, 8 },
-        { TOKEN_KEY, nullptr, "hex3", 231, 13, 1 }, { TOKEN_VALUE, new IntegerValue(0xdeadbeef), "0xdead_beef", 238, 13, 8 },
-        { TOKEN_KEY, nullptr, "oct1", 276, 16, 1 }, { TOKEN_VALUE, new IntegerValue(01234567), "0o01234567", 283, 16, 8 },
-        { TOKEN_KEY, nullptr, "oct2", 294, 17, 1 }, { TOKEN_VALUE, new IntegerValue(0755), "0o755", 301, 17, 8 },
-        { TOKEN_KEY, nullptr, "bin1", 369, 20, 1 }, { TOKEN_VALUE, new IntegerValue(214), "0b11010110", 376, 20, 8 },
+        { TOKEN_KEY, nullptr, "int1", 0, 1, 1 }, { TOKEN_VALUE, Value::of_integer(99), "+99", 7, 1, 8 },
+        { TOKEN_KEY, nullptr, "int2", 11, 2, 1 }, { TOKEN_VALUE, Value::of_integer(42), "42", 18, 2, 8 },
+        { TOKEN_KEY, nullptr, "int3", 21, 3, 1 }, { TOKEN_VALUE, Value::of_integer(0), "0", 28, 3, 8 },
+        { TOKEN_KEY, nullptr, "int4", 30, 4, 1 }, { TOKEN_VALUE, Value::of_integer(-17), "-17", 37, 4, 8 },
+        { TOKEN_KEY, nullptr, "int5", 41, 5, 1 }, { TOKEN_VALUE, Value::of_integer(1000), "1_000", 48, 5, 8 },
+        { TOKEN_KEY, nullptr, "int6", 54, 6, 1 }, { TOKEN_VALUE, Value::of_integer(5349221), "5_349_221", 61, 6, 8 },
+        { TOKEN_KEY, nullptr, "int7", 71, 7, 1 }, { TOKEN_VALUE, Value::of_integer(5349221), "53_49_221", 78, 7, 8 },
+        { TOKEN_KEY, nullptr, "int8", 121, 8, 1 }, { TOKEN_VALUE, Value::of_integer(12345), "1_2_3_4_5", 128, 8, 8 },
+        { TOKEN_KEY, nullptr, "hex1", 195, 11, 1 }, { TOKEN_VALUE, Value::of_integer(0xdeadbeef), "0xDEADBEEF", 202, 11, 8 },
+        { TOKEN_KEY, nullptr, "hex2", 213, 12, 1 }, { TOKEN_VALUE, Value::of_integer(0xdeadbeef), "0xdeadbeef", 220, 12, 8 },
+        { TOKEN_KEY, nullptr, "hex3", 231, 13, 1 }, { TOKEN_VALUE, Value::of_integer(0xdeadbeef), "0xdead_beef", 238, 13, 8 },
+        { TOKEN_KEY, nullptr, "oct1", 276, 16, 1 }, { TOKEN_VALUE, Value::of_integer(01234567), "0o01234567", 283, 16, 8 },
+        { TOKEN_KEY, nullptr, "oct2", 294, 17, 1 }, { TOKEN_VALUE, Value::of_integer(0755), "0o755", 301, 17, 8 },
+        { TOKEN_KEY, nullptr, "bin1", 369, 20, 1 }, { TOKEN_VALUE, Value::of_integer(214), "0b11010110", 376, 20, 8 },
         { TOKEN_EOF, nullptr, "", 387, 21, 1 },
     };
 
@@ -534,14 +534,14 @@ TEST(lex, floats)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "flt1", 13, 2, 1 }, { TOKEN_VALUE, new FloatValue(1), "+1.0", 20, 2, 8 },
-        { TOKEN_KEY, nullptr, "flt2", 25, 3, 1 }, { TOKEN_VALUE, new FloatValue(3.1415), "3.1415", 32, 3, 8 },
-        { TOKEN_KEY, nullptr, "flt3", 39, 4, 1 }, { TOKEN_VALUE, new FloatValue(-0.01), "-0.01", 46, 4, 8 },
-        { TOKEN_KEY, nullptr, "flt4", 64, 7, 1 }, { TOKEN_VALUE, new FloatValue(5e+22), "5e+22", 71, 7, 8 },
-        { TOKEN_KEY, nullptr, "flt5", 77, 8, 1 }, { TOKEN_VALUE, new FloatValue(1e06), "1e06", 84, 8, 8 },
-        { TOKEN_KEY, nullptr, "flt6", 89, 9, 1 }, { TOKEN_VALUE, new FloatValue(-2e-2), "-2E-2", 96, 9, 8},
-        { TOKEN_KEY, nullptr, "flt7", 110, 12, 1 }, { TOKEN_VALUE, new FloatValue(6.626e-34), "6.626e-34", 117, 12, 8 },
-        { TOKEN_KEY, nullptr, "flt8", 128, 14, 1 }, { TOKEN_VALUE, new FloatValue(224617.445991228), "224_617.445_991_228", 135, 14, 8 },
+        { TOKEN_KEY, nullptr, "flt1", 13, 2, 1 }, { TOKEN_VALUE, Value::of_float(1), "+1.0", 20, 2, 8 },
+        { TOKEN_KEY, nullptr, "flt2", 25, 3, 1 }, { TOKEN_VALUE, Value::of_float(3.1415), "3.1415", 32, 3, 8 },
+        { TOKEN_KEY, nullptr, "flt3", 39, 4, 1 }, { TOKEN_VALUE, Value::of_float(-0.01), "-0.01", 46, 4, 8 },
+        { TOKEN_KEY, nullptr, "flt4", 64, 7, 1 }, { TOKEN_VALUE, Value::of_float(5e+22), "5e+22", 71, 7, 8 },
+        { TOKEN_KEY, nullptr, "flt5", 77, 8, 1 }, { TOKEN_VALUE, Value::of_float(1e06), "1e06", 84, 8, 8 },
+        { TOKEN_KEY, nullptr, "flt6", 89, 9, 1 }, { TOKEN_VALUE, Value::of_float(-2e-2), "-2E-2", 96, 9, 8},
+        { TOKEN_KEY, nullptr, "flt7", 110, 12, 1 }, { TOKEN_VALUE, Value::of_float(6.626e-34), "6.626e-34", 117, 12, 8 },
+        { TOKEN_KEY, nullptr, "flt8", 128, 14, 1 }, { TOKEN_VALUE, Value::of_float(224617.445991228), "224_617.445_991_228", 135, 14, 8 },
         { TOKEN_EOF, nullptr, "", 155, 15, 1 },
     };
 
@@ -578,9 +578,9 @@ TEST(lex, infinity)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "sf1", 11, 2, 1 }, { TOKEN_VALUE, new FloatValue(INF64), "inf", 17, 2, 7 },
-        { TOKEN_KEY, nullptr, "sf2", 42, 3, 1 }, { TOKEN_VALUE, new FloatValue(+INF64), "+inf", 48, 3, 7 },
-        { TOKEN_KEY, nullptr, "sf3", 73, 4, 1 }, { TOKEN_VALUE, new FloatValue(-INF64), "-inf", 79, 4, 7 },
+        { TOKEN_KEY, nullptr, "sf1", 11, 2, 1 }, { TOKEN_VALUE, Value::of_float(INF64), "inf", 17, 2, 7 },
+        { TOKEN_KEY, nullptr, "sf2", 42, 3, 1 }, { TOKEN_VALUE, Value::of_float(+INF64), "+inf", 48, 3, 7 },
+        { TOKEN_KEY, nullptr, "sf3", 73, 4, 1 }, { TOKEN_VALUE, Value::of_float(-INF64), "-inf", 79, 4, 7 },
         { TOKEN_EOF, nullptr, "", 104, 5, 1 },
     };
 
@@ -598,9 +598,9 @@ TEST(lex, nan)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "sf4", 15, 2, 1 }, { TOKEN_VALUE, new FloatValue(NAN64), "nan", 21, 2, 7 },
-        { TOKEN_KEY, nullptr, "sf5", 81, 3, 1 }, { TOKEN_VALUE, new FloatValue(+NAN64), "+nan", 87, 3, 7 },
-        { TOKEN_KEY, nullptr, "sf6", 108, 4, 1 }, { TOKEN_VALUE, new FloatValue(-NAN64), "-nan", 114, 4, 7 },
+        { TOKEN_KEY, nullptr, "sf4", 15, 2, 1 }, { TOKEN_VALUE, Value::of_float(NAN64), "nan", 21, 2, 7 },
+        { TOKEN_KEY, nullptr, "sf5", 81, 3, 1 }, { TOKEN_VALUE, Value::of_float(+NAN64), "+nan", 87, 3, 7 },
+        { TOKEN_KEY, nullptr, "sf6", 108, 4, 1 }, { TOKEN_VALUE, Value::of_float(-NAN64), "-nan", 114, 4, 7 },
         { TOKEN_EOF, nullptr, "", 171, 5, 1 },
     };
 
@@ -616,8 +616,8 @@ TEST(lex, booleans)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "bool1", 0, 1, 1}, { TOKEN_VALUE, new BooleanValue(true), "true", 8, 1, 9 },
-        { TOKEN_KEY, nullptr, "bool2", 13, 2, 1}, { TOKEN_VALUE, new BooleanValue(false), "false", 21, 2, 9 },
+        { TOKEN_KEY, nullptr, "bool1", 0, 1, 1}, { TOKEN_VALUE, Value::of_boolean(true), "true", 8, 1, 9 },
+        { TOKEN_KEY, nullptr, "bool2", 13, 2, 1}, { TOKEN_VALUE, Value::of_boolean(false), "false", 21, 2, 9 },
         { TOKEN_EOF, nullptr, "", 27, 3, 1 },
     };
 
@@ -633,8 +633,8 @@ TEST(lex, local_times)
         ;
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "lt1", 0, 1, 1 }, { TOKEN_VALUE, new LocalTimeValue{LocalTime{chrono::hours{7} + chrono::minutes{32}}}, "07:32:00", 6, 1, 7 },
-        { TOKEN_KEY, nullptr, "lt2", 15, 2, 1 }, { TOKEN_VALUE, new LocalTimeValue{LocalTime{chrono::minutes{32} + chrono::microseconds{999999}}}, "00:32:00.999999", 21, 2, 7 },
+        { TOKEN_KEY, nullptr, "lt1", 0, 1, 1 }, { TOKEN_VALUE, Value::of_local_time(LocalTime(chrono::hours(7) + chrono::minutes(32))), "07:32:00", 6, 1, 7 },
+        { TOKEN_KEY, nullptr, "lt2", 15, 2, 1 }, { TOKEN_VALUE, Value::of_local_time(LocalTime(chrono::minutes(32) + chrono::microseconds(999999))), "00:32:00.999999", 21, 2, 7 },
         { TOKEN_EOF, nullptr, "", 37, 3, 1 },
     };
 
@@ -647,7 +647,7 @@ TEST(lex, local_dates)
     const string toml = "ld1 = 1979-05-27";
 
     vector<Token> tokens = {
-        { TOKEN_KEY, nullptr, "ld1", 0, 1, 1 }, { TOKEN_VALUE, new LocalDateValue{LocalDate{date::year{1979} / date::month{5} / date::day{27}}}, "1979-05-27", 6, 1, 7 },
+        { TOKEN_KEY, nullptr, "ld1", 0, 1, 1 }, { TOKEN_VALUE, Value::of_local_date(LocalDate(date::year(1979) / date::month(5) / date::day(27))), "1979-05-27", 6, 1, 7 },
         { TOKEN_EOF, nullptr, "", 16, 1, 17 },
     };
 
@@ -665,18 +665,18 @@ TEST(lex, local_datetimes)
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "ldt1", 0, 1, 1 },
         { TOKEN_VALUE,
-            new LocalDateTimeValue{
-                LocalDate{date::year{1979} / date::month{5} / date::day{27}}
-                + chrono::hours{7} + chrono::minutes{32}
-            },
+            Value::of_local_datetime(
+                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                + chrono::hours(7) + chrono::minutes(32)
+            ),
             "1979-05-27T07:32:00", 7, 1, 8},
 
         { TOKEN_KEY, nullptr, "ldt2", 27, 2, 1 },
         { TOKEN_VALUE,
-            new LocalDateTimeValue{
-                LocalDate{date::year{1979} / date::month{5} / date::day{27}}
-                + chrono::minutes{32} + chrono::microseconds{999999}
-            },
+            Value::of_local_datetime(
+                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                + chrono::minutes(32) + chrono::microseconds(999999)
+            ),
             "1979-05-27T00:32:00.999999", 34, 2, 8 },
 
         { TOKEN_EOF, nullptr, "", 61, 3, 1 },
@@ -698,31 +698,31 @@ TEST(lex, offset_datetimes)
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "odt1", 0, 1, 1 },
         { TOKEN_VALUE,
-            new OffsetDateTimeValue(
-                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
-                    + chrono::hours{7} + chrono::minutes{32}),
+            Value::of_offset_datetime(
+                    date::sys_days(date::year(1979) / date::month(5) / date::day(27))
+                    + chrono::hours(7) + chrono::minutes(32)),
             "1979-05-27T07:32:00Z", 7, 1, 8},
 
         { TOKEN_KEY, nullptr, "odt2", 28, 2, 1 },
         { TOKEN_VALUE,
-            new OffsetDateTimeValue(
-                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
-                    + chrono::hours{7} + chrono::minutes{32}),
+            Value::of_offset_datetime(
+                    date::sys_days(date::year(1979) / date::month(5) / date::day(27))
+                    + chrono::hours(7) + chrono::minutes(32)),
             "1979-05-27T00:32:00-07:00", 35, 2, 8},
 
         { TOKEN_KEY, nullptr, "odt3", 61, 3, 1 },
         { TOKEN_VALUE,
-            new OffsetDateTimeValue(
-                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
-                    + chrono::hours{7} + chrono::minutes{32} + chrono::microseconds{999999}),
+            Value::of_offset_datetime(
+                    date::sys_days(date::year(1979) / date::month(5) / date::day(27))
+                    + chrono::hours(7) + chrono::minutes(32) + chrono::microseconds(999999)),
             "1979-05-27T00:32:00.999999-07:00", 68, 3, 8},
 
 
         { TOKEN_KEY, nullptr, "odt4", 101, 4, 1 },
         { TOKEN_VALUE,
-            new OffsetDateTimeValue(
-                    date::sys_days{date::year{1979} / date::month{5} / date::day{27}}
-                    + chrono::hours{7} + chrono::minutes{32}),
+            Value::of_offset_datetime(
+                    date::sys_days(date::year(1979) / date::month(5) / date::day(27))
+                    + chrono::hours(7) + chrono::minutes(32)),
             "1979-05-27 07:32:00Z", 108, 4, 8},
 
         { TOKEN_EOF, nullptr, "", 129, 5, 1 },
@@ -751,53 +751,53 @@ TEST(lex, arrays)
 
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "integers", 0, 1, 1 }, { TOKEN_LBRACKET, nullptr, "", 11, 1, 12 },
-            { TOKEN_VALUE, new IntegerValue(1), "1", 13, 1, 14 }, { TOKEN_COMMA, nullptr, "", 14, 1, 15 },
-            { TOKEN_VALUE, new IntegerValue(2), "2", 16, 1, 17 }, { TOKEN_COMMA, nullptr, "", 17, 1, 18 },
-            { TOKEN_VALUE, new IntegerValue(3), "3", 19, 1, 20 }, { TOKEN_RBRACKET, nullptr, "", 21, 1, 22 },
+            { TOKEN_VALUE, Value::of_integer(1), "1", 13, 1, 14 }, { TOKEN_COMMA, nullptr, "", 14, 1, 15 },
+            { TOKEN_VALUE, Value::of_integer(2), "2", 16, 1, 17 }, { TOKEN_COMMA, nullptr, "", 17, 1, 18 },
+            { TOKEN_VALUE, Value::of_integer(3), "3", 19, 1, 20 }, { TOKEN_RBRACKET, nullptr, "", 21, 1, 22 },
         { TOKEN_KEY, nullptr, "colors", 23, 2, 1 }, { TOKEN_LBRACKET, nullptr, "", 32, 2, 10 },
-            { TOKEN_VALUE, new StringValue("red"), "\"red\"", 34, 2, 12 }, { TOKEN_COMMA, nullptr, "", 39, 2, 17 },
-            { TOKEN_VALUE, new StringValue("yellow"), "\"yellow\"", 41, 2, 19 }, { TOKEN_COMMA, nullptr, "", 49, 2, 27 },
-            { TOKEN_VALUE, new StringValue("green"), "\"green\"", 51, 2, 29 }, { TOKEN_RBRACKET, nullptr, "", 59, 2, 37 },
+            { TOKEN_VALUE, Value::of_string("red"), "\"red\"", 34, 2, 12 }, { TOKEN_COMMA, nullptr, "", 39, 2, 17 },
+            { TOKEN_VALUE, Value::of_string("yellow"), "\"yellow\"", 41, 2, 19 }, { TOKEN_COMMA, nullptr, "", 49, 2, 27 },
+            { TOKEN_VALUE, Value::of_string("green"), "\"green\"", 51, 2, 29 }, { TOKEN_RBRACKET, nullptr, "", 59, 2, 37 },
         { TOKEN_KEY, nullptr, "nested_arrays_of_ints", 61, 3, 1 }, { TOKEN_LBRACKET, nullptr, "", 85, 3, 25 },
             { TOKEN_LBRACKET, nullptr, "", 87, 3, 27 },
-                { TOKEN_VALUE, new IntegerValue(1), "1", 89, 3, 29 }, { TOKEN_COMMA, nullptr, "", 90, 3, 30 },
-                { TOKEN_VALUE, new IntegerValue(2), "2", 92, 3, 32 },
+                { TOKEN_VALUE, Value::of_integer(1), "1", 89, 3, 29 }, { TOKEN_COMMA, nullptr, "", 90, 3, 30 },
+                { TOKEN_VALUE, Value::of_integer(2), "2", 92, 3, 32 },
             { TOKEN_RBRACKET, nullptr, "", 94, 3, 34 }, { TOKEN_COMMA, nullptr, "", 95, 3, 35 },
             { TOKEN_LBRACKET, nullptr, "", 97, 3, 37 },
-                { TOKEN_VALUE, new IntegerValue(3), "3", 98, 3, 38 }, { TOKEN_COMMA, nullptr, "", 99, 3, 39 },
-                { TOKEN_VALUE, new IntegerValue(4), "4", 101, 3, 41 }, { TOKEN_COMMA, nullptr, "", 102, 3, 42 },
-                { TOKEN_VALUE, new IntegerValue(5), "5", 104, 3, 44 },
+                { TOKEN_VALUE, Value::of_integer(3), "3", 98, 3, 38 }, { TOKEN_COMMA, nullptr, "", 99, 3, 39 },
+                { TOKEN_VALUE, Value::of_integer(4), "4", 101, 3, 41 }, { TOKEN_COMMA, nullptr, "", 102, 3, 42 },
+                { TOKEN_VALUE, Value::of_integer(5), "5", 104, 3, 44 },
             { TOKEN_RBRACKET, nullptr, "", 105, 3, 45 },
         { TOKEN_RBRACKET, nullptr, "", 107, 3, 47 },
         { TOKEN_KEY, nullptr, "nested_mixed_array", 109, 4, 1 }, { TOKEN_LBRACKET, nullptr, "", 130, 4, 22 },
             { TOKEN_LBRACKET, nullptr, "", 132, 4, 24 },
-                { TOKEN_VALUE, new IntegerValue(1), "1", 134, 4, 26 }, { TOKEN_COMMA, nullptr, "", 135, 4, 27 },
-                { TOKEN_VALUE, new IntegerValue(2), "2", 137, 4, 29 },
+                { TOKEN_VALUE, Value::of_integer(1), "1", 134, 4, 26 }, { TOKEN_COMMA, nullptr, "", 135, 4, 27 },
+                { TOKEN_VALUE, Value::of_integer(2), "2", 137, 4, 29 },
             { TOKEN_RBRACKET, nullptr, "", 139, 4, 31 }, { TOKEN_COMMA, nullptr, "", 140, 4, 32 },
             { TOKEN_LBRACKET, nullptr, "", 142, 4, 34 },
-                { TOKEN_VALUE, new StringValue("a"), "\"a\"", 143, 4, 35 }, { TOKEN_COMMA, nullptr, "", 146, 4, 38 },
-                { TOKEN_VALUE, new StringValue("b"), "\"b\"", 148, 4, 40 }, { TOKEN_COMMA, nullptr, "", 151, 4, 43 },
-                { TOKEN_VALUE, new StringValue("c"), "\"c\"", 153, 4, 45 },
+                { TOKEN_VALUE, Value::of_string("a"), "\"a\"", 143, 4, 35 }, { TOKEN_COMMA, nullptr, "", 146, 4, 38 },
+                { TOKEN_VALUE, Value::of_string("b"), "\"b\"", 148, 4, 40 }, { TOKEN_COMMA, nullptr, "", 151, 4, 43 },
+                { TOKEN_VALUE, Value::of_string("c"), "\"c\"", 153, 4, 45 },
             { TOKEN_RBRACKET, nullptr, "", 156, 4, 48 },
         { TOKEN_RBRACKET, nullptr, "", 158, 4, 50 },
         { TOKEN_KEY, nullptr, "string_array", 160, 5, 1 }, { TOKEN_LBRACKET, nullptr, "", 175, 5, 16 },
-            { TOKEN_VALUE, new StringValue("all"), "\"all\"", 177, 5, 18 }, { TOKEN_COMMA, nullptr, "", 182, 5, 23 },
-            { TOKEN_VALUE, new StringValue("strings"), "'strings'", 184, 5, 25 }, { TOKEN_COMMA, nullptr, "", 193, 5, 34 },
-            { TOKEN_VALUE, new StringValue("are the same"), "\"\"\"are the same\"\"\"", 195, 5, 36 }, { TOKEN_COMMA, nullptr, "", 213, 5, 54 },
-            { TOKEN_VALUE, new StringValue("type"), "'''type'''", 215, 5, 56 }, { TOKEN_RBRACKET, nullptr, "", 226, 5, 67 },
+            { TOKEN_VALUE, Value::of_string("all"), "\"all\"", 177, 5, 18 }, { TOKEN_COMMA, nullptr, "", 182, 5, 23 },
+            { TOKEN_VALUE, Value::of_string("strings"), "'strings'", 184, 5, 25 }, { TOKEN_COMMA, nullptr, "", 193, 5, 34 },
+            { TOKEN_VALUE, Value::of_string("are the same"), "\"\"\"are the same\"\"\"", 195, 5, 36 }, { TOKEN_COMMA, nullptr, "", 213, 5, 54 },
+            { TOKEN_VALUE, Value::of_string("type"), "'''type'''", 215, 5, 56 }, { TOKEN_RBRACKET, nullptr, "", 226, 5, 67 },
         { TOKEN_KEY, nullptr, "numbers", 261, 8, 1 }, { TOKEN_LBRACKET, nullptr, "", 271, 8, 11 },
-            { TOKEN_VALUE, new FloatValue(0.1), "0.1", 273, 8, 13 }, { TOKEN_COMMA, nullptr, "", 276, 8, 16 },
-            { TOKEN_VALUE, new FloatValue(0.2), "0.2", 278, 8, 18 }, { TOKEN_COMMA, nullptr, "", 281, 8, 21 },
-            { TOKEN_VALUE, new FloatValue(0.5), "0.5", 283, 8, 23 }, { TOKEN_COMMA, nullptr, "", 286, 8, 26 },
-            { TOKEN_VALUE, new IntegerValue(1), "1", 288, 8, 28 }, { TOKEN_COMMA, nullptr, "", 289, 8, 29 },
-            { TOKEN_VALUE, new IntegerValue(2), "2", 291, 8, 31 }, { TOKEN_COMMA, nullptr, "", 292, 8, 32 },
-            { TOKEN_VALUE, new IntegerValue(5), "5", 294, 8, 34 }, { TOKEN_RBRACKET, nullptr, "", 296, 8, 36 },
+            { TOKEN_VALUE, Value::of_float(0.1), "0.1", 273, 8, 13 }, { TOKEN_COMMA, nullptr, "", 276, 8, 16 },
+            { TOKEN_VALUE, Value::of_float(0.2), "0.2", 278, 8, 18 }, { TOKEN_COMMA, nullptr, "", 281, 8, 21 },
+            { TOKEN_VALUE, Value::of_float(0.5), "0.5", 283, 8, 23 }, { TOKEN_COMMA, nullptr, "", 286, 8, 26 },
+            { TOKEN_VALUE, Value::of_integer(1), "1", 288, 8, 28 }, { TOKEN_COMMA, nullptr, "", 289, 8, 29 },
+            { TOKEN_VALUE, Value::of_integer(2), "2", 291, 8, 31 }, { TOKEN_COMMA, nullptr, "", 292, 8, 32 },
+            { TOKEN_VALUE, Value::of_integer(5), "5", 294, 8, 34 }, { TOKEN_RBRACKET, nullptr, "", 296, 8, 36 },
         { TOKEN_KEY, nullptr, "contributors", 298, 9, 1 }, { TOKEN_LBRACKET, nullptr, "", 313, 9, 16 },
-            { TOKEN_VALUE, new StringValue("Foo Bar <foo@example.com>"), "\"Foo Bar <foo@example.com>\"", 317, 10, 3 }, { TOKEN_COMMA, nullptr, "", 344, 10, 30 },
+            { TOKEN_VALUE, Value::of_string("Foo Bar <foo@example.com>"), "\"Foo Bar <foo@example.com>\"", 317, 10, 3 }, { TOKEN_COMMA, nullptr, "", 344, 10, 30 },
             { TOKEN_LBRACE, nullptr, "", 348, 11, 3 },
-                { TOKEN_KEY, nullptr, "name", 350, 11, 5 }, { TOKEN_VALUE, new StringValue("Baz Qux"), "\"Baz Qux\"", 357, 11, 12 }, { TOKEN_COMMA, nullptr, "", 366, 11, 21},
-                { TOKEN_KEY, nullptr, "email", 368, 11, 23 }, { TOKEN_VALUE, new StringValue("bazqux@example.com"), "\"bazqux@example.com\"", 376, 11, 31 }, { TOKEN_COMMA, nullptr, "", 396, 11, 51},
-                { TOKEN_KEY, nullptr, "url", 398, 11, 53 }, { TOKEN_VALUE, new StringValue("https://example.com/bazqux"), "\"https://example.com/bazqux\"", 404, 11, 59 }, { TOKEN_RBRACE, nullptr, "", 433, 11, 88},
+                { TOKEN_KEY, nullptr, "name", 350, 11, 5 }, { TOKEN_VALUE, Value::of_string("Baz Qux"), "\"Baz Qux\"", 357, 11, 12 }, { TOKEN_COMMA, nullptr, "", 366, 11, 21},
+                { TOKEN_KEY, nullptr, "email", 368, 11, 23 }, { TOKEN_VALUE, Value::of_string("bazqux@example.com"), "\"bazqux@example.com\"", 376, 11, 31 }, { TOKEN_COMMA, nullptr, "", 396, 11, 51},
+                { TOKEN_KEY, nullptr, "url", 398, 11, 53 }, { TOKEN_VALUE, Value::of_string("https://example.com/bazqux"), "\"https://example.com/bazqux\"", 404, 11, 59 }, { TOKEN_RBRACE, nullptr, "", 433, 11, 88},
             { TOKEN_RBRACKET, nullptr, "", 435, 12, 1 },
         { TOKEN_EOF, nullptr, "", 437, 13, 1 },
     };
@@ -821,12 +821,12 @@ TEST(lex, multiline_arrays)
 
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "integers2", 0, 1, 1 }, { TOKEN_LBRACKET, nullptr, "", 12, 1, 13 },
-            { TOKEN_VALUE, new IntegerValue(1), "1", 16, 2, 3 }, { TOKEN_COMMA, nullptr, "", 17, 2, 4 },
-            { TOKEN_VALUE, new IntegerValue(2), "2", 19, 2, 6 }, { TOKEN_COMMA, nullptr, "", 20, 2, 7 },
-            { TOKEN_VALUE, new IntegerValue(3), "3", 22, 2, 9 }, { TOKEN_RBRACKET, nullptr, "", 24, 3, 1 },
+            { TOKEN_VALUE, Value::of_integer(1), "1", 16, 2, 3 }, { TOKEN_COMMA, nullptr, "", 17, 2, 4 },
+            { TOKEN_VALUE, Value::of_integer(2), "2", 19, 2, 6 }, { TOKEN_COMMA, nullptr, "", 20, 2, 7 },
+            { TOKEN_VALUE, Value::of_integer(3), "3", 22, 2, 9 }, { TOKEN_RBRACKET, nullptr, "", 24, 3, 1 },
         { TOKEN_KEY, nullptr, "integers3", 27, 5, 1 }, { TOKEN_LBRACKET, nullptr, "", 39, 5, 13 },
-            { TOKEN_VALUE, new IntegerValue(1), "1", 43, 6, 3 }, { TOKEN_COMMA, nullptr, "", 44, 6, 4 },
-            { TOKEN_VALUE, new IntegerValue(2), "2", 48, 7, 3 }, { TOKEN_COMMA, nullptr, "", 49, 7, 4 },
+            { TOKEN_VALUE, Value::of_integer(1), "1", 43, 6, 3 }, { TOKEN_COMMA, nullptr, "", 44, 6, 4 },
+            { TOKEN_VALUE, Value::of_integer(2), "2", 48, 7, 3 }, { TOKEN_COMMA, nullptr, "", 49, 7, 4 },
             { TOKEN_RBRACKET, nullptr, "", 64, 8, 1 },
         { TOKEN_EOF, nullptr, "", 66, 9, 1 },
     };
@@ -845,13 +845,13 @@ TEST(lex, inline_tables)
 
     vector<Token> tokens = {
         { TOKEN_KEY, nullptr, "name", 0, 1, 1 }, { TOKEN_LBRACE, nullptr, "", 7, 1, 8},
-            { TOKEN_KEY, nullptr, "first", 9, 1, 10 }, { TOKEN_VALUE, new StringValue("Tom"), "\"Tom\"", 17, 1, 18 }, { TOKEN_COMMA, nullptr, "", 22, 1, 23 },
-            { TOKEN_KEY, nullptr, "last", 24, 1, 25 }, { TOKEN_VALUE, new StringValue("Preston-Werner"), "\"Preston-Werner\"", 31, 1, 32 }, { TOKEN_RBRACE, nullptr, "", 48, 1, 49 },
+            { TOKEN_KEY, nullptr, "first", 9, 1, 10 }, { TOKEN_VALUE, Value::of_string("Tom"), "\"Tom\"", 17, 1, 18 }, { TOKEN_COMMA, nullptr, "", 22, 1, 23 },
+            { TOKEN_KEY, nullptr, "last", 24, 1, 25 }, { TOKEN_VALUE, Value::of_string("Preston-Werner"), "\"Preston-Werner\"", 31, 1, 32 }, { TOKEN_RBRACE, nullptr, "", 48, 1, 49 },
         { TOKEN_KEY, nullptr, "point", 50, 2, 1 }, { TOKEN_LBRACE, nullptr, "", 58, 2, 9},
-            { TOKEN_KEY, nullptr, "x", 60, 2, 11 }, { TOKEN_VALUE, new IntegerValue(1), "1", 64, 2, 15 }, { TOKEN_COMMA, nullptr, "", 65, 2, 16 },
-            { TOKEN_KEY, nullptr, "y", 67, 2, 18 }, { TOKEN_VALUE, new IntegerValue(2), "2", 71, 2, 22 }, { TOKEN_RBRACE, nullptr, "", 73, 2, 24 },
+            { TOKEN_KEY, nullptr, "x", 60, 2, 11 }, { TOKEN_VALUE, Value::of_integer(1), "1", 64, 2, 15 }, { TOKEN_COMMA, nullptr, "", 65, 2, 16 },
+            { TOKEN_KEY, nullptr, "y", 67, 2, 18 }, { TOKEN_VALUE, Value::of_integer(2), "2", 71, 2, 22 }, { TOKEN_RBRACE, nullptr, "", 73, 2, 24 },
         { TOKEN_KEY, nullptr, "animal", 75, 3, 1 }, { TOKEN_LBRACE, nullptr, "", 84, 3, 10},
-            { TOKEN_KEY, nullptr, "type", 86, 3, 12 }, { TOKEN_KEY, nullptr, "name", 91, 3, 17 }, { TOKEN_VALUE, new StringValue("pug"), "\"pug\"", 98, 3, 24 },
+            { TOKEN_KEY, nullptr, "type", 86, 3, 12 }, { TOKEN_KEY, nullptr, "name", 91, 3, 17 }, { TOKEN_VALUE, Value::of_string("pug"), "\"pug\"", 98, 3, 24 },
             { TOKEN_RBRACE, nullptr, "", 104, 3, 30 },
         { TOKEN_EOF, nullptr, "", 106, 4, 1 },
     };
@@ -880,13 +880,13 @@ TEST(lex, tables)
     vector<Token> tokens = {
         { TOKEN_LBRACKET, nullptr, "", 0, 1, 1 }, { TOKEN_KEY, nullptr, "table", 1, 1, 2 }, { TOKEN_RBRACKET, nullptr, "", 6, 1, 7 },
         { TOKEN_LBRACKET, nullptr, "", 9, 3, 1 }, { TOKEN_KEY, nullptr, "table-1", 10, 3, 2 }, { TOKEN_RBRACKET, nullptr, "", 17, 3, 9 },
-        { TOKEN_KEY, nullptr, "key1", 19, 4, 1 }, { TOKEN_VALUE, new StringValue("some string"), "\"some string\"", 26, 4, 8 },
-        { TOKEN_KEY, nullptr, "key2", 40, 5, 1 }, { TOKEN_VALUE, new IntegerValue(123), "123", 47, 5, 8 },
+        { TOKEN_KEY, nullptr, "key1", 19, 4, 1 }, { TOKEN_VALUE, Value::of_string("some string"), "\"some string\"", 26, 4, 8 },
+        { TOKEN_KEY, nullptr, "key2", 40, 5, 1 }, { TOKEN_VALUE, Value::of_integer(123), "123", 47, 5, 8 },
         { TOKEN_LBRACKET, nullptr, "", 52, 7, 1 }, { TOKEN_KEY, nullptr, "table-2", 53, 7, 2 }, { TOKEN_RBRACKET, nullptr, "", 60, 7, 9 },
-        { TOKEN_KEY, nullptr, "key1", 62, 8, 1 }, { TOKEN_VALUE, new StringValue("another string"), "\"another string\"", 69, 8, 8 },
-        { TOKEN_KEY, nullptr, "key2", 86, 9, 1 }, { TOKEN_VALUE, new IntegerValue(456), "456", 93, 9, 8 },
+        { TOKEN_KEY, nullptr, "key1", 62, 8, 1 }, { TOKEN_VALUE, Value::of_string("another string"), "\"another string\"", 69, 8, 8 },
+        { TOKEN_KEY, nullptr, "key2", 86, 9, 1 }, { TOKEN_VALUE, Value::of_integer(456), "456", 93, 9, 8 },
         { TOKEN_LBRACKET, nullptr, "", 98, 11, 1 }, { TOKEN_KEY, nullptr, "dog", 99, 11, 2 }, { TOKEN_KEY, nullptr, "tater.man", 103, 11, 6 }, { TOKEN_RBRACKET, nullptr, "", 114, 11, 17 },
-        { TOKEN_KEY, nullptr, "type", 116, 12, 1 }, {TOKEN_KEY, nullptr, "name", 121, 12, 6 }, { TOKEN_VALUE, new StringValue("pug"), "\"pug\"", 128, 12, 13 },
+        { TOKEN_KEY, nullptr, "type", 116, 12, 1 }, {TOKEN_KEY, nullptr, "name", 121, 12, 6 }, { TOKEN_VALUE, Value::of_string("pug"), "\"pug\"", 128, 12, 13 },
         { TOKEN_EOF, nullptr, "", 134, 13, 1 },
     };
 
@@ -954,13 +954,13 @@ TEST(lex, table_arrays)
 
     vector<Token> tokens = {
         { TOKEN_DOUBLE_LBRACKET, nullptr, "", 0, 1, 1 }, { TOKEN_KEY, nullptr, "products", 2, 1, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 10, 1, 11 },
-        { TOKEN_KEY, nullptr, "name", 13, 2, 1 }, { TOKEN_VALUE, new StringValue("Hammer"), "\"Hammer\"", 20, 2, 8 },
-        { TOKEN_KEY, nullptr, "sku", 29, 3, 1 }, { TOKEN_VALUE, new IntegerValue(738594937), "738594937", 35, 3, 7 },
+        { TOKEN_KEY, nullptr, "name", 13, 2, 1 }, { TOKEN_VALUE, Value::of_string("Hammer"), "\"Hammer\"", 20, 2, 8 },
+        { TOKEN_KEY, nullptr, "sku", 29, 3, 1 }, { TOKEN_VALUE, Value::of_integer(738594937), "738594937", 35, 3, 7 },
         { TOKEN_DOUBLE_LBRACKET, nullptr, "", 46, 5, 1 }, { TOKEN_KEY, nullptr, "products", 48, 5, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 56, 5, 11 },
         { TOKEN_DOUBLE_LBRACKET, nullptr, "", 92, 7, 1 }, { TOKEN_KEY, nullptr, "products", 94, 7, 3 }, { TOKEN_DOUBLE_RBRACKET, nullptr, "", 102, 7, 11 },
-        { TOKEN_KEY, nullptr, "name", 105, 8, 1 }, { TOKEN_VALUE, new StringValue("Nail"), "\"Nail\"", 112, 8, 8 },
-        { TOKEN_KEY, nullptr, "sku", 119, 9, 1 }, { TOKEN_VALUE, new IntegerValue(284758393), "284758393", 125, 9, 7 },
-        { TOKEN_KEY, nullptr, "color", 136, 11, 1 }, { TOKEN_VALUE, new StringValue("gray"), "\"gray\"", 144, 11, 9 },
+        { TOKEN_KEY, nullptr, "name", 105, 8, 1 }, { TOKEN_VALUE, Value::of_string("Nail"), "\"Nail\"", 112, 8, 8 },
+        { TOKEN_KEY, nullptr, "sku", 119, 9, 1 }, { TOKEN_VALUE, Value::of_integer(284758393), "284758393", 125, 9, 7 },
+        { TOKEN_KEY, nullptr, "color", 136, 11, 1 }, { TOKEN_VALUE, Value::of_string("gray"), "\"gray\"", 144, 11, 9 },
         { TOKEN_EOF, nullptr, "", 151, 12, 1 },
     };
 
