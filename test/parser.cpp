@@ -614,11 +614,11 @@ TEST(parse, local_datetimes)
     const Table result{
         { "ldt1",
             Value::of_local_datetime(
-                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)) },
         { "ldt2",
             Value::of_local_datetime(
-                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::minutes(32) + chrono::microseconds(999999)) },
     };
 

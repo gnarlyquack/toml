@@ -102,7 +102,7 @@ operator==(const Value &left, const Value &right)
 
             case Value::Type::LOCAL_TIME:
             {
-                result = left.as_local_time() == right.as_local_time();
+                result = left.as_local_time().to_duration() == right.as_local_time().to_duration();
             } break;
 
             case Value::Type::OFFSET_DATETIME:
@@ -227,7 +227,7 @@ operator<<(std::ostream &os, const Value &value)
 
         case Value::Type::LOCAL_TIME:
         {
-            os << "LocalTime(" << value.as_local_datetime() << ')';
+            os << "LocalTime(" << value.as_local_time() << ')';
         } break;
 
         case Value::Type::OFFSET_DATETIME:

@@ -652,7 +652,7 @@ TEST(lex, local_datetimes)
         { TOKEN_KEY, Value(), "ldt1", 0, 1, 1 },
         { TOKEN_VALUE,
             Value::of_local_datetime(
-                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)
             ),
             "1979-05-27T07:32:00", 7, 1, 8},
@@ -660,7 +660,7 @@ TEST(lex, local_datetimes)
         { TOKEN_KEY, Value(), "ldt2", 27, 2, 1 },
         { TOKEN_VALUE,
             Value::of_local_datetime(
-                LocalDate(date::year(1979) / date::month(5) / date::day(27))
+                date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::minutes(32) + chrono::microseconds(999999)
             ),
             "1979-05-27T00:32:00.999999", 34, 2, 8 },

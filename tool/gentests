@@ -343,7 +343,7 @@ def convert_result(value, child=False):
             elif value['type'] == "datetime-local":
                 converted = datetime.datetime.fromisoformat(value['value'])
                 result = ("Value::of_local_datetime("
-                            "LocalDate(date::year({}) / date::month({}) / date::day({})) "
+                            "date::local_time<date::days>(date::year({}) / date::month({}) / date::day({})) "
                             "+ chrono::hours({}) "
                             "+ chrono::minutes({}) "
                             "+ chrono::seconds({}) "

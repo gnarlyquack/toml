@@ -25,9 +25,9 @@ namespace toml
 struct Value;
 
 using Array = std::vector<Value>;
-using LocalDate = date::local_time<date::days>;
+using LocalDate = date::year_month_day;
 using LocalDateTime = date::local_time<std::chrono::microseconds>;
-using LocalTime = date::local_time<std::chrono::microseconds>;
+using LocalTime = date::time_of_day<std::chrono::microseconds>;
 using OffsetDateTime = date::sys_time<std::chrono::microseconds>;
 using Table = std::unordered_map<std::string, Value>;
 
@@ -84,7 +84,7 @@ struct Value final
 
             case Type::LOCAL_DATE:
             {
-                new (&_local_date) LocalDate(other._local_date);
+                _local_date = other._local_date;
             } break;
 
             case Type::LOCAL_DATETIME:
@@ -94,7 +94,7 @@ struct Value final
 
             case Type::LOCAL_TIME:
             {
-                new (&_local_time) LocalTime(other._local_time);
+                _local_time = other._local_time;
             } break;
 
             case Type::OFFSET_DATETIME:
@@ -595,8 +595,7 @@ private:
 
             case Type::LOCAL_DATE:
             {
-                new (&_local_date) LocalDate(other._local_date);
-                other._local_date.~LocalDate();
+                _local_date = other._local_date;
             } break;
 
             case Type::LOCAL_DATETIME:
@@ -607,8 +606,7 @@ private:
 
             case Type::LOCAL_TIME:
             {
-                new (&_local_time) LocalTime(other._local_time);
-                other._local_time.~LocalTime();
+                _local_time = other._local_time;
             } break;
 
             case Type::OFFSET_DATETIME:
@@ -648,19 +646,9 @@ private:
                 delete _array;
             } break;
 
-            case Type::LOCAL_DATE:
-            {
-                _local_date.~LocalDate();
-            } break;
-
             case Type::LOCAL_DATETIME:
             {
                 _local_datetime.~LocalDateTime();
-            } break;
-
-            case Type::LOCAL_TIME:
-            {
-                _local_time.~LocalTime();
             } break;
 
             case Type::OFFSET_DATETIME:
