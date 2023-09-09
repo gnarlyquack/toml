@@ -57,6 +57,97 @@ struct Value final
     }
 
 
+    explicit Value(const Array &value)
+        : _type(Type::ARRAY)
+        , _array(new Array(value))
+    {
+    }
+
+
+    explicit Value(Array &&value)
+        : _type(Type::ARRAY)
+        , _array(new Array(std::move(value)))
+    {
+    }
+
+
+    explicit Value(bool value)
+        : _type(Type::BOOLEAN)
+        , _boolean(value)
+    {
+    }
+
+
+    explicit Value(double value)
+        : _type(Type::FLOAT)
+        , _float(value)
+    {
+    }
+
+
+    explicit Value(int64_t value)
+        : _type(Type::INTEGER)
+        , _integer(value)
+    {
+    }
+
+
+    explicit Value(const std::string &value)
+        : _type(Type::STRING)
+        , _string(new std::string(value))
+    {
+    }
+
+
+    explicit Value(std::string &&value)
+        : _type(Type::STRING)
+        , _string(new std::string(std::move(value)))
+    {
+    }
+
+
+    explicit Value(const LocalDate &value)
+        : _type(Type::LOCAL_DATE)
+        , _local_date(value)
+    {
+    }
+
+
+    explicit Value(const LocalDateTime &value)
+        : _type(Type::LOCAL_DATETIME)
+        , _local_datetime(value)
+    {
+    }
+
+
+    explicit Value(const LocalTime &value)
+        : _type(Type::LOCAL_TIME)
+        , _local_time(value)
+    {
+    }
+
+
+    explicit Value(const OffsetDateTime &value)
+        : _type(Type::OFFSET_DATETIME)
+        , _offset_datetime(value)
+    {
+    }
+
+
+    explicit Value(const Table &value)
+        : _type(Type::TABLE)
+        , _table(new Table(value))
+    {
+    }
+
+
+    explicit Value(Table &&value)
+        : _type(Type::TABLE)
+        , _table(new Table(std::move(value)))
+    {
+    }
+
+
     Value(const Value &other)
         : _type(other._type)
     {
@@ -155,251 +246,6 @@ struct Value final
             take(other);
         }
         return *this;
-    }
-
-
-    static Value
-    of_array()
-    {
-        Value result(Type::ARRAY);
-        result._array = new Array;
-        return result;
-    }
-
-
-    static Value
-    of_array(const Array &value)
-    {
-        Value result(Type::ARRAY);
-        result._array = new Array(value);
-        return result;
-    }
-
-
-    static Value
-    of_array(Array &&value)
-    {
-        Value result(Type::ARRAY);
-        result._array = new Array(std::move(value));
-        return result;
-    }
-
-
-    static Value
-    of_boolean()
-    {
-        Value result(Type::BOOLEAN);
-        result._boolean = {};
-        return result;
-    }
-
-
-    static Value
-    of_boolean(bool value)
-    {
-        Value result(Type::BOOLEAN);
-        result._boolean = value;
-        return result;
-    }
-
-
-    static Value
-    of_float()
-    {
-        Value result(Type::FLOAT);
-        result._float = {};
-        return result;
-    }
-
-
-    static Value
-    of_float(double value)
-    {
-        Value result(Type::FLOAT);
-        result._float = value;
-        return result;
-    }
-
-
-    static Value
-    of_integer()
-    {
-        Value result(Type::INTEGER);
-        result._integer = {};
-        return result;
-    }
-
-
-    static Value
-    of_integer(int64_t value)
-    {
-        Value result(Type::INTEGER);
-        result._integer = value;
-        return result;
-    }
-
-
-    static Value
-    of_string()
-    {
-        Value result(Type::STRING);
-        result._string = new std::string;
-        return result;
-    }
-
-
-    static Value
-    of_string(const std::string &value)
-    {
-        Value result(Type::STRING);
-        result._string = new std::string(value);
-        return result;
-    }
-
-
-    static Value
-    of_string(std::string &&value)
-    {
-        Value result(Type::STRING);
-        result._string = new std::string(std::move(value));
-        return result;
-    }
-
-
-    static Value
-    of_local_date()
-    {
-        Value result(Type::LOCAL_DATE);
-        result._local_date = {};
-        return result;
-    }
-
-
-    static Value
-    of_local_date(const LocalDate &value)
-    {
-        Value result(Type::LOCAL_DATE);
-        result._local_date = value;
-        return result;
-    }
-
-
-    static Value
-    of_local_date(LocalDate &&value)
-    {
-        Value result(Type::LOCAL_DATE);
-        result._local_date = std::move(value);
-        return result;
-    }
-
-
-    static Value
-    of_local_datetime()
-    {
-        Value result(Type::LOCAL_DATETIME);
-        result._local_datetime = {};
-        return result;
-    }
-
-
-    static Value
-    of_local_datetime(const LocalDateTime &value)
-    {
-        Value result(Type::LOCAL_DATETIME);
-        result._local_datetime = value;
-        return result;
-    }
-
-
-    static Value
-    of_local_datetime(LocalDateTime &&value)
-    {
-        Value result(Type::LOCAL_DATETIME);
-        result._local_datetime = std::move(value);
-        return result;
-    }
-
-
-    static Value
-    of_local_time()
-    {
-        Value result(Type::LOCAL_TIME);
-        result._local_time = {};
-        return result;
-    }
-
-
-    static Value
-    of_local_time(const LocalTime &value)
-    {
-        Value result(Type::LOCAL_TIME);
-        result._local_time = value;
-        return result;
-    }
-
-
-    static Value
-    of_local_time(LocalTime &&value)
-    {
-        Value result(Type::LOCAL_TIME);
-        result._local_time = std::move(value);
-        return result;
-    }
-
-
-    static Value
-    of_offset_datetime()
-    {
-        Value result(Type::OFFSET_DATETIME);
-        result._offset_datetime = {};
-        return result;
-    }
-
-
-
-    static Value
-    of_offset_datetime(const OffsetDateTime &value)
-    {
-        Value result(Type::OFFSET_DATETIME);
-        result._offset_datetime = value;
-        return result;
-    }
-
-
-    static Value
-    of_offset_datetime(OffsetDateTime &&value)
-    {
-        Value result(Type::OFFSET_DATETIME);
-        result._offset_datetime = std::move(value);
-        return result;
-    }
-
-
-    static Value
-    of_table()
-    {
-        Value result(Type::TABLE);
-        result._table = new Table;
-        return result;
-    }
-
-
-
-    static Value
-    of_table(const Table &value)
-    {
-        Value result(Type::TABLE);
-        result._table = new Table(value);
-        return result;
-    }
-
-
-    static Value
-    of_table(Table &&value)
-    {
-        Value result(Type::TABLE);
-        result._table = new Table(std::move(value));
-        return result;
     }
 
 
@@ -546,10 +392,6 @@ struct Value final
 
 
 private:
-    explicit Value(Type type) : _type(type)
-    {
-    }
-
 
     Type _type;
 

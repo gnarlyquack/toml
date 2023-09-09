@@ -604,7 +604,7 @@ value_from_record(Record *record)
     {
         case Value::Type::TABLE:
         {
-            Value value = Value::of_table();
+            Value value(Table{});
             Definitions *definitions = record->definitions;
             for (auto keyval : *definitions)
             {
@@ -618,7 +618,7 @@ value_from_record(Record *record)
 
         case Value::Type::ARRAY:
         {
-            Value value = Value::of_array();
+            Value value(Array{});
             vector<Record *> *records = record->records;
             for (auto r : *records)
             {

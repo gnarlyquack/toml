@@ -22,8 +22,8 @@ TEST(parse, comments)
         ;
 
     const Table expected = {
-        { "key", Value::of_string("value") },
-        { "another", Value::of_string("# This is not a comment") },
+        { "key", Value(string("value")) },
+        { "another", Value(string("# This is not a comment")) },
     };
 
     assert_parsed(toml, expected);
@@ -35,7 +35,7 @@ TEST(parse, keyvals)
     const string toml = "key = \"value\"";
 
     const Table result = {
-        { "key", Value::of_string("value") },
+        { "key", Value(string("value")) },
     };
 
     assert_parsed(toml, result);
@@ -68,10 +68,10 @@ TEST(parse, bare_keys)
         ;
 
     const Table result = {
-        { "key", Value::of_string("value") },
-        { "bare_key", Value::of_string("value") },
-        { "bare-key", Value::of_string("value") },
-        { "1234", Value::of_string("value") },
+        { "key", Value(string("value")) },
+        { "bare_key", Value(string("value")) },
+        { "bare-key", Value(string("value")) },
+        { "1234", Value(string("value")) },
     };
 
     assert_parsed(toml, result);
@@ -89,11 +89,11 @@ TEST(parse, quoted_keys)
         ;
 
     const Table result = {
-        { "127.0.0.1", Value::of_string("value") },
-        { "character encoding", Value::of_string("value") },
-        { "ʎǝʞ", Value::of_string("value") },
-        { "key2", Value::of_string("value") },
-        { "quoted \"value\"", Value::of_string("value") },
+        { "127.0.0.1", Value(string("value")) },
+        { "character encoding", Value(string("value")) },
+        { "ʎǝʞ", Value(string("value")) },
+        { "key2", Value(string("value")) },
+        { "quoted \"value\"", Value(string("value")) },
     };
 
     assert_parsed(toml, result);
@@ -117,7 +117,7 @@ TEST(parse, empty_string_key)
     const string toml = "\"\" = \"blank\"     # VALID but discouraged";
 
     const Table result = {
-        { "", Value::of_string("blank") } ,
+        { "", Value(string("blank")) } ,
     };
 
     assert_parsed(toml, result);
@@ -129,7 +129,7 @@ TEST(parse, empty_literal_key)
     const string toml = "'' = 'blank'     # VALID but discouraged";
 
     const Table result = {
-        { "", Value::of_string("blank") } ,
+        { "", Value(string("blank")) } ,
     };
 
     assert_parsed(toml, result);
@@ -150,18 +150,18 @@ TEST(parse, dotted_keys)
         ;
 
     const Table result = {
-        { "name", Value::of_string("Orange") },
-        { "physical", Value::of_table({
-                    { "color", Value::of_string("orange") },
-                    { "shape", Value::of_string("round") } }) },
-        { "site", Value::of_table({
-                    { "google.com", Value::of_boolean(true) } }) },
-        { "fruit", Value::of_table({
-                    { "name", Value::of_string("banana") },
-                    { "color", Value::of_string("yellow") },
-                    { "flavor", Value::of_string("banana") } }) },
-        { "3", Value::of_table({
-                    { "14159", Value::of_string("pi") } }) },
+        { "name", Value(string("Orange")) },
+        { "physical", Value(Table({
+                    { "color", Value(string("orange")) },
+                    { "shape", Value(string("round")) } })) },
+        { "site", Value(Table({
+                    { "google.com", Value(true) } })) },
+        { "fruit", Value(Table({
+                    { "name", Value(string("banana")) },
+                    { "color", Value(string("yellow")) },
+                    { "flavor", Value(string("banana")) } })) },
+        { "3", Value(Table({
+                    { "14159", Value(string("pi")) } })) },
     };
 
     assert_parsed(toml, result);
@@ -207,15 +207,15 @@ TEST(parse, extend_implicit_key)
         ;
 
     const Table result = {
-        { "fruit", Value::of_table({
-                    { "apple", Value::of_table({
-                                { "smooth", Value::of_boolean(true) },
-                                { "color", Value::of_string("red") },
-                                { "taste", Value::of_table({
-                                        { "sweet", Value::of_boolean(true) },
-                                    }) },
-                            }) },
-                    { "orange", Value::of_integer(2) } }) },
+        { "fruit", Value(Table({
+                    { "apple", Value(Table({
+                                { "smooth", Value(true) },
+                                { "color", Value(string("red")) },
+                                { "taste", Value(Table({
+                                        { "sweet", Value(true) },
+                                    })) },
+                            })) },
+                    { "orange", Value(INT64_C(2)) } })) },
     };
 
     assert_parsed(toml, result);
@@ -259,14 +259,14 @@ TEST(parse, out_of_order_keys)
         ;
 
     const Table result = {
-        { "apple", Value::of_table({
-                { "type", Value::of_string("fruit") },
-                { "skin", Value::of_string("thin") },
-                { "color", Value::of_string("red") } }) },
-        { "orange", Value::of_table({
-                { "type", Value::of_string("fruit") },
-                { "skin", Value::of_string("thick") },
-                { "color", Value::of_string("orange") } }) },
+        { "apple", Value(Table({
+                { "type", Value(string("fruit")) },
+                { "skin", Value(string("thin")) },
+                { "color", Value(string("red")) } })) },
+        { "orange", Value(Table({
+                { "type", Value(string("fruit")) },
+                { "skin", Value(string("thick")) },
+                { "color", Value(string("orange")) } })) },
     };
 
     assert_parsed(toml, result);
@@ -280,7 +280,7 @@ TEST(parse, basic_strings)
         ;
 
     const Table result = {
-        { "str", Value::of_string("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.") },
+        { "str", Value(string("I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.")) },
     };
 
     assert_parsed(toml, result);
@@ -296,7 +296,7 @@ TEST(parse, multiline_basic_strings)
         ;
 
     const Table result = {
-        { "str1", Value::of_string("Roses are red\nViolets are blue") },
+        { "str1", Value(string("Roses are red\nViolets are blue")) },
     };
 
     assert_parsed(toml, result);
@@ -324,9 +324,9 @@ TEST(parse, line_ending_backslash)
         ;
 
     const Table result = {
-        { "str1", Value::of_string("The quick brown fox jumps over the lazy dog.") },
-        { "str2", Value::of_string("The quick brown fox jumps over the lazy dog.") },
-        { "str3", Value::of_string("The quick brown fox jumps over the lazy dog.") },
+        { "str1", Value(string("The quick brown fox jumps over the lazy dog.")) },
+        { "str2", Value(string("The quick brown fox jumps over the lazy dog.")) },
+        { "str3", Value(string("The quick brown fox jumps over the lazy dog.")) },
     };
 
     assert_parsed(toml, result);
@@ -346,10 +346,10 @@ TEST(parse, multiline_basic_string_escapes)
         ;
 
     const Table result = {
-        { "str4", Value::of_string("Here are two quotation marks: \"\". Simple enough.") },
-        { "str5", Value::of_string("Here are three quotation marks: \"\"\".") },
-        { "str6", Value::of_string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".") },
-        { "str7", Value::of_string("\"This,\" she said, \"is just a pointless statement.\"") },
+        { "str4", Value(string("Here are two quotation marks: \"\". Simple enough.")) },
+        { "str5", Value(string("Here are three quotation marks: \"\"\".")) },
+        { "str6", Value(string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\".")) },
+        { "str7", Value(string("\"This,\" she said, \"is just a pointless statement.\"")) },
     };
 
     assert_parsed(toml, result);
@@ -367,10 +367,10 @@ TEST(parse, literal_strings)
         ;
 
     const Table result = {
-        { "winpath", Value::of_string("C:\\Users\\nodejs\\templates") },
-        { "winpath2", Value::of_string("\\\\ServerX\\admin$\\system32\\") },
-        { "quoted", Value::of_string("Tom \"Dubs\" Preston-Werner") },
-        { "regex", Value::of_string("<\\i\\c*\\s*>") },
+        { "winpath", Value(string("C:\\Users\\nodejs\\templates")) },
+        { "winpath2", Value(string("\\\\ServerX\\admin$\\system32\\")) },
+        { "quoted", Value(string("Tom \"Dubs\" Preston-Werner")) },
+        { "regex", Value(string("<\\i\\c*\\s*>")) },
     };
 
     assert_parsed(toml, result);
@@ -390,8 +390,8 @@ TEST(parse, multiline_literal_strings)
         ;
 
     const Table result = {
-        { "regex2", Value::of_string("I [dw]on't need \\d{2} apples") },
-        { "lines", Value::of_string("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n") },
+        { "regex2", Value(string("I [dw]on't need \\d{2} apples")) },
+        { "lines", Value(string("The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n")) },
     };
 
     assert_parsed(toml, result);
@@ -411,9 +411,9 @@ TEST(parse, mulitiline_literal_string_escapes)
         ;
 
     const Table result = {
-        { "quot15", Value::of_string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"") },
-        { "apos15", Value::of_string("Here are fifteen apostrophes: '''''''''''''''") },
-        { "str", Value::of_string("'That,' she said, 'is still pointless.'") },
+        { "quot15", Value(string("Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"")) },
+        { "apos15", Value(string("Here are fifteen apostrophes: '''''''''''''''")) },
+        { "str", Value(string("'That,' she said, 'is still pointless.'")) },
     };
 
     assert_parsed(toml, result);
@@ -446,23 +446,23 @@ TEST(parse, integers)
         ;
 
     const Table result = {
-        { "int1", Value::of_integer(99) },
-        { "int2", Value::of_integer(42) },
-        { "int3", Value::of_integer(0) },
-        { "int4", Value::of_integer(-17) },
-        { "int5", Value::of_integer(1000) },
-        { "int6", Value::of_integer(5349221) },
-        { "int7", Value::of_integer(5349221) },
-        { "int8", Value::of_integer(12345) },
+        { "int1", Value(INT64_C(99)) },
+        { "int2", Value(INT64_C(42)) },
+        { "int3", Value(INT64_C(0)) },
+        { "int4", Value(INT64_C(-17)) },
+        { "int5", Value(INT64_C(1000)) },
+        { "int6", Value(INT64_C(5349221)) },
+        { "int7", Value(INT64_C(5349221)) },
+        { "int8", Value(INT64_C(12345)) },
 
-        { "hex1", Value::of_integer(0xDEADBEEF) },
-        { "hex2", Value::of_integer(0xdeadbeef) },
-        { "hex3", Value::of_integer(0xdeadbeef) },
+        { "hex1", Value(INT64_C(0xDEADBEEF)) },
+        { "hex2", Value(INT64_C(0xdeadbeef)) },
+        { "hex3", Value(INT64_C(0xdeadbeef)) },
 
-        { "oct1", Value::of_integer(01234567) },
-        { "oct2", Value::of_integer(0755) },
+        { "oct1", Value(INT64_C(01234567)) },
+        { "oct2", Value(INT64_C(0755)) },
 
-        { "bin1", Value::of_integer(214) },
+        { "bin1", Value(INT64_C(214)) },
     };
 
     assert_parsed(toml, result);
@@ -489,14 +489,14 @@ TEST(parse, floats)
         ;
 
     const Table result = {
-        { "flt1", Value::of_float(1) },
-        { "flt2", Value::of_float(3.1415) },
-        { "flt3", Value::of_float(-0.01) },
-        { "flt4", Value::of_float(5e+22) },
-        { "flt5", Value::of_float(1e06) },
-        { "flt6", Value::of_float(-2e-2) },
-        { "flt7", Value::of_float(6.626e-34) },
-        { "flt8", Value::of_float(224617.445991228) },
+        { "flt1", Value(1.0) },
+        { "flt2", Value(3.1415) },
+        { "flt3", Value(-0.01) },
+        { "flt4", Value(5e+22) },
+        { "flt5", Value(1e06) },
+        { "flt6", Value(-2e-2) },
+        { "flt7", Value(6.626e-34) },
+        { "flt8", Value(224617.445991228) },
     };
 
     assert_parsed(toml, result);
@@ -532,9 +532,9 @@ TEST(parse, infinity)
         ;
 
     const Table result = {
-        { "sf1", Value::of_float(INF64) },
-        { "sf2", Value::of_float(+INF64) },
-        { "sf3", Value::of_float(-INF64) },
+        { "sf1", Value(INF64) },
+        { "sf2", Value(+INF64) },
+        { "sf3", Value(-INF64) },
     };
 
     assert_parsed(toml, result);
@@ -551,9 +551,9 @@ TEST(parse, nan)
         ;
 
     const Table result = {
-        { "sf4", Value::of_float(NAN64) },
-        { "sf5", Value::of_float(+NAN64) },
-        { "sf6", Value::of_float(-NAN64) },
+        { "sf4", Value(NAN64) },
+        { "sf5", Value(+NAN64) },
+        { "sf6", Value(-NAN64) },
     };
 
     assert_parsed(toml, result);
@@ -568,8 +568,8 @@ TEST(parse, booleans)
         ;
 
     const Table result = {
-        { "bool1", Value::of_boolean(true) },
-        { "bool2", Value::of_boolean(false) },
+        { "bool1", Value(true) },
+        { "bool2", Value(false) },
     };
 
     assert_parsed(toml, result);
@@ -584,8 +584,8 @@ TEST(parse, local_times)
     };
 
     const Table result{
-        { "lt1", Value::of_local_time(LocalTime(chrono::hours(7) + chrono::minutes(32))) },
-        { "lt2", Value::of_local_time(LocalTime(chrono::minutes(32) + chrono::microseconds(999999))) },
+        { "lt1", Value(LocalTime(chrono::hours(7) + chrono::minutes(32))) },
+        { "lt2", Value(LocalTime(chrono::minutes(32) + chrono::microseconds(999999))) },
     };
 
     assert_parsed(toml, result);
@@ -597,7 +597,7 @@ TEST(parse, local_dates)
     const string toml{"ld1 = 1979-05-27"};
 
     const Table result{
-        { "ld1", Value::of_local_date(LocalDate(date::year(1979) / date::month(5) / date::day(27))) },
+        { "ld1", Value(LocalDate(date::year(1979) / date::month(5) / date::day(27))) },
     };
 
     assert_parsed(toml, result);
@@ -613,11 +613,11 @@ TEST(parse, local_datetimes)
 
     const Table result{
         { "ldt1",
-            Value::of_local_datetime(
+            Value(
                 date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)) },
         { "ldt2",
-            Value::of_local_datetime(
+            Value(
                 date::local_time<date::days>(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::minutes(32) + chrono::microseconds(999999)) },
     };
@@ -637,22 +637,22 @@ TEST(parse, offset_datetimes)
 
     const Table result{
         { "odt1",
-            Value::of_offset_datetime(
+            Value(
                 date::sys_days(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)) },
 
         { "odt2",
-            Value::of_offset_datetime(
+            Value(
                 date::sys_days(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)) },
 
         { "odt3",
-            Value::of_offset_datetime(
+            Value(
                 date::sys_days(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32) + chrono::microseconds(999999)) },
 
         { "odt4",
-            Value::of_offset_datetime(
+            Value(
                 date::sys_days(date::year(1979) / date::month(5) / date::day(27))
                 + chrono::hours(7) + chrono::minutes(32)) },
     };
@@ -679,30 +679,30 @@ TEST(parse, arrays)
         ;
 
     const Table result = {
-        { "integers", Value::of_array({Value::of_integer(1), Value::of_integer(2), Value::of_integer(3) }) },
-        { "colors", Value::of_array({Value::of_string("red"), Value::of_string("yellow"), Value::of_string("green") }) },
-        { "nested_arrays_of_ints", Value::of_array({
-                Value::of_array({ Value::of_integer(1), Value::of_integer(2) }),
-                Value::of_array({ Value::of_integer(3), Value::of_integer(4), Value::of_integer(5) }),
-            }) },
-        { "nested_mixed_array", Value::of_array({
-                Value::of_array({ Value::of_integer(1), Value::of_integer(2) }),
-                Value::of_array({ Value::of_string("a"), Value::of_string("b"), Value::of_string("c") }),
-            }) },
-        { "string_array", Value::of_array({
-                Value::of_string("all"), Value::of_string("strings"), Value::of_string("are the same"), Value::of_string("type"),
-            }) },
-        { "numbers", Value::of_array({
-                Value::of_float(0.1), Value::of_float(0.2), Value::of_float(0.5), Value::of_integer(1), Value::of_integer(2), Value::of_integer(5),
-            }) },
-        { "contributors", Value::of_array({
-                Value::of_string("Foo Bar <foo@example.com>"),
-                Value::of_table({
-                    { "name", Value::of_string("Baz Qux") },
-                    { "email", Value::of_string("bazqux@example.com") },
-                    { "url", Value::of_string("https://example.com/bazqux") },
-                }),
-            }) },
+        { "integers", Value(Array({Value(INT64_C(1)), Value(INT64_C(2)), Value(INT64_C(3)) })) },
+        { "colors", Value(Array({Value(string("red")), Value(string("yellow")), Value(string("green")) })) },
+        { "nested_arrays_of_ints", Value(Array({
+                Value(Array({ Value(INT64_C(1)), Value(INT64_C(2)) })),
+                Value(Array({ Value(INT64_C(3)), Value(INT64_C(4)), Value(INT64_C(5)) })),
+            })) },
+        { "nested_mixed_array", Value(Array({
+                Value(Array({ Value(INT64_C(1)), Value(INT64_C(2)) })),
+                Value(Array({ Value(string("a")), Value(string("b")), Value(string("c")) })),
+            })) },
+        { "string_array", Value(Array({
+                Value(string("all")), Value(string("strings")), Value(string("are the same")), Value(string("type")),
+            })) },
+        { "numbers", Value(Array({
+                Value(0.1), Value(0.2), Value(0.5), Value(INT64_C(1)), Value(INT64_C(2)), Value(INT64_C(5)),
+            })) },
+        { "contributors", Value(Array({
+                Value(string("Foo Bar <foo@example.com>")),
+                Value(Table({
+                    { "name", Value(string("Baz Qux")) },
+                    { "email", Value(string("bazqux@example.com")) },
+                    { "url", Value(string("https://example.com/bazqux")) },
+                })),
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -723,12 +723,12 @@ TEST(parse, multiline_arrays)
         ;
 
     const Table result = {
-        { "integers2", Value::of_array({
-                Value::of_integer(1), Value::of_integer(2), Value::of_integer(3),
-            }) },
-        { "integers3", Value::of_array({
-                Value::of_integer(1), Value::of_integer(2),
-            }) },
+        { "integers2", Value(Array({
+                Value(INT64_C(1)), Value(INT64_C(2)), Value(INT64_C(3)),
+            })) },
+        { "integers3", Value(Array({
+                Value(INT64_C(1)), Value(INT64_C(2)),
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -744,17 +744,17 @@ TEST(parse, inline_tables)
         ;
 
     const Table result = {
-        { "name", Value::of_table({
-                { "first", Value::of_string("Tom") },
-                { "last", Value::of_string("Preston-Werner") },
-            }) },
-        { "point", Value::of_table({
-                { "x", Value::of_integer(1) },
-                { "y", Value::of_integer(2) },
-            }) },
-        { "animal", Value::of_table({
-                { "type", Value::of_table({ { "name", Value::of_string("pug") } }) },
-            }) },
+        { "name", Value(Table({
+                { "first", Value(string("Tom")) },
+                { "last", Value(string("Preston-Werner")) },
+            })) },
+        { "point", Value(Table({
+                { "x", Value(INT64_C(1)) },
+                { "y", Value(INT64_C(2)) },
+            })) },
+        { "animal", Value(Table({
+                { "type", Value(Table({ { "name", Value(string("pug")) } })) },
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -779,22 +779,22 @@ TEST(parse, tables)
         ;
 
     const Table result = {
-        { "table", Value::of_table() },
-        { "table-1", Value::of_table({
-                { "key1", Value::of_string("some string") },
-                { "key2", Value::of_integer(123) },
-            }) },
-        { "table-2", Value::of_table({
-                { "key1", Value::of_string("another string") },
-                { "key2", Value::of_integer(456) },
-            }) },
-        { "dog", Value::of_table({
-                { "tater.man", Value::of_table({
-                        { "type", Value::of_table({
-                                { "name", Value::of_string("pug") },
-                            }) },
-                    }) },
-            }) },
+        { "table", Value(Table()) },
+        { "table-1", Value(Table({
+                { "key1", Value(string("some string")) },
+                { "key2", Value(INT64_C(123)) },
+            })) },
+        { "table-2", Value(Table({
+                { "key1", Value(string("another string")) },
+                { "key2", Value(INT64_C(456)) },
+            })) },
+        { "dog", Value(Table({
+                { "tater.man", Value(Table({
+                        { "type", Value(Table({
+                                { "name", Value(string("pug")) },
+                            })) },
+                    })) },
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -811,26 +811,26 @@ TEST(parse, spaces_in_table_headers)
         ;
 
     const Table result = {
-        { "a", Value::of_table({
-                { "b", Value::of_table({
-                        { "c", Value::of_table() },
-                    }) },
-            }) },
-        { "d", Value::of_table({
-                { "e", Value::of_table({
-                        { "f", Value::of_table() },
-                    }) },
-            }) },
-        { "g", Value::of_table({
-                { "h", Value::of_table({
-                        { "i", Value::of_table() },
-                    }) },
-            }) },
-        { "j", Value::of_table({
-                { "ʞ", Value::of_table({
-                        { "l", Value::of_table() },
-                    }) },
-            }) },
+        { "a", Value(Table({
+                { "b", Value(Table({
+                        { "c", Value(Table()) },
+                    })) },
+            })) },
+        { "d", Value(Table({
+                { "e", Value(Table({
+                        { "f", Value(Table()) },
+                    })) },
+            })) },
+        { "g", Value(Table({
+                { "h", Value(Table({
+                        { "i", Value(Table()) },
+                    })) },
+            })) },
+        { "j", Value(Table({
+                { "ʞ", Value(Table({
+                        { "l", Value(Table()) },
+                    })) },
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -849,13 +849,13 @@ TEST(parse, implicit_super_tables)
         ;
 
     const Table result = {
-        { "x", Value::of_table({
-                { "y", Value::of_table({
-                        { "z", Value::of_table({
-                                { "w", Value::of_table() },
-                            }) },
-                    }) },
-            }) },
+        { "x", Value(Table({
+                { "y", Value(Table({
+                        { "z", Value(Table({
+                                { "w", Value(Table()) },
+                            })) },
+                    })) },
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -912,11 +912,11 @@ TEST(parse, out_of_order_table_definitions)
         ;
 
     const Table result = {
-        { "fruit", Value::of_table({
-                { "apple", Value::of_table() },
-                { "orange", Value::of_table() },
-            }) },
-        { "animal", Value::of_table() },
+        { "fruit", Value(Table({
+                { "apple", Value(Table()) },
+                { "orange", Value(Table()) },
+            })) },
+        { "animal", Value(Table()) },
     };
 
     assert_parsed(toml, result);
@@ -937,12 +937,12 @@ TEST(parse, top_level_table)
         ;
 
     const Table result = {
-        { "name", Value::of_string("Fido") },
-        { "breed", Value::of_string("pug") },
-        { "owner", Value::of_table({
-                { "name", Value::of_string("Regina Dogman") },
-                { "member_since", Value::of_local_date(LocalDate(date::year(1999) / date::month(8) / date::day(4))) },
-            }) },
+        { "name", Value(string("Fido")) },
+        { "breed", Value(string("pug")) },
+        { "owner", Value(Table({
+                { "name", Value(string("Regina Dogman")) },
+                { "member_since", Value(LocalDate(date::year(1999) / date::month(8) / date::day(4))) },
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -997,17 +997,17 @@ TEST(parse, dotted_keys_can_add_subtables)
         ;
 
     const Table expected{
-        { "fruit", Value::of_table({
-                { "apple", Value::of_table({
-                        { "color", Value::of_string("red") },
-                        { "taste", Value::of_table({
-                                { "sweet", Value::of_boolean(true) },
-                            }) },
-                        { "texture", Value::of_table({
-                                { "smooth", Value::of_boolean(true) },
-                            }) },
-                    }) },
-            }) },
+        { "fruit", Value(Table({
+                { "apple", Value(Table({
+                        { "color", Value(string("red")) },
+                        { "taste", Value(Table({
+                                { "sweet", Value(true) },
+                            })) },
+                        { "texture", Value(Table({
+                                { "smooth", Value(true) },
+                            })) },
+                    })) },
+            })) },
     };
 
     assert_parsed(toml, expected);
@@ -1063,18 +1063,18 @@ TEST(parse, table_arrays)
         ;
 
     const Table result = {
-        { "products", Value::of_array({
-                Value::of_table({
-                        { "name", Value::of_string("Hammer") },
-                        { "sku", Value::of_integer(738594937) },
-                    }),
-                Value::of_table(),
-                Value::of_table({
-                        { "name", Value::of_string("Nail") },
-                        { "sku", Value::of_integer(284758393) },
-                        { "color", Value::of_string("gray") }
-                    }),
-            }) },
+        { "products", Value(Array({
+                Value(Table({
+                        { "name", Value(string("Hammer")) },
+                        { "sku", Value(INT64_C(738594937)) },
+                    })),
+                Value(Table()),
+                Value(Table({
+                        { "name", Value(string("Nail")) },
+                        { "sku", Value(INT64_C(284758393)) },
+                        { "color", Value(string("gray")) }
+                    })),
+            })) },
     };
 
     assert_parsed(toml, result);
@@ -1106,31 +1106,31 @@ TEST(parse, table_array_sub_elements)
         ;
 
     const Table result = {
-        { "fruits", Value::of_array({
-                Value::of_table({
-                        { "name", Value::of_string("apple") },
-                        { "physical", Value::of_table({
-                                { "color", Value::of_string("red") },
-                                { "shape", Value::of_string("round") },
-                            }) },
-                        { "varieties", Value::of_array({
-                                Value::of_table({
-                                    { "name", Value::of_string("red delicious") },
-                                }),
-                                Value::of_table({
-                                    { "name", Value::of_string("granny smith") },
-                                }),
-                            }) },
-                    }),
-                Value::of_table({
-                        { "name", Value::of_string("banana") },
-                        { "varieties", Value::of_array({
-                                Value::of_table({
-                                        { "name", Value::of_string("plantain") },
-                                    }),
-                            }) },
-                    }),
-            }) },
+        { "fruits", Value(Array({
+                Value(Table({
+                        { "name", Value(string("apple")) },
+                        { "physical", Value(Table({
+                                { "color", Value(string("red")) },
+                                { "shape", Value(string("round")) },
+                            })) },
+                        { "varieties", Value(Array({
+                                Value(Table({
+                                    { "name", Value(string("red delicious")) },
+                                })),
+                                Value(Table({
+                                    { "name", Value(string("granny smith")) },
+                                })),
+                            })) },
+                    })),
+                Value(Table({
+                        { "name", Value(string("banana")) },
+                        { "varieties", Value(Array({
+                                Value(Table({
+                                        { "name", Value(string("plantain")) },
+                                    })),
+                            })) },
+                    })),
+            })) },
     };
 
     assert_parsed(toml, result);

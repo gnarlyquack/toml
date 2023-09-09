@@ -2,7 +2,7 @@ TEST(valid_inline_table_tests, test_array)
 {
     const string toml{"people = [{first_name = \"Bruce\", last_name = \"Springsteen\"},\n          {first_name = \"Eric\", last_name = \"Clapton\"},\n          {first_name = \"Bob\", last_name = \"Seger\"}]\n", 170};
 
-    const Table expected{{ "people", Value::of_array({Value::of_table({{ "first_name", Value::of_string("Bruce") },{ "last_name", Value::of_string("Springsteen") }}),Value::of_table({{ "first_name", Value::of_string("Eric") },{ "last_name", Value::of_string("Clapton") }}),Value::of_table({{ "first_name", Value::of_string("Bob") },{ "last_name", Value::of_string("Seger") }})}) }};
+    const Table expected{{ "people", Value(Array({Value(Table({{ "first_name", Value(std::string("Bruce")) },{ "last_name", Value(std::string("Springsteen")) }})),Value(Table({{ "first_name", Value(std::string("Eric")) },{ "last_name", Value(std::string("Clapton")) }})),Value(Table({{ "first_name", Value(std::string("Bob")) },{ "last_name", Value(std::string("Seger")) }}))})) }};
 
     assert_parsed(toml, expected);
 }
