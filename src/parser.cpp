@@ -663,6 +663,7 @@ parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> 
     cout << "sizeof(unique_ptr<Array>) = " << sizeof(unique_ptr<Array>) << '\n';
     cout << "sizeof(unique_ptr<Table>) = " << sizeof(unique_ptr<Table>) << '\n';
     cout << "sizeof(Value) = " << sizeof(Value) << '\n';
+    cout << "sizeof(Definition) = " << sizeof(Definition) << '\n';
 #endif
 
     vector<Token> tokens;

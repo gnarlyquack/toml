@@ -122,7 +122,7 @@ struct Value final
 
     explicit Value(const LocalTime &value)
         : _type(Type::LOCAL_TIME)
-        , _local_time(value)
+        , _local_time(new LocalTime(value))
     {
     }
 
@@ -185,7 +185,7 @@ struct Value final
 
             case Type::LOCAL_TIME:
             {
-                _local_time = other._local_time;
+                _local_time = new LocalTime(*other._local_time);
             } break;
 
             case Type::OFFSET_DATETIME:
@@ -348,7 +348,7 @@ struct Value final
     as_local_time()
     {
         assert(_type == Type::LOCAL_TIME);
-        return _local_time;
+        return *_local_time;
     }
 
 
@@ -356,7 +356,7 @@ struct Value final
     as_local_time() const
     {
         assert(_type == Type::LOCAL_TIME);
-        return _local_time;
+        return *_local_time;
     }
 
 
@@ -402,7 +402,7 @@ private:
         double _float;
         LocalDate _local_date;
         LocalDateTime _local_datetime;
-        LocalTime _local_time;
+        LocalTime *_local_time;
         OffsetDateTime _offset_datetime;
         std::string *_string;
         Array *_array;
@@ -491,6 +491,11 @@ private:
             case Type::LOCAL_DATETIME:
             {
                 _local_datetime.~LocalDateTime();
+            } break;
+
+            case Type::LOCAL_TIME:
+            {
+                delete _local_time;
             } break;
 
             case Type::OFFSET_DATETIME:
