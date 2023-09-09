@@ -23,7 +23,7 @@ parse_toml(const std::string &toml, Table &result, std::vector<Error> &errors);
 
 
 bool
-parse_with_metadata(const std::string &toml, Definitions &definitions, std::vector<Error> &errors);
+parse_with_metadata(const std::string &toml, DefinitionTable &definitions, std::vector<Error> &errors);
 
 
 } // namespace toml

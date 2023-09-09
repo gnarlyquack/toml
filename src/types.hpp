@@ -312,15 +312,7 @@ struct Value final
     }
 
 
-    LocalDate &
-    as_local_date()
-    {
-        assert(_type == Type::LOCAL_DATE);
-        return _local_date;
-    }
-
-
-    const LocalDate &
+    LocalDate
     as_local_date() const
     {
         assert(_type == Type::LOCAL_DATE);
@@ -328,15 +320,7 @@ struct Value final
     }
 
 
-    LocalDateTime &
-    as_local_datetime()
-    {
-        assert(_type == Type::LOCAL_DATETIME);
-        return _local_datetime;
-    }
-
-
-    const LocalDateTime &
+    LocalDateTime
     as_local_datetime() const
     {
         assert(_type == Type::LOCAL_DATETIME);
@@ -360,20 +344,13 @@ struct Value final
     }
 
 
-    OffsetDateTime &
-    as_offset_datetime()
-    {
-        assert(_type == Type::OFFSET_DATETIME);
-        return _offset_datetime;
-    }
-
-
-    const OffsetDateTime &
+    OffsetDateTime
     as_offset_datetime() const
     {
         assert(_type == Type::OFFSET_DATETIME);
         return _offset_datetime;
     }
+
 
     Table &
     as_table()
@@ -549,36 +526,41 @@ struct KeyHasher
 
 struct Definition;
 
-using Definitions = std::unordered_map<Key, Definition *, KeyHasher>;
+using DefinitionTable = std::unordered_map<Key, Definition *, KeyHasher>;
+using DefinitionArray = std::vector<Definition *>;
+
+// In order to access common union subsequence member '_type' in Definition,
+// all union members must be standard layout.
+static_assert(std::is_standard_layout<DefinitionTable>::value, "toml::DefinitionTable is not standard layout.");
+static_assert(std::is_standard_layout<DefinitionArray>::value, "toml::DefinitionArray is not standard layout.");
+static_assert(std::is_standard_layout<Value>::value, "toml::Value is not standard layout.");
 
 
 struct Definition
 {
-    Value::Type type;
-    uint32_t line;
-    uint32_t column;
-    union
+    Definition()
+        : _type(Value::Type::INVALID)
+        , _line(0)
+        , _column(0)
     {
-        Definitions *table;
-        std::vector<Definition *> *array;
-        Value value;
-    };
+    }
 
-    Definition(Value::Type t, uint32_t l, uint32_t c)
-        : type{t}
-        , line{l}
-        , column{c}
+
+    Definition(Value::Type type, uint32_t line, uint32_t column)
+        : _type(type)
+        , _line(line)
+        , _column(column)
     {
-        switch (type)
+        switch (_type)
         {
             case Value::Type::ARRAY:
             {
-                array = new std::vector<Definition *>;
+                _array.value = new DefinitionArray;
             } break;
 
             case Value::Type::TABLE:
             {
-                table = new Definitions;
+                _table.value = new DefinitionTable;
             } break;
 
             default:
@@ -588,33 +570,325 @@ struct Definition
         }
     }
 
-    Definition(Value v, uint32_t l, uint32_t c)
-        : type(v.type())
-        , line(l)
-        , column(c)
-        , value(v)
+
+    Definition(const DefinitionArray &value, uint32_t line, uint32_t column)
+        : _array{Value::Type::ARRAY, new DefinitionArray(value)}
+        , _line(line)
+        , _column(column)
     {
-        assert((type != Value::Type::ARRAY) || (type != Value::Type::TABLE));
+    }
+
+
+    Definition(DefinitionArray &&value, uint32_t line, uint32_t column)
+        : _array{Value::Type::ARRAY, new DefinitionArray(std::move(value))}
+        , _line(line)
+        , _column(column)
+    {
+    }
+
+
+    Definition(const DefinitionTable &value, uint32_t line, uint32_t column)
+        : _table{Value::Type::TABLE, new DefinitionTable(value)}
+        , _line(line)
+        , _column(column)
+    {
+    }
+
+
+    Definition(DefinitionTable &&value, uint32_t line, uint32_t column)
+        : _table{Value::Type::TABLE, new DefinitionTable(std::move(value))}
+        , _line(line)
+        , _column(column)
+    {
+    }
+
+
+    Definition(const Value &value, uint32_t line, uint32_t column)
+        : _value(value)
+        , _line(line)
+        , _column(column)
+    {
+        assert((_type != Value::Type::ARRAY) || (_type != Value::Type::TABLE));
+    }
+
+
+    Definition(Value &&value, uint32_t line, uint32_t column)
+        : _value(std::move(value))
+        , _line(line)
+        , _column(column)
+    {
+        assert((_type != Value::Type::ARRAY) || (_type != Value::Type::TABLE));
+    }
+
+
+    Definition(const Definition &other)
+        : _line(other._line)
+        , _column(other._column)
+    {
+        switch (other._type)
+        {
+            case Value::Type::ARRAY:
+            {
+                _array = { other._type, new DefinitionArray(*other._array.value) };
+            } break;
+
+            case Value::Type::TABLE:
+            {
+                _table = { other._type, new DefinitionTable(*other._table.value) };
+            } break;
+
+            default:
+            {
+                new (&_value) Value(other._value);
+            } break;
+        }
+    }
+
+
+    Definition(Definition &&other)
+        : _line(other._line)
+        , _column(other._column)
+    {
+        take(other);
     }
 
 
     ~Definition()
     {
-        switch(type)
+        destroy();
+    }
+
+
+    Definition &
+    operator=(const Definition &other)
+    {
+        if (this != &other)
+        {
+            Definition temp(other);
+            destroy();
+            take(temp);
+        }
+        return *this;
+    }
+
+
+    Definition &
+    operator=(Definition &&other)
+    {
+        if (this != &other)
+        {
+            destroy();
+            take(other);
+        }
+        return *this;
+    }
+
+
+    Value::Type
+    type() const
+    {
+        return _type;
+    }
+
+
+    DefinitionArray &
+    as_array()
+    {
+        assert(_type == Value::Type::ARRAY);
+        return *_array.value;
+    }
+
+
+    const DefinitionArray &
+    as_array() const
+    {
+        assert(_type == Value::Type::ARRAY);
+        return *_array.value;
+    }
+
+
+    DefinitionTable &
+    as_table()
+    {
+        assert(_type == Value::Type::TABLE);
+        return *_table.value;
+    }
+
+
+    const DefinitionTable &
+    as_table() const
+    {
+        assert(_type == Value::Type::TABLE);
+        return *_table.value;
+    }
+
+
+    Value &
+    as_value()
+    {
+        assert((_type != Value::Type::ARRAY) && (_type != Value::Type::TABLE));
+        return _value;
+    }
+
+
+    const Value &
+    as_value() const
+    {
+        assert((_type != Value::Type::ARRAY) && (_type != Value::Type::TABLE));
+        return _value;
+    }
+
+
+    bool
+    as_boolean() const
+    {
+        return _value.as_boolean();
+    }
+
+
+    double
+    as_float() const
+    {
+        return _value.as_float();
+    }
+
+
+    int64_t
+    as_integer() const
+    {
+        return _value.as_integer();
+    }
+
+
+    std::string &
+    as_string()
+    {
+        return _value.as_string();
+    }
+
+
+    const std::string &
+    as_string() const
+    {
+        return _value.as_string();
+    }
+
+
+    LocalDate
+    as_local_date() const
+    {
+        return _value.as_local_date();
+    }
+
+
+    LocalDateTime
+    as_local_datetime() const
+    {
+        return _value.as_local_datetime();
+    }
+
+
+    LocalTime &
+    as_local_time()
+    {
+        return _value.as_local_time();
+    }
+
+
+    const LocalTime &
+    as_local_time() const
+    {
+        return _value.as_local_time();
+    }
+
+
+    OffsetDateTime
+    as_offset_datetime() const
+    {
+        return _value.as_offset_datetime();
+    }
+
+
+    uint32_t
+    line() const
+    {
+        return _line;
+    };
+
+
+    uint32_t
+    column() const
+    {
+        return _column;
+    };
+
+
+private:
+
+    union
+    {
+        Value::Type _type;
+        Value _value;
+        struct {
+            Value::Type type;
+            DefinitionTable *value;
+        } _table;
+        struct {
+            Value::Type type;
+            DefinitionArray *value;
+        } _array;
+    };
+
+    uint32_t _line;
+
+    uint32_t _column;
+
+
+    void
+    take(Definition &other)
+    {
+        switch (other._type)
         {
             case Value::Type::ARRAY:
             {
-                delete array;
+                _array = { other._type, other._array.value };
+                other._type = Value::Type::INVALID;
             } break;
 
             case Value::Type::TABLE:
             {
-                delete table;
+                _table = { other._type, other._table.value };
+                other._type = Value::Type::INVALID;
             } break;
 
             default:
             {
-                value.~Value();
+                new (&_value) Value(std::move(other._value));
+                assert(other._value.type() == Value::Type::INVALID);
+            } break;
+        }
+
+    }
+
+
+    void
+    destroy()
+    {
+        switch(_type)
+        {
+            case Value::Type::ARRAY:
+            {
+                delete _array.value;
+            } break;
+
+            case Value::Type::TABLE:
+            {
+                delete _table.value;
+            } break;
+
+            default:
+            {
+                _value.~Value();
             } break;
         }
     }

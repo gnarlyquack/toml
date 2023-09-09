@@ -171,15 +171,15 @@ struct Parser final
     u64 length;
     u64 position;
 
-    Definitions &table;
+    DefinitionTable &table;
     MetaValue meta;
 
-    Definitions *current_table;
+    DefinitionTable *current_table;
     MetaValue *current_meta;
 
     ErrorList &errors;
 
-    explicit Parser(TokenList &token_list, Definitions &definitions, ErrorList &error_list)
+    explicit Parser(TokenList &token_list, DefinitionTable &definitions, ErrorList &error_list)
         : tokens{token_list}
         , length{tokens.size()}
         , position{0}
@@ -198,7 +198,7 @@ struct Parser final
 // Predeclarations
 //
 
-void parse_keyval(Parser &parser, Definitions *table, MetaValue *meta);
+void parse_keyval(Parser &parser, DefinitionTable *table, MetaValue *meta);
 
 Definition *parse_value(Parser &parser);
 
@@ -291,7 +291,7 @@ parse_array(Parser &parser)
             default:
             {
                 Definition *value = parse_value(parser);
-                result->array->push_back(value);
+                result->as_array().push_back(value);
             } break;
         }
     }
@@ -333,7 +333,7 @@ parse_inline_table(Parser &parser)
 
             default:
             {
-                parse_keyval(parser, result->table, &meta);
+                parse_keyval(parser, &result->as_table(), &meta);
             } break;
         }
     }
@@ -378,7 +378,7 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
+parse_keyval(Parser &parser, DefinitionTable *table, MetaValue *table_meta)
 {
     Token *token = &eat(parser, TOKEN_KEY);
     for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
@@ -406,10 +406,9 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
 
-        assert(value->type == Value::Type::TABLE);
-        table = value->table;
+        assert(value->type() == Value::Type::TABLE);
+        table = &value->as_table();
         table_meta = value_meta;
-
     }
 
     Key key = {token->lexeme, token->line, token->column};
@@ -443,7 +442,7 @@ parse_table_header(Parser &parser)
             value = new Definition(Value::Type::TABLE, key.line, key.column);
             value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
-            parser.current_table = value->table;
+            parser.current_table = &value->as_table();
             parser.current_meta = value_meta;
         }
         else
@@ -452,10 +451,10 @@ parse_table_header(Parser &parser)
             {
                 case META_TYPE_TABLE_ARRAY:
                 {
-                    vector<Definition *> *array = value->array;
-                    assert(array->size());
+                    DefinitionArray &array = value->as_array();
+                    assert(array.size());
                     assert(value_meta->array->back()->type == META_TYPE_HEADER_TABLE);
-                    parser.current_table = array->back()->table;
+                    parser.current_table = &array.back()->as_table();
                     parser.current_meta = value_meta->array->back();
                 } break;
 
@@ -463,8 +462,8 @@ parse_table_header(Parser &parser)
                 case META_TYPE_DOTTED_TABLE:
                 case META_TYPE_HEADER_TABLE:
                 {
-                    assert(value->type == Value::Type::TABLE);
-                    parser.current_table = value->table;
+                    assert(value->type() == Value::Type::TABLE);
+                    parser.current_table = &value->as_table();
                     parser.current_meta = value_meta;
                 } break;
 
@@ -478,7 +477,7 @@ parse_table_header(Parser &parser)
                     value = new Definition(Value::Type::TABLE, key.line, key.column);
                     value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
-                    parser.current_table = value->table;
+                    parser.current_table = &value->as_table();
                     parser.current_meta = value_meta;
                 } break;
             }
@@ -520,8 +519,8 @@ parse_table(Parser &parser)
         value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
     }
 
-    assert(value->type == Value::Type::TABLE);
-    parser.current_table = value->table;
+    assert(value->type() == Value::Type::TABLE);
+    parser.current_table = &value->as_table();
     parser.current_meta = value_meta;
 
     eat(parser, TOKEN_RBRACKET);
@@ -558,12 +557,12 @@ parse_table_array(Parser &parser)
     auto table = new Definition(Value::Type::TABLE, key.line, key.column);
     auto table_meta = new MetaValue(META_TYPE_HEADER_TABLE);
 
-    assert(value->type == Value::Type::ARRAY);
-    auto array = value->array;
+    assert(value->type() == Value::Type::ARRAY);
+    auto array = &value->as_array();
     array->push_back(table);
     value_meta->array->push_back(table_meta);
 
-    parser.current_table = table->table;
+    parser.current_table = &table->as_table();
     parser.current_meta = table_meta;
 
     eat(parser, TOKEN_DOUBLE_RBRACKET);
@@ -603,13 +602,13 @@ value_from_definition(Definition *definition)
 {
     Value result;
 
-    switch (definition->type)
+    switch (definition->type())
     {
         case Value::Type::TABLE:
         {
             Value value(Table{});
-            Definitions *table = definition->table;
-            for (auto keyval : *table)
+            DefinitionTable &table = definition->as_table();
+            for (auto keyval : table)
             {
                 const Key &k = keyval.first;
                 Definition *d = keyval.second;
@@ -622,8 +621,8 @@ value_from_definition(Definition *definition)
         case Value::Type::ARRAY:
         {
             Value value(Array{});
-            vector<Definition *> *array = definition->array;
-            for (auto r : *array)
+            DefinitionArray &array = definition->as_array();
+            for (auto r : array)
             {
                 value.as_array().push_back(value_from_definition(r));
             }
@@ -633,7 +632,7 @@ value_from_definition(Definition *definition)
 
         default:
         {
-            result = definition->value;
+            result = definition->as_value();
         } break;
     }
 
@@ -645,7 +644,7 @@ value_from_definition(Definition *definition)
 
 
 bool
-parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> &errors)
+parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Error> &errors)
 {
 #if 0
     cout << "sizeof(string) = " << sizeof(string) << '\n';
@@ -687,7 +686,7 @@ parse_with_metadata(const string &toml, Definitions &definitions, vector<Error> 
 bool
 parse_toml(const string &toml, Table &table, vector<Error> &errors)
 {
-    Definitions definitions;
+    DefinitionTable definitions;
     bool result = parse_with_metadata(toml, definitions, errors);
 
     if (result)
