@@ -547,19 +547,19 @@ struct Definition;
 using Definitions = std::unordered_map<Key, Definition *, KeyHasher>;
 
 
-struct Record
+struct Definition
 {
     Value::Type type;
     uint32_t line;
     uint32_t column;
     union
     {
-        Definitions *definitions;
-        std::vector<Record *> *records;
+        Definitions *table;
+        std::vector<Definition *> *array;
         Value value;
     };
 
-    Record(Value::Type t, uint32_t l, uint32_t c)
+    Definition(Value::Type t, uint32_t l, uint32_t c)
         : type{t}
         , line{l}
         , column{c}
@@ -568,12 +568,12 @@ struct Record
         {
             case Value::Type::ARRAY:
             {
-                records = new std::vector<Record *>;
+                array = new std::vector<Definition *>;
             } break;
 
             case Value::Type::TABLE:
             {
-                definitions = new Definitions;
+                table = new Definitions;
             } break;
 
             default:
@@ -583,7 +583,7 @@ struct Record
         }
     }
 
-    Record(Value v, uint32_t l, uint32_t c)
+    Definition(Value v, uint32_t l, uint32_t c)
         : type(v.type())
         , line(l)
         , column(c)
@@ -591,16 +591,29 @@ struct Record
     {
         assert((type != Value::Type::ARRAY) || (type != Value::Type::TABLE));
     }
+
+
+    ~Definition()
+    {
+        switch(type)
+        {
+            case Value::Type::ARRAY:
+            {
+                delete array;
+            } break;
+
+            case Value::Type::TABLE:
+            {
+                delete table;
+            } break;
+
+            default:
+            {
+                value.~Value();
+            } break;
+        }
+    }
 };
-
-
-struct Definition
-{
-    Key key;
-    Record *record;
-};
-
-
 
 
 } // namespace toml
