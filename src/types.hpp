@@ -6,6 +6,8 @@
 #ifndef TOML_TYPES_HPP
 #define TOML_TYPES_HPP
 
+#include <date/tz.h>
+
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -14,8 +16,6 @@
 #include <unordered_map>
 #include <utility> // move
 #include <vector>
-
-#include <date/tz.h>
 
 
 namespace toml
@@ -517,18 +517,34 @@ private:
 };
 
 
-struct Definition;
-
-
-using Definitions = std::unordered_map<std::string, Definition *>;
-
-
 struct Key
 {
     std::string value;
     uint32_t line;
     uint32_t column;
 };
+
+
+inline bool
+operator==(const Key &left, const Key &right)
+{
+    bool result = left.value == right.value;
+    return result;
+}
+
+
+struct KeyHasher
+{
+    size_t operator()(const toml::Key& key) const
+    {
+        return std::hash<std::string>()(key.value);
+    }
+};
+
+
+struct Definition;
+
+using Definitions = std::unordered_map<Key, Definition *, KeyHasher>;
 
 
 struct Record

@@ -226,9 +226,9 @@ eat(Parser &parser, TokenType expected = TOKEN_ERROR)
 
 
 void
-key_redefinition(Parser &parser, const Token &key, const Key &prev)
+key_redefinition(Parser &parser, const Key &key, const Key &prev)
 {
-    Error error = {key.line, key.column, "Key '" + key.lexeme + "' has already been defined on line " + to_string(prev.line) + ", character " + to_string(prev.column) + "."};
+    Error error = {key.line, key.column, "Key '" + key.value + "' has already been defined on line " + to_string(prev.line) + ", character " + to_string(prev.column) + "."};
     parser.errors.push_back(move(error));
 }
 
@@ -380,14 +380,15 @@ parse_value(Parser &parser)
 void
 parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
 {
-    Token *key = &eat(parser, TOKEN_KEY);
-    for ( ; peek(parser).type == TOKEN_KEY; key = &eat(parser))
+    Token *token = &eat(parser, TOKEN_KEY);
+    for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
     {
-        Definition *&value = (*table)[key->lexeme];
-        MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
+        Key key = {token->lexeme, token->line, token->column};
+        Definition *&value = (*table)[key];
+        MetaValue *&value_meta = (*table_meta->table)[key.value];
         if (!value)
         {
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+            value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
         else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -396,12 +397,12 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
         }
         else if (value_meta->type != META_TYPE_DOTTED_TABLE)
         {
-            key_redefinition(parser, *key, value->key);
+            key_redefinition(parser, key, value->key);
             // Replacing the value and continuing on seems like maybe the
             // best way to mitigate cascading errors.
             delete value;
             delete value_meta;
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+            value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
             value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
         }
 
@@ -411,11 +412,12 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
 
     }
 
-    Definition *&value = (*table)[key->lexeme];
-    MetaValue *&value_meta = (*table_meta->table)[key->lexeme];
+    Key key = {token->lexeme, token->line, token->column};
+    Definition *&value = (*table)[key];
+    MetaValue *&value_meta = (*table_meta->table)[key.value];
     if (value)
     {
-        key_redefinition(parser, *key, value->key);
+        key_redefinition(parser, key, value->key);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
         delete value;
@@ -423,22 +425,23 @@ parse_keyval(Parser &parser, Definitions *table, MetaValue *table_meta)
     }
 
     Record *record = parse_value(parser);
-    value = new Definition{{key->lexeme, key->line, key->column}, record};
+    value = new Definition{move(key), record};
     value_meta = new MetaValue{};
 }
 
 
-Token *
+Key
 parse_table_header(Parser &parser)
 {
-    Token *key = &eat(parser, TOKEN_KEY);
-    for ( ; peek(parser).type == TOKEN_KEY; key = &eat(parser))
+    Token *token = &eat(parser, TOKEN_KEY);
+    for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
     {
-        Definition *&value = (*parser.current_table)[key->lexeme];
-        MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
+        Key key = {token->lexeme, token->line, token->column};
+        Definition *&value = (*parser.current_table)[key];
+        MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
         if (!value)
         {
-            value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+            value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
             value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
             parser.current_table = value->record->definitions;
@@ -468,12 +471,12 @@ parse_table_header(Parser &parser)
 
                 default:
                 {
-                    key_redefinition(parser, *key, value->key);
+                    key_redefinition(parser, key, value->key);
                     // Replacing the value and continuing on seems like maybe the
                     // best way to mitigate cascading errors.
                     delete value;
                     delete value_meta;
-                    value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+                    value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
                     value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
 
                     parser.current_table = value->record->definitions;
@@ -483,6 +486,7 @@ parse_table_header(Parser &parser)
         }
     }
 
+    Key key = {token->lexeme, token->line, token->column};
     return key;
 }
 
@@ -494,13 +498,13 @@ parse_table(Parser &parser)
 
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
-    Token *key = parse_table_header(parser);
+    Key key = parse_table_header(parser);
 
-    Definition *&value = (*parser.current_table)[key->lexeme];
-    MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
+    Definition *&value = (*parser.current_table)[key];
+    MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
     if (!value)
     {
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+        value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
         value_meta = new MetaValue{META_TYPE_HEADER_TABLE};
     }
     else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
@@ -509,11 +513,11 @@ parse_table(Parser &parser)
     }
     else
     {
-        key_redefinition(parser, *key, value->key);
+        key_redefinition(parser, key, value->key);
         delete value;
         delete value_meta;
 
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::TABLE, key->line, key->column}};
+        value = new Definition{move(key), new Record{Value::Type::TABLE, key.line, key.column}};
         value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
     }
 
@@ -532,27 +536,27 @@ parse_table_array(Parser &parser)
 
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
-    Token *key = parse_table_header(parser);
+    Key key = parse_table_header(parser);
 
-    Definition *&value = (*parser.current_table)[key->lexeme];
-    MetaValue *&value_meta = (*parser.current_meta->table)[key->lexeme];
+    Definition *&value = (*parser.current_table)[key];
+    MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
     if (!value)
     {
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::ARRAY, key->line, key->column}};
+        value = new Definition{move(key), new Record{Value::Type::ARRAY, key.line, key.column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
     else if (value_meta->type != META_TYPE_TABLE_ARRAY)
     {
-        key_redefinition(parser, *key, value->key);
+        key_redefinition(parser, key, value->key);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
         delete value;
         delete value_meta;
-        value = new Definition{{key->lexeme, key->line, key->column}, new Record{Value::Type::ARRAY, key->line, key->column}};
+        value = new Definition{move(key), new Record{Value::Type::ARRAY, key.line, key.column}};
         value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
     }
 
-    auto table = new Record{Value::Type::TABLE, key->line, key->column};
+    auto table = new Record{Value::Type::TABLE, key.line, key.column};
     auto table_meta = new MetaValue(META_TYPE_HEADER_TABLE);
 
     assert(value->record->type == Value::Type::ARRAY);
@@ -608,9 +612,9 @@ value_from_record(Record *record)
             Definitions *definitions = record->definitions;
             for (auto keyval : *definitions)
             {
-                const string &k = keyval.first;
+                const Key &k = keyval.first;
                 Definition *d = keyval.second;
-                value.as_table()[k] = value_from_record(d->record);
+                value.as_table()[k.value] = value_from_record(d->record);
             }
 
             result = value;
@@ -690,9 +694,9 @@ parse_toml(const string &toml, Table &table, vector<Error> &errors)
     {
         for (auto keyval : definitions)
         {
-            const string &key = keyval.first;
+            const Key &key = keyval.first;
             Definition *definition = keyval.second;
-            table[key] = value_from_record(definition->record);
+            table[key.value] = value_from_record(definition->record);
         }
     }
 
