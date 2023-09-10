@@ -499,7 +499,7 @@ private:
 };
 
 
-struct Key
+struct Key final
 {
     std::string value;
     uint32_t line;
@@ -536,7 +536,7 @@ static_assert(std::is_standard_layout<DefinitionArray>::value, "toml::Definition
 static_assert(std::is_standard_layout<Value>::value, "toml::Value is not standard layout.");
 
 
-struct Definition
+struct Definition final
 {
     Definition()
         : _type(Value::Type::INVALID)

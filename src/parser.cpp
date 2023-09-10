@@ -90,75 +90,232 @@ namespace {
 // In order to enforce these rules, some meta data is needed to keep track of
 // the context in which tables are created:
 
-enum MetaType {
-    META_TYPE_LITERAL,
-    META_TYPE_IMPLICIT_TABLE,
-    META_TYPE_DOTTED_TABLE,
-    META_TYPE_HEADER_TABLE,
-    META_TYPE_TABLE_ARRAY,
-};
+
+struct ValueMeta;
+
+using ArrayMeta = vector<ValueMeta>;
+using TableMeta = unordered_map<string, ValueMeta>;
 
 
-struct MetaValue final
+struct ValueMeta final
 {
-    union
-    {
-        unordered_map<string, MetaValue *> *table;
-        vector<MetaValue *> *array;
+    enum class Type {
+        INVALID,
+        LITERAL,
+        IMPLICIT_TABLE,
+        DOTTED_TABLE,
+        HEADER_TABLE,
+        TABLE_ARRAY,
     };
-    MetaType type;
 
 
-    explicit MetaValue()
-        : type(META_TYPE_LITERAL)
+    explicit ValueMeta()
+        : _type(Type::INVALID)
     {
     }
 
 
-    explicit MetaValue(MetaType t)
-        : type(t)
+    explicit ValueMeta(Type type)
+        : _type(type)
     {
-        switch (type)
+        switch (_type)
         {
-            case META_TYPE_IMPLICIT_TABLE:
-            case META_TYPE_DOTTED_TABLE:
-            case META_TYPE_HEADER_TABLE:
+            case Type::IMPLICIT_TABLE:
+            case Type::DOTTED_TABLE:
+            case Type::HEADER_TABLE:
             {
-                table = new unordered_map<string, MetaValue *>{};
+                _table = new TableMeta;
             } break;
 
-            case META_TYPE_TABLE_ARRAY:
+            case Type::TABLE_ARRAY:
             {
-                array = new vector<MetaValue *>{};
+                _array = new ArrayMeta;
             } break;
 
             default:
             {
-                assert(false);
+                assert(_type == Type::LITERAL);
             } break;
         }
     }
 
 
-    ~MetaValue()
+    ValueMeta(const ValueMeta &other)
+        : _type(other._type)
     {
-        switch (type)
+        switch (_type)
         {
-            case META_TYPE_IMPLICIT_TABLE:
-            case META_TYPE_DOTTED_TABLE:
-            case META_TYPE_HEADER_TABLE:
+            case Type::IMPLICIT_TABLE:
+            case Type::DOTTED_TABLE:
+            case Type::HEADER_TABLE:
             {
-                delete table;
+                _table = new TableMeta(*other._table);
             } break;
 
-            case META_TYPE_TABLE_ARRAY:
+            case Type::TABLE_ARRAY:
             {
-                delete array;
+                _array = new ArrayMeta(*other._array);
             } break;
 
             default:
             {
-                assert(type == META_TYPE_LITERAL);
+                // do nothing
+            } break;
+        }
+    }
+
+
+    ValueMeta(ValueMeta &&other)
+    {
+        take(other);
+    }
+
+
+    ~ValueMeta()
+    {
+        destroy();
+    }
+
+
+    ValueMeta &
+    operator=(const ValueMeta &other)
+    {
+        if (this != &other)
+        {
+            ValueMeta temp(other);
+            destroy();
+            take(temp);
+        }
+        return *this;
+    }
+
+
+    ValueMeta &
+    operator=(ValueMeta &&other)
+    {
+        if (this != &other)
+        {
+            destroy();
+            take(other);
+        }
+        return *this;
+    }
+
+
+    void
+    make_table_dotted()
+    {
+        assert(_type == Type::IMPLICIT_TABLE);
+        _type = Type::DOTTED_TABLE;
+    }
+
+
+    void
+    make_table_header()
+    {
+        assert(_type == Type::IMPLICIT_TABLE);
+        _type = Type::HEADER_TABLE;
+    }
+
+
+    Type
+    type() const
+    {
+        return _type;
+    }
+
+
+    ArrayMeta &
+    array()
+    {
+        assert(_type == Type::TABLE_ARRAY);
+        return *_array;
+    }
+
+
+    const ArrayMeta &
+    array() const
+    {
+        assert(_type == Type::TABLE_ARRAY);
+        return *_array;
+    }
+
+
+    TableMeta &
+    table()
+    {
+        assert((_type == Type::IMPLICIT_TABLE) || (_type == Type::DOTTED_TABLE) || (_type == Type::HEADER_TABLE));
+        return *_table;
+    }
+
+
+    const TableMeta &
+    table() const
+    {
+        assert((_type == Type::IMPLICIT_TABLE) || (_type == Type::DOTTED_TABLE) || (_type == Type::HEADER_TABLE));
+        return *_table;
+    }
+
+
+private:
+
+    Type _type;
+
+    union
+    {
+        ArrayMeta *_array;
+        TableMeta *_table;
+    };
+
+
+    void
+    take(ValueMeta &other)
+    {
+        switch (other._type)
+        {
+            case Type::IMPLICIT_TABLE:
+            case Type::DOTTED_TABLE:
+            case Type::HEADER_TABLE:
+            {
+                _table = other._table;
+            } break;
+
+            case Type::TABLE_ARRAY:
+            {
+                _array = other._array;
+            } break;
+
+            default:
+            {
+                // do nothing
+            } break;
+        }
+
+        _type = other._type;
+        other._type = Type::INVALID;
+    }
+
+
+    void
+    destroy()
+    {
+        switch (_type)
+        {
+            case Type::IMPLICIT_TABLE:
+            case Type::DOTTED_TABLE:
+            case Type::HEADER_TABLE:
+            {
+                delete _table;
+            } break;
+
+            case Type::TABLE_ARRAY:
+            {
+                delete _array;
+            } break;
+
+            default:
+            {
+                // do nothing
             } break;
         }
     }
@@ -172,10 +329,10 @@ struct Parser final
     u64 position;
 
     DefinitionTable &table;
-    MetaValue meta;
+    ValueMeta meta;
 
     DefinitionTable *current_table;
-    MetaValue *current_meta;
+    ValueMeta *current_meta;
 
     ErrorList &errors;
 
@@ -184,7 +341,7 @@ struct Parser final
         , length{tokens.size()}
         , position{0}
         , table{definitions}
-        , meta{META_TYPE_HEADER_TABLE}
+        , meta{ValueMeta::Type::HEADER_TABLE}
         , current_table{&table}
         , current_meta{&meta}
         , errors{error_list}
@@ -198,7 +355,7 @@ struct Parser final
 // Predeclarations
 //
 
-void parse_keyval(Parser &parser, DefinitionTable *table, MetaValue *meta);
+void parse_keyval(Parser &parser, DefinitionTable *table, ValueMeta *meta);
 
 Definition parse_value(Parser &parser);
 
@@ -303,7 +460,7 @@ Definition
 parse_inline_table(Parser &parser)
 {
     auto result = table_definition(eat(parser, TOKEN_LBRACE));
-    MetaValue meta(META_TYPE_HEADER_TABLE);
+    ValueMeta meta(ValueMeta::Type::HEADER_TABLE);
     bool parsing = true;
     while (parsing)
     {
@@ -375,51 +532,50 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser, DefinitionTable *table, MetaValue *table_meta)
+parse_keyval(Parser &parser, DefinitionTable *table, ValueMeta *table_meta)
 {
     Token *token = &eat(parser, TOKEN_KEY);
     for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
     {
         Key key = {token->lexeme, token->line, token->column};
         Definition &value = (*table)[key];
-        MetaValue *&value_meta = (*table_meta->table)[key.value];
+        ValueMeta &value_meta = table_meta->table()[key.value];
         if (value.type() == Value::Type::INVALID)
         {
+            assert(value_meta.type() == ValueMeta::Type::INVALID);
             value = Definition(Value::Type::TABLE, key.line, key.column);
-            value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
+            value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
         }
-        else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
+        else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
         {
-            value_meta->type = META_TYPE_DOTTED_TABLE;
+            value_meta.make_table_dotted();
         }
-        else if (value_meta->type != META_TYPE_DOTTED_TABLE)
+        else if (value_meta.type() != ValueMeta::Type::DOTTED_TABLE)
         {
             key_redefinition(parser, key, table->find(key)->first);
             // Replacing the value and continuing on seems like maybe the
             // best way to mitigate cascading errors.
-            delete value_meta;
             value = Definition(Value::Type::TABLE, key.line, key.column);
-            value_meta = new MetaValue(META_TYPE_DOTTED_TABLE);
+            value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
         }
 
         assert(value.type() == Value::Type::TABLE);
         table = &value.as_table();
-        table_meta = value_meta;
+
+        assert(value_meta.type() == ValueMeta::Type::DOTTED_TABLE);
+        table_meta = &value_meta;
     }
 
     Key key = {token->lexeme, token->line, token->column};
     Definition &value = (*table)[key];
-    MetaValue *&value_meta = (*table_meta->table)[key.value];
+    ValueMeta &value_meta = table_meta->table()[key.value];
     if (value.type() != Value::Type::INVALID)
     {
         key_redefinition(parser, key, table->find(key)->first);
-        // Replacing the value and continuing on seems like maybe the best way
-        // to mitigate cascading errors.
-        delete value_meta;
     }
 
     value = parse_value(parser);
-    value_meta = new MetaValue();
+    value_meta = ValueMeta(ValueMeta::Type::LITERAL);
 }
 
 
@@ -431,35 +587,36 @@ parse_table_header(Parser &parser)
     {
         Key key = {token->lexeme, token->line, token->column};
         Definition &value = (*parser.current_table)[key];
-        MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
+        ValueMeta &value_meta = parser.current_meta->table()[key.value];
         if (value.type() == Value::Type::INVALID)
         {
+            assert(value_meta.type() == ValueMeta::Type::INVALID);
             value = Definition(Value::Type::TABLE, key.line, key.column);
-            value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
+            value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
             parser.current_table = &value.as_table();
-            parser.current_meta = value_meta;
+            parser.current_meta = &value_meta;
         }
         else
         {
-            switch (value_meta->type)
+            switch (value_meta.type())
             {
-                case META_TYPE_TABLE_ARRAY:
+                case ValueMeta::Type::TABLE_ARRAY:
                 {
                     DefinitionArray &array = value.as_array();
                     assert(array.size());
-                    assert(value_meta->array->back()->type == META_TYPE_HEADER_TABLE);
+                    assert(value_meta.array().back().type() == ValueMeta::Type::HEADER_TABLE);
                     parser.current_table = &array.back().as_table();
-                    parser.current_meta = value_meta->array->back();
+                    parser.current_meta = &value_meta.array().back();
                 } break;
 
-                case META_TYPE_IMPLICIT_TABLE:
-                case META_TYPE_DOTTED_TABLE:
-                case META_TYPE_HEADER_TABLE:
+                case ValueMeta::Type::IMPLICIT_TABLE:
+                case ValueMeta::Type::DOTTED_TABLE:
+                case ValueMeta::Type::HEADER_TABLE:
                 {
                     assert(value.type() == Value::Type::TABLE);
                     parser.current_table = &value.as_table();
-                    parser.current_meta = value_meta;
+                    parser.current_meta = &value_meta;
                 } break;
 
                 default:
@@ -467,12 +624,11 @@ parse_table_header(Parser &parser)
                     key_redefinition(parser, key, parser.current_table->find(key)->first);
                     // Replacing the value and continuing on seems like maybe the
                     // best way to mitigate cascading errors.
-                    delete value_meta;
                     value = Definition(Value::Type::TABLE, key.line, key.column);
-                    value_meta = new MetaValue(META_TYPE_IMPLICIT_TABLE);
+                    value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
                     parser.current_table = &value.as_table();
-                    parser.current_meta = value_meta;
+                    parser.current_meta = &value_meta;
                 } break;
             }
         }
@@ -493,28 +649,30 @@ parse_table(Parser &parser)
     Key key = parse_table_header(parser);
 
     Definition &value = (*parser.current_table)[key];
-    MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
+    ValueMeta &value_meta = parser.current_meta->table()[key.value];
     if (value.type() == Value::Type::INVALID)
     {
+        assert(value_meta.type() == ValueMeta::Type::INVALID);
         value = Definition(Value::Type::TABLE, key.line, key.column);
-        value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
+        value_meta = ValueMeta(ValueMeta::Type::HEADER_TABLE);
     }
-    else if (value_meta->type == META_TYPE_IMPLICIT_TABLE)
+    else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
     {
-        value_meta->type = META_TYPE_HEADER_TABLE;
+        value_meta.make_table_header();
     }
     else
     {
         key_redefinition(parser, key, parser.current_table->find(key)->first);
-        delete value_meta;
-
+        // Replacing the value and continuing on seems like maybe the best way
+        // to mitigate cascading errors.
         value = Definition(Value::Type::TABLE, key.line, key.column);
-        value_meta = new MetaValue(META_TYPE_HEADER_TABLE);
+        value_meta = ValueMeta(ValueMeta::Type::HEADER_TABLE);
     }
 
     assert(value.type() == Value::Type::TABLE);
+    assert(value_meta.type() == ValueMeta::Type::HEADER_TABLE);
     parser.current_table = &value.as_table();
-    parser.current_meta = value_meta;
+    parser.current_meta = &value_meta;
 
     eat(parser, TOKEN_RBRACKET);
 }
@@ -530,29 +688,30 @@ parse_table_array(Parser &parser)
     Key key = parse_table_header(parser);
 
     Definition &value = (*parser.current_table)[key];
-    MetaValue *&value_meta = (*parser.current_meta->table)[key.value];
+    ValueMeta &value_meta = parser.current_meta->table()[key.value];
     if (value.type() == Value::Type::INVALID)
     {
+        assert(value_meta.type() == ValueMeta::Type::INVALID);
         value = Definition(Value::Type::ARRAY, key.line, key.column);
-        value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
+        value_meta = ValueMeta(ValueMeta::Type::TABLE_ARRAY);
     }
-    else if (value_meta->type != META_TYPE_TABLE_ARRAY)
+    else if (value_meta.type() != ValueMeta::Type::TABLE_ARRAY)
     {
         key_redefinition(parser, key, parser.current_table->find(key)->first);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
-        delete value_meta;
         value = Definition(Value::Type::ARRAY, key.line, key.column);
-        value_meta = new MetaValue(META_TYPE_TABLE_ARRAY);
+        value_meta = ValueMeta(ValueMeta::Type::TABLE_ARRAY);
     }
 
     assert(value.type() == Value::Type::ARRAY);
+    assert(value_meta.type() == ValueMeta::Type::TABLE_ARRAY);
     auto array = &value.as_array();
     array->push_back(Definition(Value::Type::TABLE, key.line, key.column));
-    value_meta->array->push_back(new MetaValue(META_TYPE_HEADER_TABLE));
+    value_meta.array().push_back(ValueMeta(ValueMeta::Type::HEADER_TABLE));
 
     parser.current_table = &array->back().as_table();
-    parser.current_meta = value_meta->array->back();
+    parser.current_meta = &value_meta.array().back();
 
     eat(parser, TOKEN_DOUBLE_RBRACKET);
 }
