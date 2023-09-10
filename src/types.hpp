@@ -526,8 +526,8 @@ struct KeyHasher
 
 struct Definition;
 
-using DefinitionTable = std::unordered_map<Key, Definition *, KeyHasher>;
-using DefinitionArray = std::vector<Definition *>;
+using DefinitionTable = std::unordered_map<Key, Definition, KeyHasher>;
+using DefinitionArray = std::vector<Definition>;
 
 // In order to access common union subsequence member '_type' in Definition,
 // all union members must be standard layout.
