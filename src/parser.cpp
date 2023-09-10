@@ -329,22 +329,22 @@ struct Parser final
     u64 position;
 
     DefinitionTable &table;
-    ValueMeta meta;
+    TableMeta meta;
 
     DefinitionTable *current_table;
-    ValueMeta *current_meta;
+    TableMeta *current_meta;
 
     ErrorList &errors;
 
     explicit Parser(TokenList &token_list, DefinitionTable &definitions, ErrorList &error_list)
-        : tokens{token_list}
-        , length{tokens.size()}
-        , position{0}
-        , table{definitions}
-        , meta{ValueMeta::Type::HEADER_TABLE}
-        , current_table{&table}
-        , current_meta{&meta}
-        , errors{error_list}
+        : tokens(token_list)
+        , length(tokens.size())
+        , position(0)
+        , table(definitions)
+        , meta()
+        , current_table(&table)
+        , current_meta(&meta)
+        , errors(error_list)
     {
     }
 };
@@ -355,7 +355,7 @@ struct Parser final
 // Predeclarations
 //
 
-void parse_keyval(Parser &parser, DefinitionTable *table, ValueMeta *meta);
+void parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta);
 
 Definition parse_value(Parser &parser);
 
@@ -460,7 +460,7 @@ Definition
 parse_inline_table(Parser &parser)
 {
     auto result = table_definition(eat(parser, TOKEN_LBRACE));
-    ValueMeta meta(ValueMeta::Type::HEADER_TABLE);
+    TableMeta meta;
     bool parsing = true;
     while (parsing)
     {
@@ -532,14 +532,14 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser, DefinitionTable *table, ValueMeta *table_meta)
+parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta)
 {
     Token *token = &eat(parser, TOKEN_KEY);
     for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
     {
         Key key = {token->lexeme, token->line, token->column};
         Definition &value = (*table)[key];
-        ValueMeta &value_meta = table_meta->table()[key.value];
+        ValueMeta &value_meta = (*meta)[key.value];
         if (value.type() == Value::Type::INVALID)
         {
             assert(value_meta.type() == ValueMeta::Type::INVALID);
@@ -563,12 +563,12 @@ parse_keyval(Parser &parser, DefinitionTable *table, ValueMeta *table_meta)
         table = &value.as_table();
 
         assert(value_meta.type() == ValueMeta::Type::DOTTED_TABLE);
-        table_meta = &value_meta;
+        meta = &value_meta.table();
     }
 
     Key key = {token->lexeme, token->line, token->column};
     Definition &value = (*table)[key];
-    ValueMeta &value_meta = table_meta->table()[key.value];
+    ValueMeta &value_meta = (*meta)[key.value];
     if (value.type() != Value::Type::INVALID)
     {
         key_redefinition(parser, key, table->find(key)->first);
@@ -587,7 +587,7 @@ parse_table_header(Parser &parser)
     {
         Key key = {token->lexeme, token->line, token->column};
         Definition &value = (*parser.current_table)[key];
-        ValueMeta &value_meta = parser.current_meta->table()[key.value];
+        ValueMeta &value_meta = (*parser.current_meta)[key.value];
         if (value.type() == Value::Type::INVALID)
         {
             assert(value_meta.type() == ValueMeta::Type::INVALID);
@@ -595,7 +595,7 @@ parse_table_header(Parser &parser)
             value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
             parser.current_table = &value.as_table();
-            parser.current_meta = &value_meta;
+            parser.current_meta = &value_meta.table();
         }
         else
         {
@@ -605,9 +605,12 @@ parse_table_header(Parser &parser)
                 {
                     DefinitionArray &array = value.as_array();
                     assert(array.size());
-                    assert(value_meta.array().back().type() == ValueMeta::Type::HEADER_TABLE);
+
+                    ArrayMeta &array_meta = value_meta.array();
+                    assert(array_meta.back().type() == ValueMeta::Type::HEADER_TABLE);
+
                     parser.current_table = &array.back().as_table();
-                    parser.current_meta = &value_meta.array().back();
+                    parser.current_meta = &array_meta.back().table();
                 } break;
 
                 case ValueMeta::Type::IMPLICIT_TABLE:
@@ -616,7 +619,7 @@ parse_table_header(Parser &parser)
                 {
                     assert(value.type() == Value::Type::TABLE);
                     parser.current_table = &value.as_table();
-                    parser.current_meta = &value_meta;
+                    parser.current_meta = &value_meta.table();
                 } break;
 
                 default:
@@ -628,7 +631,7 @@ parse_table_header(Parser &parser)
                     value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
                     parser.current_table = &value.as_table();
-                    parser.current_meta = &value_meta;
+                    parser.current_meta = &value_meta.table();
                 } break;
             }
         }
@@ -649,7 +652,7 @@ parse_table(Parser &parser)
     Key key = parse_table_header(parser);
 
     Definition &value = (*parser.current_table)[key];
-    ValueMeta &value_meta = parser.current_meta->table()[key.value];
+    ValueMeta &value_meta = (*parser.current_meta)[key.value];
     if (value.type() == Value::Type::INVALID)
     {
         assert(value_meta.type() == ValueMeta::Type::INVALID);
@@ -672,7 +675,7 @@ parse_table(Parser &parser)
     assert(value.type() == Value::Type::TABLE);
     assert(value_meta.type() == ValueMeta::Type::HEADER_TABLE);
     parser.current_table = &value.as_table();
-    parser.current_meta = &value_meta;
+    parser.current_meta = &value_meta.table();
 
     eat(parser, TOKEN_RBRACKET);
 }
@@ -688,7 +691,7 @@ parse_table_array(Parser &parser)
     Key key = parse_table_header(parser);
 
     Definition &value = (*parser.current_table)[key];
-    ValueMeta &value_meta = parser.current_meta->table()[key.value];
+    ValueMeta &value_meta = (*parser.current_meta)[key.value];
     if (value.type() == Value::Type::INVALID)
     {
         assert(value_meta.type() == ValueMeta::Type::INVALID);
@@ -705,13 +708,15 @@ parse_table_array(Parser &parser)
     }
 
     assert(value.type() == Value::Type::ARRAY);
-    assert(value_meta.type() == ValueMeta::Type::TABLE_ARRAY);
-    auto array = &value.as_array();
-    array->push_back(Definition(Value::Type::TABLE, key.line, key.column));
-    value_meta.array().push_back(ValueMeta(ValueMeta::Type::HEADER_TABLE));
+    DefinitionArray &array = value.as_array();
+    array.push_back(Definition(Value::Type::TABLE, key.line, key.column));
 
-    parser.current_table = &array->back().as_table();
-    parser.current_meta = &value_meta.array().back();
+    assert(value_meta.type() == ValueMeta::Type::TABLE_ARRAY);
+    ArrayMeta &array_meta = value_meta.array();
+    array_meta.push_back(ValueMeta(ValueMeta::Type::HEADER_TABLE));
+
+    parser.current_table = &array.back().as_table();
+    parser.current_meta = &array_meta.back().table();
 
     eat(parser, TOKEN_DOUBLE_RBRACKET);
 }
