@@ -51,7 +51,7 @@ TEST(parse, invalid_keyvals)
 
     const vector<Error> errors = {
         { 1, 7, "Missing value." },
-        { 2, 15, "Expected the end of the line but got: last = \"Preston-Werner\"" },
+        { 2, 15, "Expected the end of the line." },
     };
 
     assert_errors(toml, errors);
@@ -513,7 +513,7 @@ TEST(parse, invalid_floats)
         ;
 
     const vector<Error> errors = {
-        { 2, 19, "Invalid decimal value: .7" },
+        { 2, 19, "Invalid value." },
         { 3, 21, "Missing fractional part of decimal number." },
         { 4, 21, "Missing fractional part of decimal number." },
     };

@@ -324,6 +324,8 @@ private:
 
 struct Parser final
 {
+    Lexer &lexer;
+    Token token;
     TokenList &tokens;
     u64 length;
     u64 position;
@@ -336,8 +338,10 @@ struct Parser final
 
     ErrorList &errors;
 
-    explicit Parser(TokenList &token_list, DefinitionTable &definitions, ErrorList &error_list)
-        : tokens(token_list)
+    explicit Parser(Lexer &l, TokenList &token_list, DefinitionTable &definitions, ErrorList &error_list)
+        : lexer(l)
+        , token()
+        , tokens(token_list)
         , length(tokens.size())
         , position(0)
         , table(definitions)
@@ -355,9 +359,9 @@ struct Parser final
 // Predeclarations
 //
 
-void parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta);
+void parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 context);
 
-Definition parse_value(Parser &parser);
+Definition parse_value(Parser &parser, u32 context);
 
 
 
@@ -365,6 +369,7 @@ Definition parse_value(Parser &parser);
 // Implementation
 //
 
+#if 0
 const Token &
 peek(const Parser &parser)
 {
@@ -380,6 +385,59 @@ eat(Parser &parser, TokenType expected = TOKEN_ERROR)
     assert((expected == TOKEN_ERROR) || (parser.tokens[parser.position].type == expected));
     return parser.tokens[parser.position++];
 }
+#endif
+
+void
+add_error(Parser &parser, string message)
+{
+    Token token = parser.token;
+    Error error = {token.line, token.column, move(message)};
+    parser.errors.push_back(move(error));
+}
+
+
+void
+advance(Parser &parser, u32 context, TokenType expected = TOKEN_ERROR)
+{
+    assert((expected == TOKEN_ERROR) || (expected == parser.token.type));
+    parser.token = next_token(parser.lexer, context);
+}
+
+
+void
+resynchronize(Parser &parser, string message, u32 context)
+{
+    add_error(parser, move(message));
+    resynchronize(parser.lexer, "", context);
+    advance(parser, context);
+}
+
+
+Token
+eat(Parser &parser, u32 context, TokenType expected = TOKEN_ERROR)
+{
+    assert((expected == TOKEN_ERROR) || (parser.token.type == expected));
+
+    Token result = parser.token;
+    advance(parser, context);
+    return result;
+}
+
+
+bool
+match(Parser &parser, TokenType expected)
+{
+    bool result = parser.token.type == expected;
+    return result;
+}
+
+
+TokenType
+current_token_type(Parser &parser)
+{
+    TokenType result = parser.token.type;
+    return result;
+}
 
 
 void
@@ -387,6 +445,24 @@ key_redefinition(Parser &parser, const Key &key, const Key &prev)
 {
     Error error = {key.line, key.column, "Key '" + key.value + "' has already been defined on line " + to_string(prev.line) + ", character " + to_string(prev.column) + "."};
     parser.errors.push_back(move(error));
+}
+
+
+void
+missing_value(Parser &parser)
+{
+    Token token = parser.token;
+    Error error = {token.line, token.column, "Missing value."};
+    parser.errors.push_back(move(error));
+}
+
+
+Token
+make_error(Parser &parser, TokenType type, string message)
+{
+    add_error(parser, move(message));
+    Token result = { type, Value(), "", 0, 0, 0};
+    return result;
 }
 
 
@@ -416,38 +492,54 @@ value_definition(const Token &token)
 
 
 Definition
-parse_array(Parser &parser)
+parse_array(Parser &parser, u32 context)
 {
-    auto result = array_definition(eat(parser, TOKEN_LBRACKET));
+    Definition result = array_definition(eat(parser, context | LEX_ARRAY | LEX_VALUE, TOKEN_LBRACKET));
+    TokenType prev = TOKEN_LBRACKET;
     bool parsing = true;
     while (parsing)
     {
-        const Token &token = peek(parser);
-
-        switch (token.type)
+        TokenType type = current_token_type(parser);
+        switch (type)
         {
+            case TOKEN_COMMA:
+            {
+                if (prev != TOKEN_VALUE)
+                {
+                    add_error(parser, "Missing array value.");
+                }
+                eat(parser, context | LEX_ARRAY | LEX_VALUE);
+                prev = TOKEN_COMMA;
+            } break;
+
+            case TOKEN_RBRACKET:
+            {
+                eat(parser, context);
+                parsing = false;
+            } break;
+
+            case TOKEN_COMMENT:
+            case TOKEN_NEWLINE:
+            {
+                advance(parser, context | LEX_ARRAY | LEX_VALUE);
+            } break;
+
             case TOKEN_EOF:
             {
                 // TODO: handle unterminated array
                 assert(false);
-            } break;
-
-            case TOKEN_COMMA:
-            {
-                eat(parser);
-                break;
-            }
-
-            case TOKEN_RBRACKET:
-            {
-                eat(parser);
                 parsing = false;
             } break;
 
             default:
             {
-                Definition value = parse_value(parser);
+                if (prev == TOKEN_VALUE)
+                {
+                    add_error(parser, "Missing ',' between array values.");
+                }
+                Definition value = parse_value(parser, context | LEX_ARRAY);
                 result.as_array().push_back(move(value));
+                prev = TOKEN_VALUE;
             } break;
         }
     }
@@ -457,38 +549,51 @@ parse_array(Parser &parser)
 
 
 Definition
-parse_inline_table(Parser &parser)
+parse_inline_table(Parser &parser, u32 context)
 {
-    auto result = table_definition(eat(parser, TOKEN_LBRACE));
+    auto result = table_definition(eat(parser, context | LEX_TABLE | LEX_KEY, TOKEN_LBRACE));
     TableMeta meta;
+    TokenType prev = TOKEN_LBRACE;
     bool parsing = true;
     while (parsing)
     {
-        const Token &token = peek(parser);
-
-        switch (token.type)
+        TokenType type = current_token_type(parser);
+        switch (type)
         {
+            case TOKEN_COMMA:
+            {
+                if (prev != TOKEN_VALUE)
+                {
+                    add_error(parser, "Missing inline table value.");
+                }
+                eat(parser, context | LEX_TABLE | LEX_KEY);
+                prev = TOKEN_COMMA;
+            } break;
+
+            case TOKEN_RBRACE:
+            {
+                if (prev == TOKEN_COMMA)
+                {
+                    add_error(parser, "Trailing ',' is not allowed in an inline table.");
+                }
+                eat(parser, context);
+                parsing = false;
+            } break;
+
             case TOKEN_EOF:
             {
                 // TODO: handle unterminated table
                 assert(false);
             } break;
 
-            case TOKEN_COMMA:
-            {
-                eat(parser);
-                break;
-            }
-
-            case TOKEN_RBRACE:
-            {
-                eat(parser);
-                parsing = false;
-            } break;
-
             default:
             {
-                parse_keyval(parser, &result.as_table(), &meta);
+                if (prev == TOKEN_VALUE)
+                {
+                    add_error(parser, "Missing ',' between inline table values.");
+                }
+                parse_keyval(parser, &result.as_table(), &meta, LEX_TABLE);
+                prev = TOKEN_VALUE;
             } break;
         }
     }
@@ -498,32 +603,37 @@ parse_inline_table(Parser &parser)
 
 
 Definition
-parse_value(Parser &parser)
+parse_value(Parser &parser, u32 context)
 {
     Definition result;
 
-    const Token &token = peek(parser);
-    switch (token.type)
+    switch (current_token_type(parser))
     {
         case TOKEN_VALUE:
         {
-            eat(parser);
-            result = value_definition(token);
+            result = value_definition(eat(parser, context));
         } break;
 
         case TOKEN_LBRACKET:
         {
-            result = parse_array(parser);
+            result = parse_array(parser, context);
         } break;
 
         case TOKEN_LBRACE:
         {
-            result = parse_inline_table(parser);
+            result = parse_inline_table(parser, context);
+        } break;
+
+        case TOKEN_COMMENT:
+        case TOKEN_NEWLINE:
+        case TOKEN_EOF:
+        {
+            missing_value(parser);
         } break;
 
         default:
         {
-            assert(false);
+            resynchronize(parser, "Invalid value.", LEX_EOL);
         } break;
     }
 
@@ -532,12 +642,21 @@ parse_value(Parser &parser)
 
 
 void
-parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta)
+parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 context)
 {
-    Token *token = &eat(parser, TOKEN_KEY);
-    for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
+    Token token;
+    if (current_token_type(parser) == TOKEN_KEY)
     {
-        Key key = {token->lexeme, token->line, token->column};
+        token = eat(parser, context | LEX_KEY | LEX_VALUE, TOKEN_KEY);
+    }
+    else
+    {
+        token = make_error(parser, TOKEN_KEY, "Missing key.");
+    }
+
+    while (current_token_type(parser) == TOKEN_PERIOD)
+    {
+        Key key = {token.lexeme, token.line, token.column};
         Definition &value = (*table)[key];
         ValueMeta &value_meta = (*meta)[key.value];
         if (value.type() == Value::Type::INVALID)
@@ -564,9 +683,12 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta)
 
         assert(value_meta.type() == ValueMeta::Type::DOTTED_TABLE);
         meta = &value_meta.table();
+
+        eat(parser, context | LEX_KEY, TOKEN_PERIOD);
+        token = eat(parser, context | LEX_KEY | LEX_VALUE);
     }
 
-    Key key = {token->lexeme, token->line, token->column};
+    Key key = {token.lexeme, token.line, token.column};
     Definition &value = (*table)[key];
     ValueMeta &value_meta = (*meta)[key.value];
     if (value.type() != Value::Type::INVALID)
@@ -574,7 +696,10 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta)
         key_redefinition(parser, key, table->find(key)->first);
     }
 
-    value = parse_value(parser);
+    assert(parser.token.type == TOKEN_EQUAL);
+    advance(parser, context | LEX_VALUE);
+
+    value = parse_value(parser, context);
     value_meta = ValueMeta(ValueMeta::Type::LITERAL);
 }
 
@@ -582,10 +707,11 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta)
 Key
 parse_table_header(Parser &parser)
 {
-    Token *token = &eat(parser, TOKEN_KEY);
-    for ( ; peek(parser).type == TOKEN_KEY; token = &eat(parser))
+    Token token = eat(parser, LEX_HEADER);
+
+    while (parser.token.type == TOKEN_PERIOD)
     {
-        Key key = {token->lexeme, token->line, token->column};
+        Key key = {token.lexeme, token.line, token.column};
         Definition &value = (*parser.current_table)[key];
         ValueMeta &value_meta = (*parser.current_meta)[key.value];
         if (value.type() == Value::Type::INVALID)
@@ -635,9 +761,12 @@ parse_table_header(Parser &parser)
                 } break;
             }
         }
+
+        eat(parser, LEX_HEADER, TOKEN_PERIOD);
+        token = eat(parser, LEX_HEADER);
     }
 
-    Key key = {token->lexeme, token->line, token->column};
+    Key key = {token.lexeme, token.line, token.column};
     return key;
 }
 
@@ -645,7 +774,7 @@ parse_table_header(Parser &parser)
 void
 parse_table(Parser &parser)
 {
-    eat(parser, TOKEN_LBRACKET);
+    eat(parser, LEX_HEADER, TOKEN_LBRACKET);
 
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
@@ -677,14 +806,14 @@ parse_table(Parser &parser)
     parser.current_table = &value.as_table();
     parser.current_meta = &value_meta.table();
 
-    eat(parser, TOKEN_RBRACKET);
+    eat(parser, LEX_EOL, TOKEN_RBRACKET);
 }
 
 
 void
 parse_table_array(Parser &parser)
 {
-    eat(parser, TOKEN_DOUBLE_LBRACKET);
+    eat(parser, LEX_HEADER, TOKEN_DOUBLE_LBRACKET);
 
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
@@ -718,18 +847,18 @@ parse_table_array(Parser &parser)
     parser.current_table = &array.back().as_table();
     parser.current_meta = &array_meta.back().table();
 
-    eat(parser, TOKEN_DOUBLE_RBRACKET);
+    eat(parser, LEX_EOL, TOKEN_DOUBLE_RBRACKET);
 }
 
 
 void
 parse_expression(Parser &parser)
 {
-    switch (peek(parser).type)
+    switch (current_token_type(parser))
     {
         case TOKEN_KEY:
         {
-            parse_keyval(parser, parser.current_table, parser.current_meta);
+            parse_keyval(parser, parser.current_table, parser.current_meta, LEX_EOL);
         } break;
 
         case TOKEN_LBRACKET:
@@ -742,9 +871,40 @@ parse_expression(Parser &parser)
             parse_table_array(parser);
         } break;
 
+        // invalid cases
+
+        case TOKEN_EQUAL:
+        {
+            parse_keyval(parser, parser.current_table, parser.current_meta, LEX_EOL);
+        } break;
+
         default:
         {
-            assert(false); // Not reachable?
+            // TODO: Handle error here?
+        } break;
+    }
+
+    if (current_token_type(parser) == TOKEN_COMMENT)
+    {
+        eat(parser, LEX_EOL);
+    }
+
+    switch (current_token_type(parser))
+    {
+        case TOKEN_COMMENT:
+        {
+            eat(parser, LEX_EOL);
+        } // fallthrough
+
+        case TOKEN_NEWLINE:
+        case TOKEN_EOF:
+        {
+            // do nothing
+        } break;
+
+        default:
+        {
+            resynchronize(parser, "Expected the end of the line.", LEX_EOL);
         } break;
     }
 }
@@ -818,6 +978,8 @@ parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Err
     cout << "sizeof(Definition) = " << sizeof(Definition) << '\n';
 #endif
 
+#if 0
+
     vector<Token> tokens;
     bool result = lex_toml(toml, tokens, errors);
 
@@ -832,6 +994,20 @@ parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Err
         result = errors.size() == 0;
     }
 
+#else
+
+    vector<Token> tokens;
+    Lexer lexer(toml, tokens, errors);
+    Parser parser(lexer, tokens, definitions, errors);
+
+    for (advance(parser, LEX_HEADER | LEX_KEY); !match(parser, TOKEN_EOF); advance(parser, LEX_HEADER | LEX_KEY))
+    {
+        parse_expression(parser);
+    }
+
+#endif
+
+    bool result = errors.size() == 0;
     return result;
 }
 

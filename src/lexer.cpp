@@ -46,45 +46,11 @@ constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                               'A', 'B', 'C', 'D', 'E', 'F' };
 
 
-enum LexingContext
-{
-    LEX_EOL         =      0,
-    LEX_FRACTION    = 1 << 0,
-    LEX_EXPONENT    = 1 << 1,
-    LEX_DATE        = 1 << 2,
-    LEX_TIME        = 1 << 3,
-    LEX_DATETIME    = 1 << 4,
-    LEX_TIMEZONE    = 1 << 5,
-    LEX_ARRAY       = 1 << 6,
-    LEX_TABLE       = 1 << 7,
-    LEX_HEADER      = 1 << 8,
-    LEX_KEY         = 1 << 9,
-};
-
-
 enum ContainerState
 {
     CONTAINER_START,
     CONTAINER_VALUE,
     CONTAINER_SEPARATOR,
-};
-
-
-struct TomlIterator
-{
-    const string &toml;
-    u64 length;
-
-    u64 start_position;
-    u32 start_line;
-    u32 start_column;
-
-    u64 current_position;
-    u32 current_line;
-    u32 current_column;
-
-    vector<Token> &tokens;
-    vector<Error> &errors;
 };
 
 
@@ -106,13 +72,16 @@ struct LexDigitResult
 //
 
 void
+eat_bytes(TomlIterator &iterator, u64 count, byte expected = INVALID_BYTE);
+
+void
 lex_keyval(TomlIterator &iterator, u32 context);
 
 bool
 lex_string_char(TomlIterator &iterator, string &result);
 
-void
-lex_value(TomlIterator &iterator, u32 context);
+Token
+lex_value(Lexer &lexer, u32 context);
 
 
 //
@@ -183,6 +152,41 @@ add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
 }
 
 
+Token
+make_token(Lexer &lexer, TokenType type, u64 length)
+{
+    advance(lexer);
+    if (length)
+    {
+        eat_bytes(lexer, length);
+    }
+    Token result = { type, Value(), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
+    advance(lexer);
+
+    return result;
+}
+
+
+Token
+make_token(Lexer &lexer, TokenType type, string lexeme = "")
+{
+    Token result = { type, Value(), move(lexeme), lexer.start_position, lexer.start_line, lexer.start_column };
+    advance(lexer);
+
+    return result;
+}
+
+
+Token
+make_value(Lexer &lexer, Value &&value)
+{
+    Token result = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
+    advance(lexer);
+    return result;
+}
+
+
+#if 0
 void
 add_value(TomlIterator &iterator, Value &&value)
 {
@@ -190,6 +194,7 @@ add_value(TomlIterator &iterator, Value &&value)
     iterator.tokens.push_back(move(token));
     advance(iterator);
 }
+#endif
 
 
 bool
@@ -326,7 +331,7 @@ eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
 
 
 void
-eat_bytes(TomlIterator &iterator, u64 count, byte expected = INVALID_BYTE)
+eat_bytes(TomlIterator &iterator, u64 count, byte expected)
 {
     assert(count);
     for (u64 i = 0; i < count; ++i)
@@ -348,6 +353,17 @@ eat_comment(TomlIterator &iterator)
             lex_string_char(iterator, eaten);
         };
     }
+}
+
+
+Token
+make_comment(Lexer &lexer)
+{
+    advance(lexer);
+    eat_comment(lexer);
+
+    Token result = make_token(lexer, TOKEN_COMMENT, get_lexeme(lexer));
+    return result;
 }
 
 
@@ -479,92 +495,6 @@ void
 format_unicode(ostream &o, u32 codepoint)
 {
     o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
-}
-
-
-void
-resynchronize(TomlIterator &iterator, string message, u32 context)
-{
-    advance(iterator);
-    u32 uneaten = 0;
-    bool valid = true;
-    bool whitespace = false;
-    bool eating = true;
-    while (eating && !end_of_file(iterator, uneaten))
-    {
-        byte b = get_byte(iterator, uneaten);
-
-        switch (b)
-        {
-            case '\n':
-            {
-                eating = false;
-            } break;
-
-            case '\r':
-            {
-                eating = !match(iterator, '\n', 1);
-            } break;
-
-            case ' ':
-            case '\t':
-            {
-                ++uneaten;
-                whitespace = true;
-            } // fallthrough
-            case '.':
-            {
-                eating = (context & (LEX_KEY | LEX_HEADER)) == 0;
-            } break;
-
-            case '=':
-            {
-                eating = (context & LEX_KEY) == 0;
-            } break;
-
-            case '#':
-            {
-                // headers and inline tables cannot have comments
-                eating = context & (LEX_TABLE | LEX_HEADER);
-            } break;
-
-            case ',':
-            {
-                eating = (context & (LEX_TABLE | LEX_ARRAY)) == 0;
-            } break;
-
-            case ']':
-            {
-                eating = (context & (LEX_HEADER | LEX_ARRAY)) == 0;
-            } break;
-
-            case '}':
-            {
-                eating = (context & LEX_TABLE) == 0;
-            } break;
-        }
-
-        if (eating)
-        {
-            if (whitespace)
-            {
-                whitespace = false;
-            }
-            else
-            {
-                for ( ; uneaten; --uneaten)
-                {
-                    message += eat_byte(iterator);
-                }
-                valid = lex_string_char(iterator, message) && valid;
-            }
-        }
-    }
-
-    if (valid)
-    {
-        add_error(iterator, move(message));
-    }
 }
 
 
@@ -1035,7 +965,7 @@ lex_timezone(TomlIterator &iterator, string &value, u32 context)
 }
 
 
-void
+Token
 lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 context)
 {
     bool valid = true;
@@ -1098,6 +1028,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
         }
     }
 
+    Token token;
     if (valid)
     {
         istringstream in{value};
@@ -1107,14 +1038,14 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
             {
                 LocalDate result;
                 in >> date::parse("%Y-%m-%d", result);
-                add_value(iterator, Value(result));
+                token = make_value(iterator, Value(result));
             } break;
 
             case Value::Type::LOCAL_DATETIME:
             {
                 LocalDateTime result;
                 in >> date::parse("%Y-%m-%d %T", result);
-                add_value(iterator, Value(result));
+                token = make_value(iterator, Value(result));
             } break;
 
             case Value::Type::OFFSET_DATETIME:
@@ -1122,7 +1053,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
                 assert(type == Value::Type::OFFSET_DATETIME);
                 OffsetDateTime result;
                 in >> date::parse("%Y-%m-%d %T%z", result);
-                add_value(iterator, Value(result));
+                token = make_value(iterator, Value(result));
             } break;
 
             default:
@@ -1133,14 +1064,17 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
     }
     else
     {
-        add_value(iterator, Value());
+        token = make_value(iterator, Value());
     }
+
+    return token;
 }
 
 
-void
+Token
 lex_decimal(TomlIterator &iterator, u32 context, string &value)
 {
+    Token token;
     LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
     if (result.digits.length() == 0)
@@ -1155,11 +1089,11 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         valid = lex_fraction(iterator, context, value) && valid;
         if (valid)
         {
-            add_value(iterator, Value(string_to_f64(value)));
+            token = make_value(iterator, Value(string_to_f64(value)));
         }
         else
         {
-            add_value(iterator, Value());
+            token = make_value(iterator, Value());
         }
     }
     else if (match(iterator, 'e') || match(iterator, 'E'))
@@ -1170,16 +1104,16 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         valid = lex_exponent(iterator, context, value) && valid;
         if (valid)
         {
-            add_value(iterator, Value(string_to_f64(value)));
+            token = make_value(iterator, Value(string_to_f64(value)));
         }
         else
         {
-            add_value(iterator, Value());
+            token = make_value(iterator, Value());
         }
     }
     else if (match(iterator, '-'))
     {
-        lex_date(iterator, value, result, context);
+        token = lex_date(iterator, value, result, context);
     }
     else if (match(iterator, ':'))
     {
@@ -1210,11 +1144,11 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
                 chrono::hours{hours}
                 + chrono::minutes{minutes}
                 + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
-            add_value(iterator, Value(lexed));
+            token = make_value(iterator, Value(lexed));
         }
         else
         {
-            add_value(iterator, Value());
+            token = make_value(iterator, Value());
         }
     }
     else
@@ -1222,17 +1156,19 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
         if (validate_digits(iterator, result, "decimal", true))
         {
             value += move(result.digits);
-            add_value(iterator, Value(string_to_s64(value)));
+            token = make_value(iterator, Value(string_to_s64(value)));
         }
         else
         {
-            add_value(iterator, Value());
+            token = make_value(iterator, Value());
         }
     }
+
+    return token;
 }
 
 
-void
+Token
 lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
 {
     bool valid = true;
@@ -1242,24 +1178,27 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
         valid = false;
     }
 
-    LexDigitResult result = lex_digits(iterator, is_hexadecimal, context);
-    if (!validate_digits(iterator, result, "hexadecimal", false))
+    LexDigitResult lexed = lex_digits(iterator, is_hexadecimal, context);
+    if (!validate_digits(iterator, lexed, "hexadecimal", false))
     {
         valid = false;
     }
 
+    Token result;
     if (valid)
     {
-        add_value(iterator, Value(string_to_s64(result.digits, 16)));
+        result = make_value(iterator, Value(string_to_s64(lexed.digits, 16)));
     }
     else
     {
-        add_value(iterator, Value());
+        result = make_value(iterator, Value());
     }
+
+    return result;
 }
 
 
-void
+Token
 lex_octal(TomlIterator &iterator, u32 context, const string &value)
 {
     bool valid = true;
@@ -1270,24 +1209,27 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
         valid = false;
     }
 
-    LexDigitResult result = lex_digits(iterator, is_octal, context);
-    if (!validate_digits(iterator, result, "octal", false))
+    LexDigitResult lexed = lex_digits(iterator, is_octal, context);
+    if (!validate_digits(iterator, lexed, "octal", false))
     {
         valid = false;
     }
 
+    Token result;
     if (valid)
     {
-        add_value(iterator, Value(string_to_s64(result.digits, 8)));
+        result = make_value(iterator, Value(string_to_s64(lexed.digits, 8)));
     }
     else
     {
-        add_value(iterator, Value());
+        result = make_value(iterator, Value());
     }
+
+    return result;
 }
 
 
-void
+Token
 lex_binary(TomlIterator &iterator, u32 context, const string &value)
 {
     bool valid = true;
@@ -1298,55 +1240,61 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
         valid = false;
     }
 
-    LexDigitResult result = lex_digits(iterator, is_binary, context);
-    if (!validate_digits(iterator, result, "binary", false))
+    LexDigitResult lexed = lex_digits(iterator, is_binary, context);
+    if (!validate_digits(iterator, lexed, "binary", false))
     {
         valid = false;
     }
 
+    Token result;
     if (valid)
     {
-        add_value(iterator, Value(string_to_s64(result.digits, 2)));
+        result = make_value(iterator, Value(string_to_s64(lexed.digits, 2)));
     }
     else
     {
-        add_value(iterator, Value());
+        result = make_value(iterator, Value());
     }
+    return result;
 }
 
 
-void
+Token
 lex_number(TomlIterator &iterator, u32 context)
 {
-    string result = get_lexeme(iterator);
-    assert((result == "") || (result == "-") || (result == "+"));
+    Token result;
+
+    string value = get_lexeme(iterator);
+    assert((value == "") || (value == "-") || (value == "+"));
 
     if (match(iterator, '0'))
     {
         if (match(iterator, 'x', 1))
         {
             eat_bytes(iterator, 2);
-            lex_hexadecimal(iterator, context, result);
+            result = lex_hexadecimal(iterator, context, value);
         }
         else if (match(iterator, 'o', 1))
         {
             eat_bytes(iterator, 2);
-            lex_octal(iterator, context, result);
+            result = lex_octal(iterator, context, value);
         }
         else if (match(iterator, 'b', 1))
         {
             eat_bytes(iterator, 2);
-            lex_binary(iterator, context, result);
+            result = lex_binary(iterator, context, value);
         }
         else
         {
-            lex_decimal(iterator, context, result);
+            result = lex_decimal(iterator, context, value);
         }
     }
     else
     {
-        lex_decimal(iterator, context, result);
+        result = lex_decimal(iterator, context, value);
     }
+
+    return result;
 }
 
 
@@ -1905,22 +1853,23 @@ lex_inline_table(TomlIterator &iterator)
 }
 
 
-void
-lex_value(TomlIterator &iterator, u32 context)
+Token
+lex_value(Lexer &lexer, u32 context)
 {
-    assert(!match_whitespace(iterator));
+    assert(!match_whitespace(lexer));
 
-    advance(iterator);
+    Token result;
 
-    byte c = get_byte(iterator);
-    if (match_eol(iterator))
+    advance(lexer);
+    byte c = get_byte(lexer);
+    if (match_eol(lexer))
     {
-        add_error(iterator, "Missing value.");
-        add_token(iterator, TOKEN_ERROR);
+        add_error(lexer, "Missing value.");
+        result = make_token(lexer, TOKEN_ERROR);
     }
     else if (is_decimal(c))
     {
-        lex_number(iterator, context);
+        result = lex_number(lexer, context);
     }
     else
     {
@@ -1929,117 +1878,119 @@ lex_value(TomlIterator &iterator, u32 context)
             case '"':
             case '\'':
             {
-                if (match(iterator, c, 1) && match(iterator, c, 2))
+                if (match(lexer, c, 1) && match(lexer, c, 2))
                 {
-                    string value = lex_multiline_string(iterator, c);
-                    add_value(iterator, Value(move(value)));
+                    string value = lex_multiline_string(lexer, c);
+                    result = make_value(lexer, Value(move(value)));
                 }
                 else
                 {
-                    string value = lex_string(iterator, c);
-                    add_value(iterator, Value(move(value)));
+                    string value = lex_string(lexer, c);
+                    result = make_value(lexer, Value(move(value)));
                 }
             } break;
 
             case '-':
             {
-                eat_byte(iterator);
-                if (match(iterator, 'i'))
+                eat_byte(lexer);
+                if (match(lexer, 'i'))
                 {
-                    eat_string(iterator, "inf", context);
-                    add_value(iterator, Value(-INF64));
+                    eat_string(lexer, "inf", context);
+                    result = make_value(lexer, Value(-INF64));
                 }
-                else if (match(iterator, 'n'))
+                else if (match(lexer, 'n'))
                 {
-                    eat_string(iterator, "nan", context);
-                    add_value(iterator, Value(-NAN64));
+                    eat_string(lexer, "nan", context);
+                    result = make_value(lexer, Value(-NAN64));
                 }
                 else
                 {
-                    lex_number(iterator, context);
+                    result = lex_number(lexer, context);
                 }
             } break;
 
             case '+':
             {
-                eat_byte(iterator);
-                if (match(iterator, 'i'))
+                eat_byte(lexer);
+                if (match(lexer, 'i'))
                 {
-                    eat_string(iterator, "inf", context);
-                    add_value(iterator, Value(+INF64));
+                    eat_string(lexer, "inf", context);
+                    result = make_value(lexer, Value(+INF64));
                 }
-                else if (match(iterator, 'n'))
+                else if (match(lexer, 'n'))
                 {
-                    eat_string(iterator, "nan", context);
-                    add_value(iterator, Value(+NAN64));
+                    eat_string(lexer, "nan", context);
+                    result = make_value(lexer, Value(+NAN64));
                 }
                 else
                 {
-                    lex_number(iterator, context);
+                    result = lex_number(lexer, context);
                 }
             } break;
 
             case 'i':
             {
-                eat_string(iterator, "inf", context);
-                add_value(iterator, Value(INF64));
+                eat_string(lexer, "inf", context);
+                result = make_value(lexer, Value(INF64));
             } break;
 
             case 'n':
             {
-                eat_string(iterator, "nan", context);
-                add_value(iterator, Value(NAN64));
+                eat_string(lexer, "nan", context);
+                result = make_value(lexer, Value(NAN64));
             } break;
 
 
             case 't':
             {
-                eat_string(iterator, "true", context);
-                add_value(iterator, Value(true));
+                eat_string(lexer, "true", context);
+                result = make_value(lexer, Value(true));
             } break;
 
             case 'f':
             {
-                eat_string(iterator, "false", context);
-                add_value(iterator, Value(false));
+                eat_string(lexer, "false", context);
+                result = make_value(lexer, Value(false));
             } break;
 
             case '[':
             {
-                lex_array(iterator);
+                assert(false);
+                lex_array(lexer);
             } break;
 
             case '{':
             {
-                lex_inline_table(iterator);
+                assert(false);
+                lex_inline_table(lexer);
             } break;
 
             // special handling for invalid cases
             case '.':
             {
-                lex_number(iterator, context);
+                result = lex_number(lexer, context);
             } break;
 
             case '#':
             {
-                add_error(iterator, "Missing value.");
-                add_token(iterator, TOKEN_ERROR);
+                add_error(lexer, "Missing value.");
+                result = make_token(lexer, TOKEN_ERROR);
             } break;
 
             default:
             {
-                resynchronize(iterator, "Invalid value: ", context);
+                resynchronize(lexer, "Invalid value: ", context);
             } break;
         }
     }
+
+    return result;
 }
 
 
-void
+Token
 lex_unquoted_key(TomlIterator &iterator, u32 context)
 {
-    assert((context & (LEX_TABLE | LEX_HEADER)) == context);
-
     string value;
     bool valid = true;
     bool lexing = true;
@@ -2059,6 +2010,7 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
                 case '\t':
                 case '\n':
                 case '.':
+                case '#':
                 {
                     lexing = false;
                 } break;
@@ -2070,19 +2022,7 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
 
                 case '=':
                 {
-                    // headers don't have key-value pairs
-                    lexing = context & LEX_HEADER;
-                } break;
-
-                case '#':
-                {
-                    // headers and inline tables cannot have comments
-                    lexing = context & (LEX_TABLE | LEX_HEADER);
-                } break;
-
-                case ',':
-                {
-                    lexing = !(context & LEX_TABLE);
+                    lexing = !(context & LEX_KEY);
                 } break;
 
                 case ']':
@@ -2090,6 +2030,7 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
                     lexing = !(context & LEX_HEADER);
                 } break;
 
+                case ',':
                 case '}':
                 {
                     lexing = !(context & LEX_TABLE);
@@ -2115,10 +2056,12 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
         missing_key(iterator);
     }
 
-    add_token(iterator, TOKEN_KEY, move(value));
+    Token result = make_token(iterator, TOKEN_KEY, move(value));
+    return result;
 }
 
 
+#if 0
 void
 lex_simple_key(TomlIterator &iterator, u32 context)
 {
@@ -2135,11 +2078,13 @@ lex_simple_key(TomlIterator &iterator, u32 context)
         lex_unquoted_key(iterator, context);
     }
 }
+#endif
 
 
-void
-lex_key(TomlIterator &iterator, u32 context)
+Token
+lex_key(Lexer &lexer, u32 context)
 {
+#if 0
     bool lexing = true;
     while (lexing)
     {
@@ -2165,6 +2110,25 @@ lex_key(TomlIterator &iterator, u32 context)
             }
         }
     }
+#else
+
+    Token result;
+    advance(lexer);
+
+    byte c = get_byte(lexer);
+    if ((c == '"') || (c == '\''))
+    {
+        string key = lex_string(lexer, c);
+        result = make_token(lexer, TOKEN_KEY, move(key));
+    }
+    else
+    {
+        result = lex_unquoted_key(lexer, context);
+    }
+
+    return result;
+
+#endif
 }
 
 
@@ -2191,101 +2155,282 @@ lex_keyval(TomlIterator &iterator, u32 context)
 
 
 void
-lex_table(TomlIterator &iterator)
+lex_table(Lexer &lexer, bool table_array)
 {
-    advance(iterator);
+    lex_key(lexer, LEX_HEADER);
 
-    eat_byte(iterator, '[');
-    bool table_array = match(iterator, '[');
+    assert(!match_whitespace(lexer));
+    advance(lexer);
 
-    if (table_array)
+    if (match(lexer, ']'))
     {
-        eat_byte(iterator);
-        add_token(iterator, TOKEN_DOUBLE_LBRACKET);
-    }
-    else
-    {
-        add_token(iterator, TOKEN_LBRACKET);
-        eat_whitespace(iterator);
-    }
-
-    lex_key(iterator, LEX_HEADER);
-
-    assert(!match_whitespace(iterator));
-    advance(iterator);
-
-    if (match(iterator, ']'))
-    {
-        eat_byte(iterator);
+        eat_byte(lexer);
         if (!table_array)
         {
-            add_token(iterator, TOKEN_RBRACKET);
+            add_token(lexer, TOKEN_RBRACKET);
         }
-        else if (match(iterator, ']'))
+        else if (match(lexer, ']'))
         {
-            eat_byte(iterator);
-            add_token(iterator, TOKEN_DOUBLE_RBRACKET);
+            eat_byte(lexer);
+            add_token(lexer, TOKEN_DOUBLE_RBRACKET);
         }
         else
         {
-            add_error(iterator, "Missing closing ']' for table array header.");
+            add_error(lexer, "Missing closing ']' for table array header.");
         }
     }
     else if (table_array)
     {
-        add_error(iterator, "Missing closing ']]' for table array header.");
+        add_error(lexer, "Missing closing ']]' for table array header.");
     }
     else
     {
-        add_error(iterator, "Missing closing ']' for table header.");
+        add_error(lexer, "Missing closing ']' for table header.");
     }
 }
 
 
 void
-lex_expression(TomlIterator &iterator)
+lex_expression(Lexer &lexer)
 {
-    eat_whitespace(iterator);
-
-    if (match(iterator, '['))
+    if (match(lexer, TOKEN_LBRACKET))
     {
-        lex_table(iterator);
+        bool table_array = match(lexer, TOKEN_LBRACKET);
+        lex_table(lexer, table_array);
     }
-    else if (!match_eol(iterator) && !match(iterator, '#'))
+    else if (match(lexer, TOKEN_KEY))
     {
-        lex_keyval(iterator, LEX_EOL);
+        lex_keyval(lexer, LEX_EOL);
     }
 
-    eat_whitespace(iterator);
-    eat_comment(iterator);
+    if (!match(lexer, TOKEN_NEWLINE) && !match(lexer, TOKEN_EOF))
+    {
+        // TODO: Unexpected stuff after expression
+        assert(false);
+    }
 }
 
 
 } // namespace
 
 
-bool
-lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
+Token
+next_token(Lexer &lexer, u32 context)
 {
-    TomlIterator iterator = { toml, toml.length(), 0, 1, 1, 0, 1, 1, tokens, errors };
-
-    while (!end_of_file(iterator))
+    Token result;
+    bool lexing = true;
+    while (lexing)
     {
-        bool lexing = true;
-        while (lexing)
+        if (end_of_file(lexer))
         {
-            lex_expression(iterator);
-            lexing = eat_newline(iterator);
+            result = make_token(lexer, TOKEN_EOF, 0);
+            lexing = false;
         }
-
-        if (!end_of_file(iterator))
+        else
         {
-            resynchronize(iterator, "Expected the end of the line but got: ", LEX_EOL);
+            byte b = get_byte(lexer);
+            switch (b)
+            {
+                case ' ':
+                case '\t':
+                {
+                    eat_byte(lexer);
+                } break;
+
+                case '#':
+                {
+                    result = make_comment(lexer);
+                    lexing = false;
+                } break;
+
+                case '\n':
+                {
+                    result = make_token(lexer, TOKEN_NEWLINE, 1);
+                    lexing = false;
+                } break;
+
+                case '\r':
+                {
+                    if (match(lexer, '\n', 1))
+                    {
+                        result = make_token(lexer, TOKEN_NEWLINE, 2);
+                    }
+                    else
+                    {
+                        // TODO: invalid unicode
+                        assert(false);
+                    }
+                    lexing = false;
+                } break;
+
+                case '.':
+                {
+                    result = make_token(lexer, TOKEN_PERIOD, 1);
+                    lexing = false;
+                } break;
+
+                case '=':
+                {
+                    result = make_token(lexer, TOKEN_EQUAL, 1);
+                    lexing = false;
+                } break;
+
+                case '[':
+                {
+                    if ((context & LEX_HEADER) && (get_byte(lexer, 1) == '['))
+                    {
+                        result = make_token(lexer, TOKEN_DOUBLE_LBRACKET, 2);
+                    }
+                    else
+                    {
+                        result = make_token(lexer, TOKEN_LBRACKET, 1);
+                    }
+                    lexing = false;
+                } break;
+
+                case ']':
+                {
+                    if ((context & LEX_HEADER) && (get_byte(lexer, 1) == ']'))
+                    {
+                        result = make_token(lexer, TOKEN_DOUBLE_RBRACKET, 2);
+                    }
+                    else
+                    {
+                        result = make_token(lexer, TOKEN_RBRACKET, 1);
+                    }
+                    lexing = false;
+                } break;
+
+                case '{':
+                {
+                    result = make_token(lexer, TOKEN_LBRACE, 1);
+                    lexing = false;
+                } break;
+
+                case '}':
+                {
+                    result = make_token(lexer, TOKEN_RBRACE, 1);
+                    lexing = false;
+                } break;
+
+                case ',':
+                {
+                    result = make_token(lexer, TOKEN_COMMA, 1);
+                    lexing = false;
+                } break;
+
+                default:
+                {
+                    if (context & LEX_VALUE)
+                    {
+                        result = lex_value(lexer, context);
+                    }
+                    else
+                    {
+                        result = lex_key(lexer, context);
+                    }
+                    lexing = false;
+                } break;
+            }
         }
     }
 
-    advance(iterator);
-    add_token(iterator, TOKEN_EOF);
+    return result;
+}
+
+
+void
+resynchronize(Lexer &lexer, string message, u32 context)
+{
+    advance(lexer);
+    u32 uneaten = 0;
+    bool valid = true;
+    bool whitespace = false;
+    bool eating = true;
+    while (eating && !end_of_file(lexer, uneaten))
+    {
+        byte b = get_byte(lexer, uneaten);
+
+        switch (b)
+        {
+            case '\n':
+            {
+                eating = false;
+            } break;
+
+            case '\r':
+            {
+                eating = !match(lexer, '\n', 1);
+            } break;
+
+            case ' ':
+            case '\t':
+            {
+                ++uneaten;
+                whitespace = true;
+            } // fallthrough
+            case '.':
+            {
+                eating = (context & (LEX_KEY | LEX_HEADER)) == 0;
+            } break;
+
+            case '=':
+            {
+                eating = (context & LEX_KEY) == 0;
+            } break;
+
+            case '#':
+            {
+                // headers and inline tables cannot have comments
+                eating = context & (LEX_TABLE | LEX_HEADER);
+            } break;
+
+            case ',':
+            {
+                eating = (context & (LEX_TABLE | LEX_ARRAY)) == 0;
+            } break;
+
+            case ']':
+            {
+                eating = (context & (LEX_HEADER | LEX_ARRAY)) == 0;
+            } break;
+
+            case '}':
+            {
+                eating = (context & LEX_TABLE) == 0;
+            } break;
+        }
+
+        if (eating)
+        {
+            if (whitespace)
+            {
+                whitespace = false;
+            }
+            else
+            {
+                for ( ; uneaten; --uneaten)
+                {
+                    message += eat_byte(lexer);
+                }
+                valid = lex_string_char(lexer, message) && valid;
+            }
+        }
+    }
+}
+
+
+bool
+lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
+{
+    Lexer lexer(toml, tokens, errors);
+
+    for (next_token(lexer, LEX_KEY); !match(lexer, TOKEN_EOF); next_token(lexer, LEX_KEY))
+    {
+        lex_expression(lexer);
+    }
+
+    add_token(lexer, TOKEN_EOF);
 
     return errors.size() == 0;
 }
