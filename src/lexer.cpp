@@ -72,13 +72,13 @@ struct LexDigitResult
 //
 
 void
-eat_bytes(TomlIterator &iterator, u64 count, byte expected = INVALID_BYTE);
+eat_bytes(Lexer &lexer, u64 count, byte expected = INVALID_BYTE);
 
 void
-lex_keyval(TomlIterator &iterator, u32 context);
+lex_keyval(Lexer &lexer, u32 context);
 
 bool
-lex_string_char(TomlIterator &iterator, string &result);
+lex_string_char(Lexer &lexer, string &result);
 
 Token
 lex_value(Lexer &lexer, u32 context);
@@ -110,45 +110,45 @@ byte_to_hex(byte value, string &out)
 
 
 void
-advance(TomlIterator &iterator)
+advance(Lexer &lexer)
 {
-    iterator.start_position = iterator.current_position;
-    iterator.start_line = iterator.current_line;
-    iterator.start_column = iterator.current_column;
+    lexer.start_position = lexer.current_position;
+    lexer.start_line = lexer.current_line;
+    lexer.start_column = lexer.current_column;
 }
 
 
 string
-get_lexeme(const TomlIterator &iterator)
+get_lexeme(const Lexer &lexer)
 {
-    string result = iterator.toml.substr(
-        iterator.start_position,
-        iterator.current_position - iterator.start_position);
+    string result = lexer.toml.substr(
+        lexer.start_position,
+        lexer.current_position - lexer.start_position);
     return result;
 }
 
 
 void
-add_error(TomlIterator &iterator, string message, u64 line, u64 column)
+add_error(Lexer &lexer, string message, u64 line, u64 column)
 {
     Error error = { line, column, move(message) };
-    iterator.errors.push_back(move(error));
-    advance(iterator);
+    lexer.errors.push_back(move(error));
+    advance(lexer);
 }
 
 void
-add_error(TomlIterator &iterator, string message)
+add_error(Lexer &lexer, string message)
 {
-    add_error(iterator, move(message), iterator.start_line, iterator.start_column);
+    add_error(lexer, move(message), lexer.start_line, lexer.start_column);
 }
 
 
 void
-add_token(TomlIterator &iterator, TokenType type, string lexeme = "")
+add_token(Lexer &lexer, TokenType type, string lexeme = "")
 {
-    Token token = { type, Value(), move(lexeme), iterator.start_position, iterator.start_line, iterator.start_column };
-    iterator.tokens.push_back(move(token));
-    advance(iterator);
+    Token token = { type, Value(), move(lexeme), lexer.start_position, lexer.start_line, lexer.start_column };
+    lexer.tokens.push_back(move(token));
+    advance(lexer);
 }
 
 
@@ -188,31 +188,31 @@ make_value(Lexer &lexer, Value &&value)
 
 #if 0
 void
-add_value(TomlIterator &iterator, Value &&value)
+add_value(Lexer &lexer, Value &&value)
 {
-    Token token = { TOKEN_VALUE, std::move(value), get_lexeme(iterator), iterator.start_position, iterator.start_line, iterator.start_column };
-    iterator.tokens.push_back(move(token));
-    advance(iterator);
+    Token token = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
+    lexer.tokens.push_back(move(token));
+    advance(lexer);
 }
 #endif
 
 
 bool
-end_of_file(const TomlIterator &iterator, u64 ahead = 0)
+end_of_file(const Lexer &lexer, u64 ahead = 0)
 {
-    assert(iterator.current_position <= iterator.length);
-    bool result = iterator.length - iterator.current_position <= ahead;
+    assert(lexer.current_position <= lexer.length);
+    bool result = lexer.length - lexer.current_position <= ahead;
     return result;
 }
 
 
 byte
-get_byte(const TomlIterator &iterator, u64 ahead = 0)
+get_byte(const Lexer &lexer, u64 ahead = 0)
 {
     byte result = INVALID_BYTE;
-    if (!end_of_file(iterator, ahead))
+    if (!end_of_file(lexer, ahead))
     {
-        result = iterator.toml[iterator.current_position + ahead];
+        result = lexer.toml[lexer.current_position + ahead];
     }
     return result;
 }
@@ -267,14 +267,14 @@ is_octal(byte value)
 
 
 bool
-match(const TomlIterator &iterator, byte value, u64 ahead = 0)
+match(const Lexer &lexer, byte value, u64 ahead = 0)
 {
-    assert(iterator.current_position <= iterator.length);
+    assert(lexer.current_position <= lexer.length);
 
     bool result = false;
-    if ((iterator.length - iterator.current_position) > ahead)
+    if ((lexer.length - lexer.current_position) > ahead)
     {
-        result = iterator.toml[iterator.current_position + ahead] == value;
+        result = lexer.toml[lexer.current_position + ahead] == value;
     }
 
     return result;
@@ -282,15 +282,15 @@ match(const TomlIterator &iterator, byte value, u64 ahead = 0)
 
 
 bool
-match_eol(const TomlIterator &iterator, u32 ahead = 0)
+match_eol(const Lexer &lexer, u32 ahead = 0)
 {
     bool result = false;
 
-    if (end_of_file(iterator, ahead) || match(iterator, '\n', ahead))
+    if (end_of_file(lexer, ahead) || match(lexer, '\n', ahead))
     {
         result = true;
     }
-    else if (match(iterator, '\r', ahead) && match(iterator, '\n', ahead + 1))
+    else if (match(lexer, '\r', ahead) && match(lexer, '\n', ahead + 1))
     {
         result = true;
     }
@@ -300,30 +300,30 @@ match_eol(const TomlIterator &iterator, u32 ahead = 0)
 
 
 bool
-match_whitespace(TomlIterator &iterator)
+match_whitespace(Lexer &lexer)
 {
-    bool result = match(iterator, ' ') || match(iterator, '\t');
+    bool result = match(lexer, ' ') || match(lexer, '\t');
     return result;
 }
 
 
 byte
-eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
+eat_byte(Lexer &lexer, byte expected = INVALID_BYTE)
 {
-    assert(!end_of_file(iterator));
+    assert(!end_of_file(lexer));
 
-    byte result = iterator.toml[iterator.current_position];
+    byte result = lexer.toml[lexer.current_position];
     assert((expected == INVALID_BYTE) || (result == expected));
 
-    ++iterator.current_position;
+    ++lexer.current_position;
     if (result == '\n')
     {
-        ++iterator.current_line;
-        iterator.current_column = 1;
+        ++lexer.current_line;
+        lexer.current_column = 1;
     }
     else
     {
-        ++iterator.current_column;
+        ++lexer.current_column;
     }
 
     return result;
@@ -331,26 +331,26 @@ eat_byte(TomlIterator &iterator, byte expected = INVALID_BYTE)
 
 
 void
-eat_bytes(TomlIterator &iterator, u64 count, byte expected)
+eat_bytes(Lexer &lexer, u64 count, byte expected)
 {
     assert(count);
     for (u64 i = 0; i < count; ++i)
     {
-        eat_byte(iterator, expected);
+        eat_byte(lexer, expected);
     }
 }
 
 
 void
-eat_comment(TomlIterator &iterator)
+eat_comment(Lexer &lexer)
 {
-    if (match(iterator, '#'))
+    if (match(lexer, '#'))
     {
-        eat_byte(iterator);
+        eat_byte(lexer);
         string eaten;
-        while (!match_eol(iterator))
+        while (!match_eol(lexer))
         {
-            lex_string_char(iterator, eaten);
+            lex_string_char(lexer, eaten);
         };
     }
 }
@@ -368,18 +368,18 @@ make_comment(Lexer &lexer)
 
 
 bool
-eat_newline(TomlIterator &iterator)
+eat_newline(Lexer &lexer)
 {
     bool result = false;
 
-    if (match(iterator, '\n'))
+    if (match(lexer, '\n'))
     {
-        eat_byte(iterator);
+        eat_byte(lexer);
         result = true;
     }
-    else if (match(iterator, '\r') && match(iterator, '\n', 1))
+    else if (match(lexer, '\r') && match(lexer, '\n', 1))
     {
-        eat_bytes(iterator, 2);
+        eat_bytes(lexer, 2);
         result = true;
     }
 
@@ -388,15 +388,15 @@ eat_newline(TomlIterator &iterator)
 
 
 bool
-eat_string(TomlIterator &iterator, const string &expected, u32 context)
+eat_string(Lexer &lexer, const string &expected, u32 context)
 {
     bool result = false;
 
     string eaten;
     bool eating = true;
-    while (eating && !match_eol(iterator) && !match_whitespace(iterator))
+    while (eating && !match_eol(lexer) && !match_whitespace(lexer))
     {
-        byte c = get_byte(iterator);
+        byte c = get_byte(lexer);
         switch (c)
         {
             case ',':
@@ -418,7 +418,7 @@ eat_string(TomlIterator &iterator, const string &expected, u32 context)
         if (eating)
         {
             eaten.push_back(c);
-            eat_byte(iterator);
+            eat_byte(lexer);
         }
     }
 
@@ -428,7 +428,7 @@ eat_string(TomlIterator &iterator, const string &expected, u32 context)
     }
     else
     {
-        add_error(iterator, "Invalid value: " + get_lexeme(iterator));
+        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
     }
 
     return result;
@@ -436,17 +436,17 @@ eat_string(TomlIterator &iterator, const string &expected, u32 context)
 
 
 bool
-eat_whitespace(TomlIterator &iterator)
+eat_whitespace(Lexer &lexer)
 {
     bool result = false;
 
-    if (match_whitespace(iterator))
+    if (match_whitespace(lexer))
     {
         result = true;
         do
         {
-            eat_byte(iterator);
-        } while (match_whitespace(iterator));
+            eat_byte(lexer);
+        } while (match_whitespace(lexer));
     }
 
     return result;
@@ -499,77 +499,77 @@ format_unicode(ostream &o, u32 codepoint)
 
 
 void
-invalid_escape(TomlIterator &iterator, u32 line, u32 column)
+invalid_escape(Lexer &lexer, u32 line, u32 column)
 {
     string message = "Invalid escape sequence.";
     Error error = { line, column, move(message) };
-    iterator.errors.push_back(move(error));
+    lexer.errors.push_back(move(error));
 }
 
 
 void
-invalid_escape(TomlIterator &iterator)
+invalid_escape(Lexer &lexer)
 {
-    assert(iterator.current_column > 2);
-    invalid_escape(iterator, iterator.current_line, iterator.current_column - 1);
+    assert(lexer.current_column > 2);
+    invalid_escape(lexer, lexer.current_line, lexer.current_column - 1);
 }
 
 
 void
-invalid_unicode(TomlIterator &iterator, u32 line, u32 column)
+invalid_unicode(Lexer &lexer, u32 line, u32 column)
 {
     string message = "Unicode escape sequence specified an invalid or non-allowed codepoint.";
     Error error = { line, column, move(message) };
-    iterator.errors.push_back(move(error));
+    lexer.errors.push_back(move(error));
 }
 
 
 void
-invalid_unicode_escape(TomlIterator &iterator, u32 lexed, u32 count, u32 line, u32 column)
+invalid_unicode_escape(Lexer &lexer, u32 lexed, u32 count, u32 line, u32 column)
 {
     string message = "Invalid or incomplete Unicode escape sequence: expected " + to_string(count) + " hexadecimal characters but parsed " + to_string(lexed) + ".";
     Error error = { line, column, move(message) };
-    iterator.errors.push_back(move(error));
+    lexer.errors.push_back(move(error));
 }
 
 
 void
-missing_key(TomlIterator &iterator)
+missing_key(Lexer &lexer)
 {
-    add_error(iterator, "Missing key.");
+    add_error(lexer, "Missing key.");
 }
 
 
 void
-unterminated_string(TomlIterator &iterator)
+unterminated_string(Lexer &lexer)
 {
-    add_error(iterator, "Unterminated string.", iterator.current_line, iterator.current_column);
+    add_error(lexer, "Unterminated string.", lexer.current_line, lexer.current_column);
 }
 
 
 bool
-validate_digits(TomlIterator &iterator, const LexDigitResult &result, const string &type, bool no_leading_zero)
+validate_digits(Lexer &lexer, const LexDigitResult &result, const string &type, bool no_leading_zero)
 {
     bool valid = true;
 
     if (result.flags & result.INVALID_DIGIT)
     {
-        add_error(iterator, "Invalid " + type + " number: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid " + type + " number: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.flags & result.INVALID_UNDERSCORE)
     {
-        add_error(iterator, "'_' must separate digits in " + type + " number: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "'_' must separate digits in " + type + " number: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing " + type + " number.", result.line, result.column);
+        add_error(lexer, "Missing " + type + " number.", result.line, result.column);
         valid = false;
     }
     else if (no_leading_zero && (result.digits[0] == '0') && (result.digits.length() > 1))
     {
-        add_error(iterator, "Leading zeros are not allowed in " + type + " number.", result.line, result.column);
+        add_error(lexer, "Leading zeros are not allowed in " + type + " number.", result.line, result.column);
         valid = false;
     }
 
@@ -578,28 +578,28 @@ validate_digits(TomlIterator &iterator, const LexDigitResult &result, const stri
 
 
 bool
-validate_hour(TomlIterator &iterator, const LexDigitResult &result)
+validate_hour(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid hour: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing hour", result.line, result.column);
+        add_error(lexer, "Missing hour", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(iterator, "Hour must be two digits.", result.line, result.column);
+        add_error(lexer, "Hour must be two digits.", result.line, result.column);
         valid = false;
     }
     else if ((result.digits[0] > '2') || ((result.digits[0] == '2') && (result.digits[1] > '3')))
     {
-        add_error(iterator, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.line, result.column);
         valid = false;
     }
 
@@ -608,28 +608,28 @@ validate_hour(TomlIterator &iterator, const LexDigitResult &result)
 
 
 bool
-validate_minute(TomlIterator &iterator, const LexDigitResult &result)
+validate_minute(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid minute: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing minute.", result.line, result.column);
+        add_error(lexer, "Missing minute.", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(iterator, "Minute must be two digits.", result.line, result.column);
+        add_error(lexer, "Minute must be two digits.", result.line, result.column);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
-        add_error(iterator, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
         valid = false;
     }
 
@@ -638,29 +638,29 @@ validate_minute(TomlIterator &iterator, const LexDigitResult &result)
 
 
 bool
-validate_second(TomlIterator &iterator, const LexDigitResult &result)
+validate_second(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid second: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing second.", result.line, result.column);
+        add_error(lexer, "Missing second.", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(iterator, "Second must be two digits.", result.line, result.column);
+        add_error(lexer, "Second must be two digits.", result.line, result.column);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
         // TODO support leap seconds?
-        add_error(iterator, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
         valid = false;
     }
 
@@ -669,23 +669,23 @@ validate_second(TomlIterator &iterator, const LexDigitResult &result)
 
 
 bool
-validate_year(TomlIterator &iterator, const LexDigitResult &result)
+validate_year(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid year: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 4)
     {
-        add_error(iterator, "Year must be four digits", result.line, result.column);
+        add_error(lexer, "Year must be four digits", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing year", result.line, result.column);
+        add_error(lexer, "Missing year", result.line, result.column);
         valid = false;
     }
 
@@ -694,30 +694,30 @@ validate_year(TomlIterator &iterator, const LexDigitResult &result)
 
 
 bool
-validate_month(TomlIterator &iterator, const LexDigitResult &result)
+validate_month(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid month: " + get_lexeme(iterator), result.line, result.column);
+        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(iterator, "Month must be two digits.", result.line, result.column);
+        add_error(lexer, "Month must be two digits.", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing month", result.line, result.column);
+        add_error(lexer, "Missing month", result.line, result.column);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
             || ((result.digits[0] == '1') && (result.digits[1] > '2'))
             || (result.digits[0] > '1'))
     {
-        add_error(iterator, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.line, result.column);
         valid = false;
     }
 
@@ -726,23 +726,23 @@ validate_month(TomlIterator &iterator, const LexDigitResult &result)
 
 
 bool
-validate_day(TomlIterator &iterator, const LexDigitResult &result)
+validate_day(Lexer &lexer, const LexDigitResult &result)
 {
     bool valid = true;
 
     if (result.flags)
     {
-        add_error(iterator, "Invalid day: " + result.digits, result.line, result.column);
+        add_error(lexer, "Invalid day: " + result.digits, result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(iterator, "Day must be two digits.", result.line, result.column);
+        add_error(lexer, "Day must be two digits.", result.line, result.column);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(iterator, "Missing day", result.line, result.column);
+        add_error(lexer, "Missing day", result.line, result.column);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
@@ -750,7 +750,7 @@ validate_day(TomlIterator &iterator, const LexDigitResult &result)
             || (result.digits[0] > '3'))
     {
         // TODO Validate day based on month and year while lexing?
-        add_error(iterator, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.line, result.column);
         valid = false;
     }
 
@@ -759,26 +759,26 @@ validate_day(TomlIterator &iterator, const LexDigitResult &result)
 
 
 LexDigitResult
-lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
+lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
 {
     LexDigitResult result = {};
-    result.line = iterator.current_line;
-    result.column = iterator.current_column;
+    result.line = lexer.current_line;
+    result.column = lexer.current_column;
 
     bool underscore_allowed = false;
     bool lexing = true;
-    while (lexing && !match_eol(iterator) && !match_whitespace(iterator))
+    while (lexing && !match_eol(lexer) && !match_whitespace(lexer))
     {
-        byte c = get_byte(iterator);
+        byte c = get_byte(lexer);
         if (is_digit(c))
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.digits.push_back(c);
             underscore_allowed = true;
         }
         else if (c == '_')
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.flags |= result.HAS_UNDERSCORE;
             if (underscore_allowed)
             {
@@ -805,7 +805,7 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
         }
         else
         {
-            result.digits.push_back(eat_byte(iterator));
+            result.digits.push_back(eat_byte(lexer));
             result.flags |= result.INVALID_DIGIT;
         }
     }
@@ -820,15 +820,15 @@ lex_digits(TomlIterator &iterator, IsDigit is_digit, u32 context)
 
 
 bool
-lex_exponent(TomlIterator &iterator, u32 context, string &value)
+lex_exponent(Lexer &lexer, u32 context, string &value)
 {
-    if (match(iterator, '-') || match(iterator, '+'))
+    if (match(lexer, '-') || match(lexer, '+'))
     {
-        value.push_back(eat_byte(iterator));
+        value.push_back(eat_byte(lexer));
     }
 
-    LexDigitResult exponent = lex_digits(iterator, is_decimal, context);
-    bool valid = validate_digits(iterator, exponent, "exponential part of decimal", false);
+    LexDigitResult exponent = lex_digits(lexer, is_decimal, context);
+    bool valid = validate_digits(lexer, exponent, "exponential part of decimal", false);
     value += move(exponent.digits);
 
     return valid;
@@ -836,16 +836,16 @@ lex_exponent(TomlIterator &iterator, u32 context, string &value)
 
 
 bool
-lex_fraction(TomlIterator &iterator, u32 context, string &value)
+lex_fraction(Lexer &lexer, u32 context, string &value)
 {
-    LexDigitResult fraction = lex_digits(iterator, is_decimal, context | LEX_EXPONENT);
-    bool valid = validate_digits(iterator, fraction, "fractional part of decimal", false);
+    LexDigitResult fraction = lex_digits(lexer, is_decimal, context | LEX_EXPONENT);
+    bool valid = validate_digits(lexer, fraction, "fractional part of decimal", false);
     value += move(fraction.digits);
 
-    if (match(iterator, 'e') || match(iterator, 'E'))
+    if (match(lexer, 'e') || match(lexer, 'E'))
     {
-        value.push_back(eat_byte(iterator));
-        valid = lex_exponent(iterator, context, value) && valid;
+        value.push_back(eat_byte(lexer));
+        valid = lex_exponent(lexer, context, value) && valid;
     }
 
     return valid;
@@ -853,50 +853,50 @@ lex_fraction(TomlIterator &iterator, u32 context, string &value)
 
 
 bool
-lex_time(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 context)
+lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 {
     bool valid = true;
 
-    if (!validate_hour(iterator, lexed))
+    if (!validate_hour(lexer, lexed))
     {
         valid = false;
     }
     value += move(lexed.digits);
 
-    if (match(iterator, ':'))
+    if (match(lexer, ':'))
     {
-        value += eat_byte(iterator);
+        value += eat_byte(lexer);
 
-        lexed = lex_digits(iterator, is_decimal, context | LEX_TIME | LEX_FRACTION);
-        if (!validate_minute(iterator, lexed))
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME | LEX_FRACTION);
+        if (!validate_minute(lexer, lexed))
         {
             valid = false;
         }
         value += move(lexed.digits);
 
-        if (match(iterator, ':'))
+        if (match(lexer, ':'))
         {
-            value += eat_byte(iterator);
+            value += eat_byte(lexer);
 
-            lexed = lex_digits(iterator, is_decimal, context | LEX_FRACTION);
-            if (!validate_second(iterator, lexed))
+            lexed = lex_digits(lexer, is_decimal, context | LEX_FRACTION);
+            if (!validate_second(lexer, lexed))
             {
                 valid = false;
             }
             value += move(lexed.digits);
 
-            if (match(iterator, '.'))
+            if (match(lexer, '.'))
             {
-                value += eat_byte(iterator);
-                lexed = lex_digits(iterator, is_decimal, context);
+                value += eat_byte(lexer);
+                lexed = lex_digits(lexer, is_decimal, context);
                 if (lexed.flags)
                 {
-                    add_error(iterator, "Invalid value for fractional seconds: " + get_lexeme(iterator), lexed.line, lexed.column);
+                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.line, lexed.column);
                     valid = false;
                 }
                 else if (lexed.digits.length() == 0)
                 {
-                    add_error(iterator, "Missing fractional seconds", lexed.line, lexed.column);
+                    add_error(lexer, "Missing fractional seconds", lexed.line, lexed.column);
                     valid = false;
                 }
 
@@ -906,13 +906,13 @@ lex_time(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
         else
         {
             valid = false;
-            resynchronize(iterator, "Invalid or missing seconds for time: ", context);
+            resynchronize(lexer, "Invalid or missing seconds for time: ", context);
         }
     }
     else
     {
         valid = false;
-        resynchronize(iterator, "Invalid or missing minutes for time: ", context);
+        resynchronize(lexer, "Invalid or missing minutes for time: ", context);
     }
 
     return valid;
@@ -920,42 +920,42 @@ lex_time(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
 
 
 bool
-lex_hour(TomlIterator &iterator, string &value, u32 context)
+lex_hour(Lexer &lexer, string &value, u32 context)
 {
     bool result;
-    LexDigitResult lexed = lex_digits(iterator, is_decimal, context | LEX_TIME | LEX_FRACTION);
+    LexDigitResult lexed = lex_digits(lexer, is_decimal, context | LEX_TIME | LEX_FRACTION);
     if (lexed.digits.length())
     {
-        result = lex_time(iterator, value, lexed, context);
+        result = lex_time(lexer, value, lexed, context);
     }
     else
     {
         result = false;
-        add_error(iterator, "Missing time.", lexed.line, lexed.column);
+        add_error(lexer, "Missing time.", lexed.line, lexed.column);
     }
     return result;
 }
 
 
 bool
-lex_timezone(TomlIterator &iterator, string &value, u32 context)
+lex_timezone(Lexer &lexer, string &value, u32 context)
 {
     bool result = true;
 
-    value += eat_byte(iterator);
+    value += eat_byte(lexer);
     assert(value.back() == '-' || value.back() == '+');
 
-    LexDigitResult lexed = lex_digits(iterator, is_decimal, context | LEX_TIME);
-    if (!validate_hour(iterator, lexed))
+    LexDigitResult lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+    if (!validate_hour(lexer, lexed))
     {
         result = false;
     }
     value += move(lexed.digits);
 
-    eat_byte(iterator, ':');
+    eat_byte(lexer, ':');
 
-    lexed = lex_digits(iterator, is_decimal, context);
-    if (!validate_minute(iterator, lexed))
+    lexed = lex_digits(lexer, is_decimal, context);
+    if (!validate_minute(lexer, lexed))
     {
         result = false;
     }
@@ -966,62 +966,62 @@ lex_timezone(TomlIterator &iterator, string &value, u32 context)
 
 
 Token
-lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 context)
+lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 {
     bool valid = true;
     Value::Type type = Value::Type::LOCAL_DATE;
 
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' sign not allowed for date");
+        add_error(lexer, "'" + value + "' sign not allowed for date");
         valid = false;
     }
-    if (!validate_year(iterator, lexed))
+    if (!validate_year(lexer, lexed))
     {
         valid = false;
     }
     value += move(lexed.digits);
 
-    value += eat_byte(iterator, '-');
+    value += eat_byte(lexer, '-');
 
-    lexed = lex_digits(iterator, is_decimal, context | LEX_DATE | LEX_DATETIME);
-    if (!validate_month(iterator, lexed))
+    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE | LEX_DATETIME);
+    if (!validate_month(lexer, lexed))
     {
         valid = false;
     }
     value += move(lexed.digits);
 
-    value += eat_byte(iterator, '-');
+    value += eat_byte(lexer, '-');
 
-    lexed = lex_digits(iterator, is_decimal, context | LEX_DATETIME);
-    if (!validate_day(iterator, lexed))
+    lexed = lex_digits(lexer, is_decimal, context | LEX_DATETIME);
+    if (!validate_day(lexer, lexed))
     {
         valid = false;
     }
     value += move(lexed.digits);
 
-    if (match(iterator, 'T') || match(iterator, 't')
-        || (match(iterator, ' ') && !match_eol(iterator, 1) && is_decimal(get_byte(iterator, 1))))
+    if (match(lexer, 'T') || match(lexer, 't')
+        || (match(lexer, ' ') && !match_eol(lexer, 1) && is_decimal(get_byte(lexer, 1))))
     {
         type = Value::Type::LOCAL_DATETIME;
-        eat_byte(iterator);
+        eat_byte(lexer);
         value += ' ';
 
-        if (!lex_hour(iterator, value, LEX_TIMEZONE))
+        if (!lex_hour(lexer, value, LEX_TIMEZONE))
         {
             valid = false;
         }
 
-        if (match(iterator, 'Z') ||match(iterator, 'z'))
+        if (match(lexer, 'Z') ||match(lexer, 'z'))
         {
             type = Value::Type::OFFSET_DATETIME;
-            eat_byte(iterator);
+            eat_byte(lexer);
             value += "+0000";
         }
-        else if (match(iterator, '+') || match(iterator, '-'))
+        else if (match(lexer, '+') || match(lexer, '-'))
         {
             type = Value::Type::OFFSET_DATETIME;
-            if (!lex_timezone(iterator, value, context))
+            if (!lex_timezone(lexer, value, context))
             {
                 valid = false;
             }
@@ -1038,14 +1038,14 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
             {
                 LocalDate result;
                 in >> date::parse("%Y-%m-%d", result);
-                token = make_value(iterator, Value(result));
+                token = make_value(lexer, Value(result));
             } break;
 
             case Value::Type::LOCAL_DATETIME:
             {
                 LocalDateTime result;
                 in >> date::parse("%Y-%m-%d %T", result);
-                token = make_value(iterator, Value(result));
+                token = make_value(lexer, Value(result));
             } break;
 
             case Value::Type::OFFSET_DATETIME:
@@ -1053,7 +1053,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
                 assert(type == Value::Type::OFFSET_DATETIME);
                 OffsetDateTime result;
                 in >> date::parse("%Y-%m-%d %T%z", result);
-                token = make_value(iterator, Value(result));
+                token = make_value(lexer, Value(result));
             } break;
 
             default:
@@ -1064,7 +1064,7 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
     }
     else
     {
-        token = make_value(iterator, Value());
+        token = make_value(lexer, Value());
     }
 
     return token;
@@ -1072,58 +1072,58 @@ lex_date(TomlIterator &iterator, string &value, LexDigitResult &lexed, u32 conte
 
 
 Token
-lex_decimal(TomlIterator &iterator, u32 context, string &value)
+lex_decimal(Lexer &lexer, u32 context, string &value)
 {
     Token token;
-    LexDigitResult result = lex_digits(iterator, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
+    LexDigitResult result = lex_digits(lexer, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
     if (result.digits.length() == 0)
     {
-        resynchronize(iterator, "Invalid decimal value: ", context);
+        resynchronize(lexer, "Invalid decimal value: ", context);
     }
-    else if (match(iterator, '.'))
+    else if (match(lexer, '.'))
     {
-        bool valid = validate_digits(iterator, result, "whole part of decimal", true);
+        bool valid = validate_digits(lexer, result, "whole part of decimal", true);
         value += move(result.digits);
-        value.push_back(eat_byte(iterator));
-        valid = lex_fraction(iterator, context, value) && valid;
+        value.push_back(eat_byte(lexer));
+        valid = lex_fraction(lexer, context, value) && valid;
         if (valid)
         {
-            token = make_value(iterator, Value(string_to_f64(value)));
+            token = make_value(lexer, Value(string_to_f64(value)));
         }
         else
         {
-            token = make_value(iterator, Value());
+            token = make_value(lexer, Value());
         }
     }
-    else if (match(iterator, 'e') || match(iterator, 'E'))
+    else if (match(lexer, 'e') || match(lexer, 'E'))
     {
-        bool valid = validate_digits(iterator, result, "whole part of decimal", true);
+        bool valid = validate_digits(lexer, result, "whole part of decimal", true);
         value += move(result.digits);
-        value.push_back(eat_byte(iterator));
-        valid = lex_exponent(iterator, context, value) && valid;
+        value.push_back(eat_byte(lexer));
+        valid = lex_exponent(lexer, context, value) && valid;
         if (valid)
         {
-            token = make_value(iterator, Value(string_to_f64(value)));
+            token = make_value(lexer, Value(string_to_f64(value)));
         }
         else
         {
-            token = make_value(iterator, Value());
+            token = make_value(lexer, Value());
         }
     }
-    else if (match(iterator, '-'))
+    else if (match(lexer, '-'))
     {
-        token = lex_date(iterator, value, result, context);
+        token = lex_date(lexer, value, result, context);
     }
-    else if (match(iterator, ':'))
+    else if (match(lexer, ':'))
     {
         bool valid = true;
         if (value.length())
         {
-            add_error(iterator, "'" + value + "' sign not allowed for time");
+            add_error(lexer, "'" + value + "' sign not allowed for time");
             valid = false;
         }
-        if (!lex_time(iterator, value, result, context))
+        if (!lex_time(lexer, value, result, context))
         {
             valid = false;
         }
@@ -1144,23 +1144,23 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
                 chrono::hours{hours}
                 + chrono::minutes{minutes}
                 + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
-            token = make_value(iterator, Value(lexed));
+            token = make_value(lexer, Value(lexed));
         }
         else
         {
-            token = make_value(iterator, Value());
+            token = make_value(lexer, Value());
         }
     }
     else
     {
-        if (validate_digits(iterator, result, "decimal", true))
+        if (validate_digits(lexer, result, "decimal", true))
         {
             value += move(result.digits);
-            token = make_value(iterator, Value(string_to_s64(value)));
+            token = make_value(lexer, Value(string_to_s64(value)));
         }
         else
         {
-            token = make_value(iterator, Value());
+            token = make_value(lexer, Value());
         }
     }
 
@@ -1169,17 +1169,17 @@ lex_decimal(TomlIterator &iterator, u32 context, string &value)
 
 
 Token
-lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
+lex_hexadecimal(Lexer &lexer, u32 context, const string &value)
 {
     bool valid = true;
     if (value.length())
     {
-        add_error(iterator, "A leading '" + value + "' is not allowed in a hexadecimal integer.");
+        add_error(lexer, "A leading '" + value + "' is not allowed in a hexadecimal integer.");
         valid = false;
     }
 
-    LexDigitResult lexed = lex_digits(iterator, is_hexadecimal, context);
-    if (!validate_digits(iterator, lexed, "hexadecimal", false))
+    LexDigitResult lexed = lex_digits(lexer, is_hexadecimal, context);
+    if (!validate_digits(lexer, lexed, "hexadecimal", false))
     {
         valid = false;
     }
@@ -1187,11 +1187,11 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
     Token result;
     if (valid)
     {
-        result = make_value(iterator, Value(string_to_s64(lexed.digits, 16)));
+        result = make_value(lexer, Value(string_to_s64(lexed.digits, 16)));
     }
     else
     {
-        result = make_value(iterator, Value());
+        result = make_value(lexer, Value());
     }
 
     return result;
@@ -1199,18 +1199,18 @@ lex_hexadecimal(TomlIterator &iterator, u32 context, const string &value)
 
 
 Token
-lex_octal(TomlIterator &iterator, u32 context, const string &value)
+lex_octal(Lexer &lexer, u32 context, const string &value)
 {
     bool valid = true;
 
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' is not allowed in an octal integer.");
+        add_error(lexer, "'" + value + "' is not allowed in an octal integer.");
         valid = false;
     }
 
-    LexDigitResult lexed = lex_digits(iterator, is_octal, context);
-    if (!validate_digits(iterator, lexed, "octal", false))
+    LexDigitResult lexed = lex_digits(lexer, is_octal, context);
+    if (!validate_digits(lexer, lexed, "octal", false))
     {
         valid = false;
     }
@@ -1218,11 +1218,11 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
     Token result;
     if (valid)
     {
-        result = make_value(iterator, Value(string_to_s64(lexed.digits, 8)));
+        result = make_value(lexer, Value(string_to_s64(lexed.digits, 8)));
     }
     else
     {
-        result = make_value(iterator, Value());
+        result = make_value(lexer, Value());
     }
 
     return result;
@@ -1230,18 +1230,18 @@ lex_octal(TomlIterator &iterator, u32 context, const string &value)
 
 
 Token
-lex_binary(TomlIterator &iterator, u32 context, const string &value)
+lex_binary(Lexer &lexer, u32 context, const string &value)
 {
     bool valid = true;
 
     if (value.length())
     {
-        add_error(iterator, "'" + value + "' is not allowed in a binary integer.");
+        add_error(lexer, "'" + value + "' is not allowed in a binary integer.");
         valid = false;
     }
 
-    LexDigitResult lexed = lex_digits(iterator, is_binary, context);
-    if (!validate_digits(iterator, lexed, "binary", false))
+    LexDigitResult lexed = lex_digits(lexer, is_binary, context);
+    if (!validate_digits(lexer, lexed, "binary", false))
     {
         valid = false;
     }
@@ -1249,49 +1249,49 @@ lex_binary(TomlIterator &iterator, u32 context, const string &value)
     Token result;
     if (valid)
     {
-        result = make_value(iterator, Value(string_to_s64(lexed.digits, 2)));
+        result = make_value(lexer, Value(string_to_s64(lexed.digits, 2)));
     }
     else
     {
-        result = make_value(iterator, Value());
+        result = make_value(lexer, Value());
     }
     return result;
 }
 
 
 Token
-lex_number(TomlIterator &iterator, u32 context)
+lex_number(Lexer &lexer, u32 context)
 {
     Token result;
 
-    string value = get_lexeme(iterator);
+    string value = get_lexeme(lexer);
     assert((value == "") || (value == "-") || (value == "+"));
 
-    if (match(iterator, '0'))
+    if (match(lexer, '0'))
     {
-        if (match(iterator, 'x', 1))
+        if (match(lexer, 'x', 1))
         {
-            eat_bytes(iterator, 2);
-            result = lex_hexadecimal(iterator, context, value);
+            eat_bytes(lexer, 2);
+            result = lex_hexadecimal(lexer, context, value);
         }
-        else if (match(iterator, 'o', 1))
+        else if (match(lexer, 'o', 1))
         {
-            eat_bytes(iterator, 2);
-            result = lex_octal(iterator, context, value);
+            eat_bytes(lexer, 2);
+            result = lex_octal(lexer, context, value);
         }
-        else if (match(iterator, 'b', 1))
+        else if (match(lexer, 'b', 1))
         {
-            eat_bytes(iterator, 2);
-            result = lex_binary(iterator, context, value);
+            eat_bytes(lexer, 2);
+            result = lex_binary(lexer, context, value);
         }
         else
         {
-            result = lex_decimal(iterator, context, value);
+            result = lex_decimal(lexer, context, value);
         }
     }
     else
     {
-        result = lex_decimal(iterator, context, value);
+        result = lex_decimal(lexer, context, value);
     }
 
     return result;
@@ -1299,17 +1299,17 @@ lex_number(TomlIterator &iterator, u32 context)
 
 
 bool
-lex_string_char(TomlIterator &iterator, string &result)
+lex_string_char(Lexer &lexer, string &result)
 {
-    assert(!end_of_file(iterator));
+    assert(!end_of_file(lexer));
 
-    u32 line = iterator.current_line;
-    u32 column = iterator.current_column;
+    u32 line = lexer.current_line;
+    u32 column = lexer.current_column;
     u32 codepoint = 0;
     u32 nbytes = 0;
     bool valid = true;
 
-    byte c = eat_byte(iterator);
+    byte c = eat_byte(lexer);
     result.push_back(c);
 
     if ((c & B10000000) == 0)
@@ -1336,21 +1336,21 @@ lex_string_char(TomlIterator &iterator, string &result)
     {
         string message = "Invalid UTF-8 byte: ";
         byte_to_hex(c, message);
-        add_error(iterator, move(message), line, column);
+        add_error(lexer, move(message), line, column);
         nbytes = 1; // Let's just eat the byte and (try to) keep going
         valid = false;
     }
 
     u32 eaten = 1;
-    for ( ; (eaten < nbytes) && valid && !end_of_file(iterator); ++eaten)
+    for ( ; (eaten < nbytes) && valid && !end_of_file(lexer); ++eaten)
     {
-        c = get_byte(iterator);
+        c = get_byte(lexer);
         if ((c & B11000000) == B10000000)
         {
             byte masked = c & B00111111;
             u32 shift = 6 * (nbytes - 1 - eaten);
             codepoint |= (masked << shift);
-            result.push_back(eat_byte(iterator));
+            result.push_back(eat_byte(lexer));
         }
         else
         {
@@ -1361,7 +1361,7 @@ lex_string_char(TomlIterator &iterator, string &result)
             message += '-';
             byte_to_hex(0xbf, message);
             message += '.';
-            add_error(iterator, move(message), line, column);
+            add_error(lexer, move(message), line, column);
             valid = false;
         }
     }
@@ -1377,7 +1377,7 @@ lex_string_char(TomlIterator &iterator, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using 1 byte but was encoded using 2.";
-                add_error(iterator, message.str(), line, column);
+                add_error(lexer, message.str(), line, column);
                 valid = false;
             }
             else if ((nbytes == 3) && (codepoint < 0x800))
@@ -1388,7 +1388,7 @@ lex_string_char(TomlIterator &iterator, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
-                add_error(iterator, message.str(), line, column);
+                add_error(lexer, message.str(), line, column);
                 valid = false;
             }
             else if ((nbytes == 4) && (codepoint < 0x10000))
@@ -1407,7 +1407,7 @@ lex_string_char(TomlIterator &iterator, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
-                add_error(iterator, message.str(), line, column);
+                add_error(lexer, message.str(), line, column);
                 valid = false;
             }
             else if (codepoint > 0x10ffff)
@@ -1418,7 +1418,7 @@ lex_string_char(TomlIterator &iterator, string &result)
                 message << " (maximum codepoint is ";
                 format_unicode(message, 0x10ffff);
                 message << ")";
-                add_error(iterator, message.str(), line, column);
+                add_error(lexer, message.str(), line, column);
                 valid = false;
             }
             else if (!(
@@ -1431,19 +1431,19 @@ lex_string_char(TomlIterator &iterator, string &result)
                 message << "Unicode codepoint ";
                 format_unicode(message, codepoint);
                 message << " is not allowed.";
-                add_error(iterator, message.str(), line, column);
+                add_error(lexer, message.str(), line, column);
                 valid = false;
             }
 
             // Adjust the current column to reflect only 1 "character". Although
             // this probably falls apart with combining characters, etc. Pull
             // requests accepted. :-)
-            iterator.current_column -= (nbytes - 1);
+            lexer.current_column -= (nbytes - 1);
         }
         else
         {
             valid = false;
-            add_error(iterator, "Unable to decode UTF-8 codepoint: unexpected end of file after decoding " + to_string(eaten) + " of " + to_string(nbytes) + " bytes.");
+            add_error(lexer, "Unable to decode UTF-8 codepoint: unexpected end of file after decoding " + to_string(eaten) + " of " + to_string(nbytes) + " bytes.");
         }
     }
 
@@ -1452,19 +1452,19 @@ lex_string_char(TomlIterator &iterator, string &result)
 
 
 void
-lex_unicode(TomlIterator &iterator, string &result, u32 count)
+lex_unicode(Lexer &lexer, string &result, u32 count)
 {
     assert((count == 4) || (count == 8));
-    assert(iterator.current_column >= 3);
+    assert(lexer.current_column >= 3);
 
-    u32 line = iterator.current_line;
-    u32 column = iterator.current_column - 2;
+    u32 line = lexer.current_line;
+    u32 column = lexer.current_column - 2;
     u32 codepoint = 0;
     bool valid = true;
     u32 lexed = 0;
-    for ( ; (lexed < count) && !end_of_file(iterator); ++lexed)
+    for ( ; (lexed < count) && !end_of_file(lexer); ++lexed)
     {
-        byte c = get_byte(iterator);
+        byte c = get_byte(lexer);
 
         if ((c >= '0') && (c <= '9'))
         {
@@ -1488,7 +1488,7 @@ lex_unicode(TomlIterator &iterator, string &result, u32 count)
 
         u64 shift = 4 * (count - 1 - lexed);
         codepoint |= (c << shift);
-        eat_byte(iterator);
+        eat_byte(lexer);
     }
 
     if (valid && (lexed == count))
@@ -1499,78 +1499,78 @@ lex_unicode(TomlIterator &iterator, string &result, u32 count)
         }
         else
         {
-            invalid_unicode(iterator, line, column);
+            invalid_unicode(lexer, line, column);
         }
     }
     else if (!valid)
     {
-        invalid_unicode_escape(iterator, lexed, count, line, column);
+        invalid_unicode_escape(lexer, lexed, count, line, column);
     }
 }
 
 
 void
-lex_escape(TomlIterator &iterator, string &result)
+lex_escape(Lexer &lexer, string &result)
 {
-    assert(!end_of_file(iterator));
+    assert(!end_of_file(lexer));
 
-    byte c = get_byte(iterator);
+    byte c = get_byte(lexer);
     switch (c)
     {
         case '"':
         case '\'':
         case '\\':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back(c);
         } break;
 
         case 'b':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back('\b');
         } break;
 
         case 'f':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back('\f');
         } break;
 
         case 'n':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back('\n');
         } break;
 
         case 'r':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back('\r');
         } break;
 
         case 't':
         {
-            eat_byte(iterator);
+            eat_byte(lexer);
             result.push_back('\t');
         } break;
 
         case 'u':
         {
-            eat_byte(iterator);
-            lex_unicode(iterator, result, 4);
+            eat_byte(lexer);
+            lex_unicode(lexer, result, 4);
         } break;
 
         case 'U':
         {
-            eat_byte(iterator);
-            lex_unicode(iterator, result, 8);
+            eat_byte(lexer);
+            lex_unicode(lexer, result, 8);
         } break;
 
         default:
         {
-            invalid_escape(iterator);
-            eat_byte(iterator);
+            invalid_escape(lexer);
+            eat_byte(lexer);
             result.push_back(c);
         }
     }
@@ -1578,34 +1578,34 @@ lex_escape(TomlIterator &iterator, string &result)
 
 
 string
-lex_multiline_string(TomlIterator &iterator, byte delimiter)
+lex_multiline_string(Lexer &lexer, byte delimiter)
 {
     assert((delimiter == '"') || (delimiter == '\''));
-    eat_bytes(iterator, 3, delimiter);
-    eat_newline(iterator);
+    eat_bytes(lexer, 3, delimiter);
+    eat_newline(lexer);
 
     string result;
     bool lexing = true;
     while (lexing)
     {
-        if (end_of_file(iterator))
+        if (end_of_file(lexer))
         {
-            unterminated_string(iterator);
+            unterminated_string(lexer);
             lexing = false;
         }
-        else if (eat_newline(iterator))
+        else if (eat_newline(lexer))
         {
             result.push_back('\n');
         }
         else
         {
-            byte c = get_byte(iterator);
+            byte c = get_byte(lexer);
             if (c == delimiter)
             {
                 u32 i = 1;
-                for ( ; match(iterator, delimiter, i) && (i < 5); ++i);
+                for ( ; match(lexer, delimiter, i) && (i < 5); ++i);
 
-                eat_bytes(iterator, i);
+                eat_bytes(lexer, i);
                 switch (i)
                 {
                     case 1:
@@ -1640,36 +1640,36 @@ lex_multiline_string(TomlIterator &iterator, byte delimiter)
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
-                u32 line = iterator.current_line;
-                u32 column = iterator.current_column;
-                eat_byte(iterator);
-                if (!end_of_file(iterator))
+                u32 line = lexer.current_line;
+                u32 column = lexer.current_column;
+                eat_byte(lexer);
+                if (!end_of_file(lexer))
                 {
-                    if (eat_whitespace(iterator) || match_eol(iterator))
+                    if (eat_whitespace(lexer) || match_eol(lexer))
                     {
-                        bool eating = eat_newline(iterator);
+                        bool eating = eat_newline(lexer);
                         if (eating)
                         {
                             while (eating)
                             {
-                                eat_whitespace(iterator);
-                                eating = eat_newline(iterator);
+                                eat_whitespace(lexer);
+                                eating = eat_newline(lexer);
                             }
                         }
                         else
                         {
-                            invalid_escape(iterator, line, column);
+                            invalid_escape(lexer, line, column);
                         }
                     }
                     else
                     {
-                        lex_escape(iterator, result);
+                        lex_escape(lexer, result);
                     }
                 }
             }
             else
             {
-                lex_string_char(iterator, result);
+                lex_string_char(lexer, result);
             }
         }
     }
@@ -1679,39 +1679,39 @@ lex_multiline_string(TomlIterator &iterator, byte delimiter)
 
 
 string
-lex_string(TomlIterator &iterator, byte delimiter)
+lex_string(Lexer &lexer, byte delimiter)
 {
     assert((delimiter == '"') || (delimiter == '\''));
-    eat_byte(iterator, delimiter);
+    eat_byte(lexer, delimiter);
 
     string result;
     bool lexing = true;
     while (lexing)
     {
-        if (match_eol(iterator))
+        if (match_eol(lexer))
         {
-            unterminated_string(iterator);
+            unterminated_string(lexer);
             lexing = false;
         }
         else
         {
-            byte c = get_byte(iterator);
+            byte c = get_byte(lexer);
             if (c == delimiter)
             {
-                eat_byte(iterator);
+                eat_byte(lexer);
                 lexing = false;
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
-                eat_byte(iterator);
-                if (!end_of_file(iterator))
+                eat_byte(lexer);
+                if (!end_of_file(lexer))
                 {
-                    lex_escape(iterator, result);
+                    lex_escape(lexer, result);
                 }
             }
             else
             {
-                lex_string_char(iterator, result);
+                lex_string_char(lexer, result);
             }
         }
     }
@@ -1721,35 +1721,35 @@ lex_string(TomlIterator &iterator, byte delimiter)
 
 
 void
-lex_array(TomlIterator &iterator)
+lex_array(Lexer &lexer)
 {
-    eat_byte(iterator, '[');
-    add_token(iterator, TOKEN_LBRACKET);
+    eat_byte(lexer, '[');
+    add_token(lexer, TOKEN_LBRACKET);
 
     ContainerState state = CONTAINER_START;
     bool lexing = true;
     while (lexing)
     {
-        eat_whitespace(iterator);
-        if (end_of_file(iterator))
+        eat_whitespace(lexer);
+        if (end_of_file(lexer))
         {
-            advance(iterator);
-            add_error(iterator, "Unterminated array.");
+            advance(lexer);
+            add_error(lexer, "Unterminated array.");
             lexing = false;
         }
-        else if (match_eol(iterator))
+        else if (match_eol(lexer))
         {
-            eat_newline(iterator);
+            eat_newline(lexer);
         }
         else
         {
-            switch (get_byte(iterator))
+            switch (get_byte(lexer))
             {
                 case ']':
                 {
-                    advance(iterator);
-                    eat_byte(iterator);
-                    add_token(iterator, TOKEN_RBRACKET);
+                    advance(lexer);
+                    eat_byte(lexer);
+                    add_token(lexer, TOKEN_RBRACKET);
                     lexing = false;
                 } break;
 
@@ -1757,29 +1757,29 @@ lex_array(TomlIterator &iterator)
                 {
                     if (state != CONTAINER_VALUE)
                     {
-                        add_error(iterator, "Missing value for array.");
+                        add_error(lexer, "Missing value for array.");
                     }
 
-                    advance(iterator);
-                    eat_byte(iterator);
-                    add_token(iterator, TOKEN_COMMA);
+                    advance(lexer);
+                    eat_byte(lexer);
+                    add_token(lexer, TOKEN_COMMA);
                     state = CONTAINER_SEPARATOR;
                 } break;
 
                 case '#':
                 {
-                    eat_comment(iterator);
-                    eat_newline(iterator);
+                    eat_comment(lexer);
+                    eat_newline(lexer);
                 } break;
 
                 default:
                 {
                     if (state == CONTAINER_VALUE)
                     {
-                        advance(iterator);
-                        add_error(iterator, "Missing ',' between array values.");
+                        advance(lexer);
+                        add_error(lexer, "Missing ',' between array values.");
                     }
-                    lex_value(iterator, LEX_ARRAY);
+                    lex_value(lexer, LEX_ARRAY);
                     state = CONTAINER_VALUE;
                 }
             }
@@ -1789,10 +1789,10 @@ lex_array(TomlIterator &iterator)
 
 
 void
-lex_inline_table(TomlIterator &iterator)
+lex_inline_table(Lexer &lexer)
 {
-    eat_byte(iterator, '{');
-    add_token(iterator, TOKEN_LBRACE);
+    eat_byte(lexer, '{');
+    add_token(lexer, TOKEN_LBRACE);
 
     ContainerState state = CONTAINER_START;
     u32 comma_line = 0;
@@ -1800,51 +1800,51 @@ lex_inline_table(TomlIterator &iterator)
     bool lexing = true;
     while (lexing)
     {
-        eat_whitespace(iterator);
-        switch (get_byte(iterator))
+        eat_whitespace(lexer);
+        switch (get_byte(lexer))
         {
             case '}':
             {
-                advance(iterator);
+                advance(lexer);
                 if (state == CONTAINER_SEPARATOR)
                 {
-                    add_error(iterator, "Trailing ',' is not allowed in an inline table.", comma_line, comma_offset);
+                    add_error(lexer, "Trailing ',' is not allowed in an inline table.", comma_line, comma_offset);
                 }
-                eat_byte(iterator);
-                add_token(iterator, TOKEN_RBRACE);
+                eat_byte(lexer);
+                add_token(lexer, TOKEN_RBRACE);
                 lexing = false;
             } break;
 
             case ',':
             {
-                advance(iterator);
+                advance(lexer);
                 if (state != CONTAINER_VALUE)
                 {
-                    add_error(iterator, "Missing value for inline table.");
+                    add_error(lexer, "Missing value for inline table.");
                 }
-                comma_line = iterator.current_line;
-                comma_offset = iterator.current_column;
-                eat_byte(iterator);
-                add_token(iterator, TOKEN_COMMA);
+                comma_line = lexer.current_line;
+                comma_offset = lexer.current_column;
+                eat_byte(lexer);
+                add_token(lexer, TOKEN_COMMA);
                 state = CONTAINER_SEPARATOR;
             } break;
 
             default:
             {
-                if (match_eol(iterator))
+                if (match_eol(lexer))
                 {
-                    advance(iterator);
-                    add_error(iterator, "Unterminated inline table.");
+                    advance(lexer);
+                    add_error(lexer, "Unterminated inline table.");
                     lexing = false;
                 }
                 else
                 {
                     if (state == CONTAINER_VALUE)
                     {
-                        advance(iterator);
-                        add_error(iterator, "Missing ',' between inline table values.");
+                        advance(lexer);
+                        add_error(lexer, "Missing ',' between inline table values.");
                     }
-                    lex_keyval(iterator, LEX_TABLE);
+                    lex_keyval(lexer, LEX_TABLE);
                     state = CONTAINER_VALUE;
                 }
             }
@@ -1989,18 +1989,18 @@ lex_value(Lexer &lexer, u32 context)
 
 
 Token
-lex_unquoted_key(TomlIterator &iterator, u32 context)
+lex_unquoted_key(Lexer &lexer, u32 context)
 {
     string value;
     bool valid = true;
     bool lexing = true;
-    while (lexing && !end_of_file(iterator))
+    while (lexing && !end_of_file(lexer))
     {
-        byte b = get_byte(iterator);
+        byte b = get_byte(lexer);
 
         if (is_key_char(b))
         {
-            value += eat_byte(iterator);
+            value += eat_byte(lexer);
         }
         else
         {
@@ -2017,7 +2017,7 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
 
                 case '\r':
                 {
-                    lexing = !match(iterator, '\n', 1);
+                    lexing = !match(lexer, '\n', 1);
                 } break;
 
                 case '=':
@@ -2039,7 +2039,7 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
 
             if (lexing)
             {
-                if (lex_string_char(iterator, value))
+                if (lex_string_char(lexer, value))
                 {
                     valid = false;
                 }
@@ -2049,33 +2049,33 @@ lex_unquoted_key(TomlIterator &iterator, u32 context)
 
     if (!valid)
     {
-        add_error(iterator, "Invalid key: " + value);
+        add_error(lexer, "Invalid key: " + value);
     }
     else if (value.length() == 0)
     {
-        missing_key(iterator);
+        missing_key(lexer);
     }
 
-    Token result = make_token(iterator, TOKEN_KEY, move(value));
+    Token result = make_token(lexer, TOKEN_KEY, move(value));
     return result;
 }
 
 
 #if 0
 void
-lex_simple_key(TomlIterator &iterator, u32 context)
+lex_simple_key(Lexer &lexer, u32 context)
 {
-    assert(!match_whitespace(iterator) && !match_eol(iterator));
+    assert(!match_whitespace(lexer) && !match_eol(lexer));
 
-    byte c = get_byte(iterator);
+    byte c = get_byte(lexer);
     if ((c == '"') || (c == '\''))
     {
-        string key = lex_string(iterator, c);
-        add_token(iterator, TOKEN_KEY, move(key));
+        string key = lex_string(lexer, c);
+        add_token(lexer, TOKEN_KEY, move(key));
     }
     else
     {
-        lex_unquoted_key(iterator, context);
+        lex_unquoted_key(lexer, context);
     }
 }
 #endif
@@ -2088,21 +2088,21 @@ lex_key(Lexer &lexer, u32 context)
     bool lexing = true;
     while (lexing)
     {
-        advance(iterator);
-        if (match_eol(iterator))
+        advance(lexer);
+        if (match_eol(lexer))
         {
-            missing_key(iterator);
+            missing_key(lexer);
             lexing = false;
         }
         else
         {
-            lex_simple_key(iterator, context);
+            lex_simple_key(lexer, context);
 
-            eat_whitespace(iterator);
-            if (match(iterator, '.'))
+            eat_whitespace(lexer);
+            if (match(lexer, '.'))
             {
-                eat_byte(iterator);
-                eat_whitespace(iterator);
+                eat_byte(lexer);
+                eat_whitespace(lexer);
             }
             else
             {
@@ -2133,24 +2133,24 @@ lex_key(Lexer &lexer, u32 context)
 
 
 void
-lex_keyval(TomlIterator &iterator, u32 context)
+lex_keyval(Lexer &lexer, u32 context)
 {
-    lex_key(iterator, context);
+    lex_key(lexer, context);
 
-    eat_whitespace(iterator);
+    eat_whitespace(lexer);
 
-    if (match(iterator, '='))
+    if (match(lexer, '='))
     {
-        eat_byte(iterator);
-        eat_whitespace(iterator);
+        eat_byte(lexer);
+        eat_whitespace(lexer);
     }
     else
     {
-        advance(iterator);
-        add_error(iterator, "Missing '=' between key and value.");
+        advance(lexer);
+        add_error(lexer, "Missing '=' between key and value.");
     }
 
-    lex_value(iterator, context);
+    lex_value(lexer, context);
 }
 
 

@@ -34,7 +34,7 @@ enum LexingContext
 };
 
 
-struct TomlIterator
+struct Lexer
 {
     const std::string &toml;
     u64 length;
@@ -51,7 +51,7 @@ struct TomlIterator
     std::vector<Error> &errors;
 
 
-    explicit TomlIterator(const std::string &t, std::vector<Token> &token_list, std::vector<Error> &error_list)
+    explicit Lexer(const std::string &t, std::vector<Token> &token_list, std::vector<Error> &error_list)
         : toml(t)
         , length(toml.length())
         , start_position(0)
@@ -65,8 +65,6 @@ struct TomlIterator
     {
     }
 };
-
-using Lexer = TomlIterator;
 
 
 Token
