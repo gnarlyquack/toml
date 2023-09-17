@@ -50,8 +50,8 @@ TEST(parse, invalid_keyvals)
         ;
 
     const vector<Error> errors = {
-        { 1, 7, "Missing value." },
-        { 2, 15, "Expected the end of the line." },
+        {  6, 1,  7, "Missing value." },
+        { 30, 2, 15, "Expected the end of the line." },
     };
 
     assert_errors(toml, errors);
@@ -105,7 +105,7 @@ TEST(parse, empty_unqoted_key)
     const string toml = "= \"no key name\"  # INVALID";
 
     const vector<Error> errors = {
-        { 1, 1, "Missing key." },
+        { 0, 1, 1, "Missing key." },
     };
 
     assert_errors(toml, errors);
@@ -180,8 +180,8 @@ TEST(parse, multiple_keys)
         ;
 
     const vector<Error> errors = {
-        { 3, 1, "Key 'name' has already been defined on line 2, character 1." },
-        { 6, 1, "Key 'spelling' has already been defined on line 5, character 1." },
+        { 30, 3, 1, "Key 'name' has already been defined on line 2, character 1." },
+        { 90, 6, 1, "Key 'spelling' has already been defined on line 5, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -236,7 +236,7 @@ TEST(parse, key_redefinition)
         ;
 
     const vector<Error> errors = {
-        { 8, 7, "Key 'apple' has already been defined on line 4, character 7." },
+        { 205, 8, 7, "Key 'apple' has already been defined on line 4, character 7." },
     };
 
     assert_errors(toml, errors);
@@ -513,9 +513,9 @@ TEST(parse, invalid_floats)
         ;
 
     const vector<Error> errors = {
-        { 2, 19, "Invalid value." },
-        { 3, 21, "Missing fractional part of decimal number." },
-        { 4, 21, "Missing fractional part of decimal number." },
+        { 35, 2, 19, "Invalid value." },
+        { 58, 3, 21, "Missing fractional part of decimal number." },
+        { 79, 4, 21, "Missing fractional part of decimal number." },
     };
 
     assert_errors(toml, errors);
@@ -875,7 +875,7 @@ TEST(parse, cannot_redefine_table)
         ;
 
     const vector<Error> errors = {
-        { 6, 2, "Key 'fruit' has already been defined on line 3, character 2." },
+        { 42, 6, 2, "Key 'fruit' has already been defined on line 3, character 2." },
     };
 
     assert_errors(toml, errors);
@@ -895,7 +895,7 @@ TEST(parse, cannot_redefine_subtable)
         ;
 
     const vector<Error> errors = {
-        { 6, 8, "Key 'apple' has already been defined on line 4, character 1." },
+        { 55, 6, 8, "Key 'apple' has already been defined on line 4, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -960,7 +960,7 @@ TEST(parse, dotted_keys_cannot_redefine_tables)
         ;
 
     const vector<Error> errors = {
-        { 5, 8, "Key 'apple' has already been defined on line 2, character 1." },
+        { 61, 5, 8, "Key 'apple' has already been defined on line 2, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -978,7 +978,7 @@ TEST(parse, dotted_keys_cannot_redefine_subtables)
         ;
 
     const vector<Error> errors = {
-        { 5, 14, "Key 'taste' has already been defined on line 3, character 7." },
+        { 67, 5, 14, "Key 'taste' has already been defined on line 3, character 7." },
     };
 
     assert_errors(toml, errors);
@@ -1023,7 +1023,7 @@ TEST(parse, inline_tables_cannot_be_extended)
         ;
 
     const vector<Error> errors = {
-        { 3, 1, "Key 'type' has already been defined on line 2, character 1." },
+        { 35, 3, 1, "Key 'type' has already been defined on line 2, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -1039,7 +1039,7 @@ TEST(parse, inline_tables_cannot_extend_other_tables)
         ;
 
     const vector<Error> errors = {
-        { 3, 1, "Key 'type' has already been defined on line 2, character 1." },
+        { 29, 3, 1, "Key 'type' has already been defined on line 2, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -1151,7 +1151,7 @@ TEST(parse, cannot_redefine_table_as_table_array)
         ;
 
     const vector<Error> errors = {
-        { 6, 3, "Key 'fruit' has already been defined on line 2, character 2." },
+        { 128, 6, 3, "Key 'fruit' has already been defined on line 2, character 2." },
     };
 
     assert_errors(toml, errors);
@@ -1168,7 +1168,7 @@ TEST(parse, table_array_cannot_extend_array)
         ;
 
     const vector<Error> errors = {
-        { 4, 3, "Key 'fruits' has already been defined on line 2, character 1." },
+        { 34, 4, 3, "Key 'fruits' has already been defined on line 2, character 1." },
     };
 
     assert_errors(toml, errors);
@@ -1199,8 +1199,8 @@ TEST(parse, tables_and_table_arrays_cannot_redefine_each_other)
         ;
 
     const vector<Error> errors = {
-        { 9, 9, "Key 'varieties' has already been defined on line 5, character 10." },
-        { 17, 10, "Key 'physical' has already been defined on line 12, character 9." },
+        { 165,  9,  9, "Key 'varieties' has already been defined on line 5, character 10." },
+        { 323, 17, 10, "Key 'physical' has already been defined on line 12, character 9." },
     };
 
     assert_errors(toml, errors);

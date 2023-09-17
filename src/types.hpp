@@ -499,11 +499,18 @@ private:
 };
 
 
+struct SourceLocation
+{
+    uint64_t index;
+    uint32_t line;
+    uint32_t column;
+};
+
+
 struct Key final
 {
     std::string value;
-    uint32_t line;
-    uint32_t column;
+    SourceLocation location;
 };
 
 
@@ -517,7 +524,7 @@ operator==(const Key &left, const Key &right)
 
 struct KeyHasher
 {
-    size_t operator()(const toml::Key& key) const
+    size_t operator()(const toml::Key &key) const
     {
         return std::hash<std::string>()(key.value);
     }
@@ -540,16 +547,14 @@ struct Definition final
 {
     Definition()
         : _type(Value::Type::INVALID)
-        , _line(0)
-        , _column(0)
+        , _location()
     {
     }
 
 
-    Definition(Value::Type type, uint32_t line, uint32_t column)
+    Definition(Value::Type type, const SourceLocation &location)
         : _type(type)
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
         switch (_type)
         {
@@ -571,59 +576,52 @@ struct Definition final
     }
 
 
-    Definition(const DefinitionArray &value, uint32_t line, uint32_t column)
+    Definition(const DefinitionArray &value, const SourceLocation &location)
         : _array{Value::Type::ARRAY, new DefinitionArray(value)}
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
     }
 
 
-    Definition(DefinitionArray &&value, uint32_t line, uint32_t column)
+    Definition(DefinitionArray &&value, const SourceLocation &location)
         : _array{Value::Type::ARRAY, new DefinitionArray(std::move(value))}
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
     }
 
 
-    Definition(const DefinitionTable &value, uint32_t line, uint32_t column)
+    Definition(const DefinitionTable &value, const SourceLocation &location)
         : _table{Value::Type::TABLE, new DefinitionTable(value)}
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
     }
 
 
-    Definition(DefinitionTable &&value, uint32_t line, uint32_t column)
+    Definition(DefinitionTable &&value, const SourceLocation &location)
         : _table{Value::Type::TABLE, new DefinitionTable(std::move(value))}
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
     }
 
 
-    Definition(const Value &value, uint32_t line, uint32_t column)
+    Definition(const Value &value, const SourceLocation &location)
         : _value(value)
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
         assert((_type != Value::Type::ARRAY) || (_type != Value::Type::TABLE));
     }
 
 
-    Definition(Value &&value, uint32_t line, uint32_t column)
+    Definition(Value &&value, const SourceLocation &location)
         : _value(std::move(value))
-        , _line(line)
-        , _column(column)
+        , _location(location)
     {
         assert((_type != Value::Type::ARRAY) || (_type != Value::Type::TABLE));
     }
 
 
     Definition(const Definition &other)
-        : _line(other._line)
-        , _column(other._column)
+        : _location(other._location)
     {
         switch (other._type)
         {
@@ -646,8 +644,7 @@ struct Definition final
 
 
     Definition(Definition &&other)
-        : _line(other._line)
-        , _column(other._column)
+        : _location(std::move(other._location))
     {
         take(other);
     }
@@ -809,17 +806,31 @@ struct Definition final
     }
 
 
+    const SourceLocation &
+    location() const
+    {
+        return _location;
+    }
+
+
+    uint64_t
+    index() const
+    {
+        return _location.index;
+    }
+
+
     uint32_t
     line() const
     {
-        return _line;
+        return _location.line;
     };
 
 
     uint32_t
     column() const
     {
-        return _column;
+        return _location.column;
     };
 
 
@@ -839,9 +850,7 @@ private:
         } _array;
     };
 
-    uint32_t _line;
-
-    uint32_t _column;
+    SourceLocation _location;
 
 
     void

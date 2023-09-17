@@ -46,8 +46,9 @@ inline bool
 operator==(const Error &left, const Error &right)
 {
     bool result =
-        (left.line == right.line)
-        && (left.column == right.column)
+           (left.location.index == right.location.index)
+        && (left.location.line == right.location.line)
+        && (left.location.column == right.location.column)
         && (left.message == right.message);
     return result;
 }
@@ -170,9 +171,9 @@ operator==(const Token &left, const Token &right)
 {
     bool result =
         (left.type == right.type)
-        && (left.position == right.position)
-        && (left.line == right.line)
-        && (left.column == right.column)
+        && (left.location.index == right.location.index)
+        && (left.location.line == right.location.line)
+        && (left.location.column == right.location.column)
         && (left.lexeme == right.lexeme);
     if (result && (left.type == TOKEN_VALUE))
     {
@@ -305,17 +306,17 @@ operator<<(std::ostream &os, const Token &token)
         os << "VALUE("
             << token.value << ", "
             << token.lexeme << ", "
-            << token.position << ", "
-            << token.line << ", "
-            << token.column  << ")";
+            << token.location.index << ", "
+            << token.location.line << ", "
+            << token.location.column  << ")";
     }
     else
     {
         os << TOKEN_NAMES[token.type] << '('
             << token.lexeme << ", "
-            << token.position << ", "
-            << token.line << ", "
-            << token.column  << ")";
+            << token.location.index << ", "
+            << token.location.line << ", "
+            << token.location.column  << ")";
     }
 
     return os;
@@ -325,7 +326,8 @@ operator<<(std::ostream &os, const Token &token)
 inline std::ostream &
 operator<<(std::ostream &os, const Error &error)
 {
-    os << "Error(" << error.line << ", " << error.column << ", \"" << error.message << "\")";
+    os << "Error(" << error.location.index << ", " << error.location.line << ", " << error.location.column
+                   << ", \"" << error.message << "\")";
     return os;
 }
 

@@ -6,6 +6,8 @@
 #ifndef TOML_ERROR_HPP
 #define TOML_ERROR_HPP
 
+#include "types.hpp"
+
 #include <string>
 
 
@@ -15,8 +17,7 @@ namespace toml
 
 struct Error
 {
-    std::string::size_type line;
-    std::string::size_type column;
+    SourceLocation location;
     std::string message;
 };
 

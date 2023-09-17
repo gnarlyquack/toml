@@ -51,9 +51,7 @@ struct Token
     TokenType type;
     Value value;
     std::string lexeme;
-    u64 position;
-    u32 line;
-    u32 column;
+    SourceLocation location;
 };
 
 

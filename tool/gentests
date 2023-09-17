@@ -84,7 +84,7 @@ TEST(%b, %b)
     const string toml{"%b", %d};
 
     const vector<Error> expected{
-        { 0, 0, "" },
+        { 0, 0, 0, "" },
     };
 
     assert_errors(toml, expected);

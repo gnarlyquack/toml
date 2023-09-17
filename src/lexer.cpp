@@ -61,9 +61,8 @@ struct LexDigitResult
     static constexpr u32 INVALID_UNDERSCORE    = 1 << 2;
 
     string digits;
-    u32 flags;
-    u32 line;
-    u32 column;
+    u32 flags = 0;
+    SourceLocation location;
 };
 
 
@@ -109,9 +108,7 @@ byte_to_hex(byte value, string &out)
 void
 advance(Lexer &lexer)
 {
-    lexer.start_position = lexer.current_position;
-    lexer.start_line = lexer.current_line;
-    lexer.start_column = lexer.current_column;
+    lexer.start = lexer.current;
 }
 
 
@@ -119,16 +116,16 @@ string
 get_lexeme(const Lexer &lexer)
 {
     string result = lexer.toml.substr(
-        lexer.start_position,
-        lexer.current_position - lexer.start_position);
+        lexer.start.index,
+        lexer.current.index - lexer.start.index);
     return result;
 }
 
 
 void
-add_error(Lexer &lexer, string message, u64 line, u64 column)
+add_error(Lexer &lexer, string message, const SourceLocation &location)
 {
-    Error error = { line, column, move(message) };
+    Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
     advance(lexer);
 }
@@ -136,7 +133,7 @@ add_error(Lexer &lexer, string message, u64 line, u64 column)
 void
 add_error(Lexer &lexer, string message)
 {
-    add_error(lexer, move(message), lexer.start_line, lexer.start_column);
+    add_error(lexer, move(message), lexer.start);
 }
 
 
@@ -148,7 +145,7 @@ make_token(Lexer &lexer, TokenType type, u64 length)
     {
         eat_bytes(lexer, length);
     }
-    Token result = { type, Value(), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
+    Token result = { type, Value(), get_lexeme(lexer), lexer.start };
     advance(lexer);
 
     return result;
@@ -158,7 +155,7 @@ make_token(Lexer &lexer, TokenType type, u64 length)
 Token
 make_token(Lexer &lexer, TokenType type, string lexeme = "")
 {
-    Token result = { type, Value(), move(lexeme), lexer.start_position, lexer.start_line, lexer.start_column };
+    Token result = { type, Value(), move(lexeme), lexer.start };
     advance(lexer);
 
     return result;
@@ -168,7 +165,7 @@ make_token(Lexer &lexer, TokenType type, string lexeme = "")
 Token
 make_value(Lexer &lexer, Value &&value)
 {
-    Token result = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
+    Token result = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start };
     advance(lexer);
     return result;
 }
@@ -188,8 +185,8 @@ add_value(Lexer &lexer, Value &&value)
 bool
 end_of_file(const Lexer &lexer, u64 ahead = 0)
 {
-    assert(lexer.current_position <= lexer.length);
-    bool result = lexer.length - lexer.current_position <= ahead;
+    assert(lexer.current.index <= lexer.length);
+    bool result = lexer.length - lexer.current.index <= ahead;
     return result;
 }
 
@@ -200,7 +197,7 @@ get_byte(const Lexer &lexer, u64 ahead = 0)
     byte result = INVALID_BYTE;
     if (!end_of_file(lexer, ahead))
     {
-        result = lexer.toml[lexer.current_position + ahead];
+        result = lexer.toml[lexer.current.index + ahead];
     }
     return result;
 }
@@ -257,12 +254,12 @@ is_octal(byte value)
 bool
 match(const Lexer &lexer, byte value, u64 ahead = 0)
 {
-    assert(lexer.current_position <= lexer.length);
+    assert(lexer.current.index <= lexer.length);
 
     bool result = false;
-    if ((lexer.length - lexer.current_position) > ahead)
+    if ((lexer.length - lexer.current.index) > ahead)
     {
-        result = lexer.toml[lexer.current_position + ahead] == value;
+        result = lexer.toml[lexer.current.index + ahead] == value;
     }
 
     return result;
@@ -300,18 +297,18 @@ eat_byte(Lexer &lexer, byte expected = INVALID_BYTE)
 {
     assert(!end_of_file(lexer));
 
-    byte result = lexer.toml[lexer.current_position];
+    byte result = lexer.toml[lexer.current.index];
     assert((expected == INVALID_BYTE) || (result == expected));
 
-    ++lexer.current_position;
+    ++lexer.current.index;
     if (result == '\n')
     {
-        ++lexer.current_line;
-        lexer.current_column = 1;
+        ++lexer.current.line;
+        lexer.current.column = 1;
     }
     else
     {
-        ++lexer.current_column;
+        ++lexer.current.column;
     }
 
     return result;
@@ -487,10 +484,10 @@ format_unicode(ostream &o, u32 codepoint)
 
 
 void
-invalid_escape(Lexer &lexer, u32 line, u32 column)
+invalid_escape(Lexer &lexer, const SourceLocation &location)
 {
     string message = "Invalid escape sequence.";
-    Error error = { line, column, move(message) };
+    Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
 }
 
@@ -498,25 +495,27 @@ invalid_escape(Lexer &lexer, u32 line, u32 column)
 void
 invalid_escape(Lexer &lexer)
 {
-    assert(lexer.current_column > 2);
-    invalid_escape(lexer, lexer.current_line, lexer.current_column - 1);
+    assert(lexer.current.column > 2);
+    SourceLocation location = lexer.current;
+    --location.column;
+    invalid_escape(lexer, location);
 }
 
 
 void
-invalid_unicode(Lexer &lexer, u32 line, u32 column)
+invalid_unicode(Lexer &lexer, const SourceLocation &location)
 {
     string message = "Unicode escape sequence specified an invalid or non-allowed codepoint.";
-    Error error = { line, column, move(message) };
+    Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
 }
 
 
 void
-invalid_unicode_escape(Lexer &lexer, u32 lexed, u32 count, u32 line, u32 column)
+invalid_unicode_escape(Lexer &lexer, u32 lexed, u32 count, const SourceLocation &location)
 {
     string message = "Invalid or incomplete Unicode escape sequence: expected " + to_string(count) + " hexadecimal characters but parsed " + to_string(lexed) + ".";
-    Error error = { line, column, move(message) };
+    Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
 }
 
@@ -531,7 +530,7 @@ missing_key(Lexer &lexer)
 void
 unterminated_string(Lexer &lexer)
 {
-    add_error(lexer, "Unterminated string.", lexer.current_line, lexer.current_column);
+    add_error(lexer, "Unterminated string.", lexer.current);
 }
 
 
@@ -542,22 +541,22 @@ validate_digits(Lexer &lexer, const LexDigitResult &result, const string &type, 
 
     if (result.flags & result.INVALID_DIGIT)
     {
-        add_error(lexer, "Invalid " + type + " number: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid " + type + " number: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.flags & result.INVALID_UNDERSCORE)
     {
-        add_error(lexer, "'_' must separate digits in " + type + " number: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "'_' must separate digits in " + type + " number: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing " + type + " number.", result.line, result.column);
+        add_error(lexer, "Missing " + type + " number.", result.location);
         valid = false;
     }
     else if (no_leading_zero && (result.digits[0] == '0') && (result.digits.length() > 1))
     {
-        add_error(lexer, "Leading zeros are not allowed in " + type + " number.", result.line, result.column);
+        add_error(lexer, "Leading zeros are not allowed in " + type + " number.", result.location);
         valid = false;
     }
 
@@ -572,22 +571,22 @@ validate_hour(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing hour", result.line, result.column);
+        add_error(lexer, "Missing hour", result.location);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Hour must be two digits.", result.line, result.column);
+        add_error(lexer, "Hour must be two digits.", result.location);
         valid = false;
     }
     else if ((result.digits[0] > '2') || ((result.digits[0] == '2') && (result.digits[1] > '3')))
     {
-        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.location);
         valid = false;
     }
 
@@ -602,22 +601,22 @@ validate_minute(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing minute.", result.line, result.column);
+        add_error(lexer, "Missing minute.", result.location);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Minute must be two digits.", result.line, result.column);
+        add_error(lexer, "Minute must be two digits.", result.location);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
-        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.location);
         valid = false;
     }
 
@@ -632,23 +631,23 @@ validate_second(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing second.", result.line, result.column);
+        add_error(lexer, "Missing second.", result.location);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Second must be two digits.", result.line, result.column);
+        add_error(lexer, "Second must be two digits.", result.location);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
         // TODO support leap seconds?
-        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.location);
         valid = false;
     }
 
@@ -663,17 +662,17 @@ validate_year(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() != 4)
     {
-        add_error(lexer, "Year must be four digits", result.line, result.column);
+        add_error(lexer, "Year must be four digits", result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing year", result.line, result.column);
+        add_error(lexer, "Missing year", result.location);
         valid = false;
     }
 
@@ -688,24 +687,24 @@ validate_month(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.line, result.column);
+        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.location);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Month must be two digits.", result.line, result.column);
+        add_error(lexer, "Month must be two digits.", result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing month", result.line, result.column);
+        add_error(lexer, "Missing month", result.location);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
             || ((result.digits[0] == '1') && (result.digits[1] > '2'))
             || (result.digits[0] > '1'))
     {
-        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.location);
         valid = false;
     }
 
@@ -720,17 +719,17 @@ validate_day(Lexer &lexer, const LexDigitResult &result)
 
     if (result.flags)
     {
-        add_error(lexer, "Invalid day: " + result.digits, result.line, result.column);
+        add_error(lexer, "Invalid day: " + result.digits, result.location);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Day must be two digits.", result.line, result.column);
+        add_error(lexer, "Day must be two digits.", result.location);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing day", result.line, result.column);
+        add_error(lexer, "Missing day", result.location);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
@@ -738,7 +737,7 @@ validate_day(Lexer &lexer, const LexDigitResult &result)
             || (result.digits[0] > '3'))
     {
         // TODO Validate day based on month and year while lexing?
-        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.line, result.column);
+        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.location);
         valid = false;
     }
 
@@ -749,9 +748,8 @@ validate_day(Lexer &lexer, const LexDigitResult &result)
 LexDigitResult
 lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
 {
-    LexDigitResult result = {};
-    result.line = lexer.current_line;
-    result.column = lexer.current_column;
+    LexDigitResult result;
+    result.location = lexer.current;
 
     bool underscore_allowed = false;
     bool lexing = true;
@@ -879,12 +877,12 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
                 lexed = lex_digits(lexer, is_decimal, context);
                 if (lexed.flags)
                 {
-                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.line, lexed.column);
+                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.location);
                     valid = false;
                 }
                 else if (lexed.digits.length() == 0)
                 {
-                    add_error(lexer, "Missing fractional seconds", lexed.line, lexed.column);
+                    add_error(lexer, "Missing fractional seconds", lexed.location);
                     valid = false;
                 }
 
@@ -919,7 +917,7 @@ lex_hour(Lexer &lexer, string &value, u32 context)
     else
     {
         result = false;
-        add_error(lexer, "Missing time.", lexed.line, lexed.column);
+        add_error(lexer, "Missing time.", lexed.location);
     }
     return result;
 }
@@ -1291,8 +1289,7 @@ lex_string_char(Lexer &lexer, string &result)
 {
     assert(!end_of_file(lexer));
 
-    u32 line = lexer.current_line;
-    u32 column = lexer.current_column;
+    SourceLocation location = lexer.current;
     u32 codepoint = 0;
     u32 nbytes = 0;
     bool valid = true;
@@ -1324,7 +1321,7 @@ lex_string_char(Lexer &lexer, string &result)
     {
         string message = "Invalid UTF-8 byte: ";
         byte_to_hex(c, message);
-        add_error(lexer, move(message), line, column);
+        add_error(lexer, move(message), location);
         nbytes = 1; // Let's just eat the byte and (try to) keep going
         valid = false;
     }
@@ -1349,7 +1346,7 @@ lex_string_char(Lexer &lexer, string &result)
             message += '-';
             byte_to_hex(0xbf, message);
             message += '.';
-            add_error(lexer, move(message), line, column);
+            add_error(lexer, move(message), location);
             valid = false;
         }
     }
@@ -1365,7 +1362,7 @@ lex_string_char(Lexer &lexer, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using 1 byte but was encoded using 2.";
-                add_error(lexer, message.str(), line, column);
+                add_error(lexer, message.str(), location);
                 valid = false;
             }
             else if ((nbytes == 3) && (codepoint < 0x800))
@@ -1376,7 +1373,7 @@ lex_string_char(Lexer &lexer, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
-                add_error(lexer, message.str(), line, column);
+                add_error(lexer, message.str(), location);
                 valid = false;
             }
             else if ((nbytes == 4) && (codepoint < 0x10000))
@@ -1395,7 +1392,7 @@ lex_string_char(Lexer &lexer, string &result)
                 message << "Overlong encoding of Unicode codepoint: ";
                 format_unicode(message, codepoint);
                 message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
-                add_error(lexer, message.str(), line, column);
+                add_error(lexer, message.str(), location);
                 valid = false;
             }
             else if (codepoint > 0x10ffff)
@@ -1406,7 +1403,7 @@ lex_string_char(Lexer &lexer, string &result)
                 message << " (maximum codepoint is ";
                 format_unicode(message, 0x10ffff);
                 message << ")";
-                add_error(lexer, message.str(), line, column);
+                add_error(lexer, message.str(), location);
                 valid = false;
             }
             else if (!(
@@ -1419,14 +1416,14 @@ lex_string_char(Lexer &lexer, string &result)
                 message << "Unicode codepoint ";
                 format_unicode(message, codepoint);
                 message << " is not allowed.";
-                add_error(lexer, message.str(), line, column);
+                add_error(lexer, message.str(), location);
                 valid = false;
             }
 
             // Adjust the current column to reflect only 1 "character". Although
             // this probably falls apart with combining characters, etc. Pull
             // requests accepted. :-)
-            lexer.current_column -= (nbytes - 1);
+            lexer.current.column -= (nbytes - 1);
         }
         else
         {
@@ -1443,10 +1440,10 @@ void
 lex_unicode(Lexer &lexer, string &result, u32 count)
 {
     assert((count == 4) || (count == 8));
-    assert(lexer.current_column >= 3);
+    assert(lexer.current.column >= 3);
 
-    u32 line = lexer.current_line;
-    u32 column = lexer.current_column - 2;
+    SourceLocation location = lexer.current;
+    location.column -= 2;
     u32 codepoint = 0;
     bool valid = true;
     u32 lexed = 0;
@@ -1487,12 +1484,12 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
         }
         else
         {
-            invalid_unicode(lexer, line, column);
+            invalid_unicode(lexer, location);
         }
     }
     else if (!valid)
     {
-        invalid_unicode_escape(lexer, lexed, count, line, column);
+        invalid_unicode_escape(lexer, lexed, count, location);
     }
 }
 
@@ -1628,8 +1625,7 @@ lex_multiline_string(Lexer &lexer, byte delimiter)
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
-                u32 line = lexer.current_line;
-                u32 column = lexer.current_column;
+                SourceLocation location = lexer.current;
                 eat_byte(lexer);
                 if (!end_of_file(lexer))
                 {
@@ -1646,7 +1642,7 @@ lex_multiline_string(Lexer &lexer, byte delimiter)
                         }
                         else
                         {
-                            invalid_escape(lexer, line, column);
+                            invalid_escape(lexer, location);
                         }
                     }
                     else

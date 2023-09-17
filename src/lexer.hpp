@@ -11,6 +11,7 @@
 
 #include "error.hpp"
 #include "token.hpp"
+#include "types.hpp"
 
 
 namespace toml
@@ -39,13 +40,8 @@ struct Lexer
     const std::string &toml;
     u64 length;
 
-    u64 start_position;
-    u32 start_line;
-    u32 start_column;
-
-    u64 current_position;
-    u32 current_line;
-    u32 current_column;
+    SourceLocation current;
+    SourceLocation start;
 
     std::vector<Error> &errors;
 
@@ -53,12 +49,8 @@ struct Lexer
     explicit Lexer(const std::string &t, std::vector<Error> &error_list)
         : toml(t)
         , length(toml.length())
-        , start_position(0)
-        , start_line(1)
-        , start_column(1)
-        , current_position(0)
-        , current_line(1)
-        , current_column(1)
+        , current({0, 1, 1})
+        , start(current)
         , errors(error_list)
     {
     }

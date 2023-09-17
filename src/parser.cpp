@@ -385,7 +385,7 @@ void
 add_error(Parser &parser, string message)
 {
     Token token = parser.token;
-    Error error = {token.line, token.column, move(message)};
+    Error error = {token.location, move(message)};
     parser.errors.push_back(move(error));
 }
 
@@ -437,7 +437,7 @@ current_token_type(Parser &parser)
 void
 key_redefinition(Parser &parser, const Key &key, const Key &prev)
 {
-    Error error = {key.line, key.column, "Key '" + key.value + "' has already been defined on line " + to_string(prev.line) + ", character " + to_string(prev.column) + "."};
+    Error error = {key.location, "Key '" + key.value + "' has already been defined on line " + to_string(prev.location.line) + ", character " + to_string(prev.location.column) + "."};
     parser.errors.push_back(move(error));
 }
 
@@ -446,7 +446,7 @@ void
 missing_value(Parser &parser)
 {
     Token token = parser.token;
-    Error error = {token.line, token.column, "Missing value."};
+    Error error = {token.location, "Missing value."};
     parser.errors.push_back(move(error));
 }
 
@@ -455,7 +455,7 @@ Token
 make_error(Parser &parser, TokenType type, string message)
 {
     add_error(parser, move(message));
-    Token result = { type, Value(), "", 0, 0, 0};
+    Token result = { type, Value(), "", SourceLocation() };
     return result;
 }
 
@@ -463,7 +463,7 @@ make_error(Parser &parser, TokenType type, string message)
 Definition
 array_definition(const Token &token)
 {
-    Definition result(Value::Type::ARRAY, token.line, token.column);
+    Definition result(Value::Type::ARRAY, token.location);
     return result;
 }
 
@@ -471,7 +471,7 @@ array_definition(const Token &token)
 Definition
 table_definition(const Token &token)
 {
-    Definition result(Value::Type::TABLE, token.line, token.column);
+    Definition result(Value::Type::TABLE, token.location);
     return result;
 }
 
@@ -480,7 +480,7 @@ Definition
 value_definition(const Token &token)
 {
     assert(token.type == TOKEN_VALUE);
-    Definition result(token.value, token.line, token.column);
+    Definition result(token.value, token.location);
     return result;
 }
 
@@ -650,13 +650,13 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
 
     while (current_token_type(parser) == TOKEN_PERIOD)
     {
-        Key key = {token.lexeme, token.line, token.column};
+        Key key = {token.lexeme, token.location};
         Definition &value = (*table)[key];
         ValueMeta &value_meta = (*meta)[key.value];
         if (value.type() == Value::Type::INVALID)
         {
             assert(value_meta.type() == ValueMeta::Type::INVALID);
-            value = Definition(Value::Type::TABLE, key.line, key.column);
+            value = Definition(Value::Type::TABLE, key.location);
             value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
         }
         else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
@@ -668,7 +668,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
             key_redefinition(parser, key, table->find(key)->first);
             // Replacing the value and continuing on seems like maybe the
             // best way to mitigate cascading errors.
-            value = Definition(Value::Type::TABLE, key.line, key.column);
+            value = Definition(Value::Type::TABLE, key.location);
             value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
         }
 
@@ -682,7 +682,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
         token = eat(parser, context | LEX_KEY | LEX_VALUE);
     }
 
-    Key key = {token.lexeme, token.line, token.column};
+    Key key = {token.lexeme, token.location};
     Definition &value = (*table)[key];
     ValueMeta &value_meta = (*meta)[key.value];
     if (value.type() != Value::Type::INVALID)
@@ -705,13 +705,13 @@ parse_table_header(Parser &parser)
 
     while (parser.token.type == TOKEN_PERIOD)
     {
-        Key key = {token.lexeme, token.line, token.column};
+        Key key = {token.lexeme, token.location};
         Definition &value = (*parser.current_table)[key];
         ValueMeta &value_meta = (*parser.current_meta)[key.value];
         if (value.type() == Value::Type::INVALID)
         {
             assert(value_meta.type() == ValueMeta::Type::INVALID);
-            value = Definition(Value::Type::TABLE, key.line, key.column);
+            value = Definition(Value::Type::TABLE, key.location);
             value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
             parser.current_table = &value.as_table();
@@ -747,7 +747,7 @@ parse_table_header(Parser &parser)
                     key_redefinition(parser, key, parser.current_table->find(key)->first);
                     // Replacing the value and continuing on seems like maybe the
                     // best way to mitigate cascading errors.
-                    value = Definition(Value::Type::TABLE, key.line, key.column);
+                    value = Definition(Value::Type::TABLE, key.location);
                     value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
 
                     parser.current_table = &value.as_table();
@@ -760,7 +760,7 @@ parse_table_header(Parser &parser)
         token = eat(parser, LEX_HEADER);
     }
 
-    Key key = {token.lexeme, token.line, token.column};
+    Key key = {token.lexeme, token.location};
     return key;
 }
 
@@ -779,7 +779,7 @@ parse_table(Parser &parser)
     if (value.type() == Value::Type::INVALID)
     {
         assert(value_meta.type() == ValueMeta::Type::INVALID);
-        value = Definition(Value::Type::TABLE, key.line, key.column);
+        value = Definition(Value::Type::TABLE, key.location);
         value_meta = ValueMeta(ValueMeta::Type::HEADER_TABLE);
     }
     else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
@@ -791,7 +791,7 @@ parse_table(Parser &parser)
         key_redefinition(parser, key, parser.current_table->find(key)->first);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
-        value = Definition(Value::Type::TABLE, key.line, key.column);
+        value = Definition(Value::Type::TABLE, key.location);
         value_meta = ValueMeta(ValueMeta::Type::HEADER_TABLE);
     }
 
@@ -818,7 +818,7 @@ parse_table_array(Parser &parser)
     if (value.type() == Value::Type::INVALID)
     {
         assert(value_meta.type() == ValueMeta::Type::INVALID);
-        value = Definition(Value::Type::ARRAY, key.line, key.column);
+        value = Definition(Value::Type::ARRAY, key.location);
         value_meta = ValueMeta(ValueMeta::Type::TABLE_ARRAY);
     }
     else if (value_meta.type() != ValueMeta::Type::TABLE_ARRAY)
@@ -826,13 +826,13 @@ parse_table_array(Parser &parser)
         key_redefinition(parser, key, parser.current_table->find(key)->first);
         // Replacing the value and continuing on seems like maybe the best way
         // to mitigate cascading errors.
-        value = Definition(Value::Type::ARRAY, key.line, key.column);
+        value = Definition(Value::Type::ARRAY, key.location);
         value_meta = ValueMeta(ValueMeta::Type::TABLE_ARRAY);
     }
 
     assert(value.type() == Value::Type::ARRAY);
     DefinitionArray &array = value.as_array();
-    array.push_back(Definition(Value::Type::TABLE, key.line, key.column));
+    array.push_back(Definition(Value::Type::TABLE, key.location));
 
     assert(value_meta.type() == ValueMeta::Type::TABLE_ARRAY);
     ArrayMeta &array_meta = value_meta.array();
