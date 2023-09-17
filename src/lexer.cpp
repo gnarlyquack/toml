@@ -877,12 +877,14 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
         else
         {
             valid = false;
+            add_error(lexer, "Invalid or missing seconds for time.", lexer.current);
             resynchronize(lexer, "Invalid or missing seconds for time: ", context);
         }
     }
     else
     {
         valid = false;
+        add_error(lexer, "Invalid or missing minutes for time.", lexer.current);
         resynchronize(lexer, "Invalid or missing minutes for time: ", context);
     }
 
@@ -1799,6 +1801,7 @@ lex_value(Lexer &lexer, u32 context)
             default:
             {
                 resynchronize(lexer, "Invalid value: ", context);
+                add_error(lexer, "Invalid value.");
                 result = make_value(lexer, Value());
             } break;
         }
