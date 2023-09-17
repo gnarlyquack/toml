@@ -1082,7 +1082,16 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
     }
     else if (match(lexer, '-'))
     {
-        token = lex_date(lexer, value, result, context);
+        if (result.digits.length())
+        {
+            token = lex_date(lexer, value, result, context);
+        }
+        else
+        {
+            resynchronize(lexer, context);
+            add_error(lexer, "Invalid value.");
+            token = make_value(lexer, Value());
+        }
     }
     else if (match(lexer, ':'))
     {
