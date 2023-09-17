@@ -2154,63 +2154,6 @@ lex_keyval(TomlIterator &iterator, u32 context)
 }
 
 
-void
-lex_table(Lexer &lexer, bool table_array)
-{
-    lex_key(lexer, LEX_HEADER);
-
-    assert(!match_whitespace(lexer));
-    advance(lexer);
-
-    if (match(lexer, ']'))
-    {
-        eat_byte(lexer);
-        if (!table_array)
-        {
-            add_token(lexer, TOKEN_RBRACKET);
-        }
-        else if (match(lexer, ']'))
-        {
-            eat_byte(lexer);
-            add_token(lexer, TOKEN_DOUBLE_RBRACKET);
-        }
-        else
-        {
-            add_error(lexer, "Missing closing ']' for table array header.");
-        }
-    }
-    else if (table_array)
-    {
-        add_error(lexer, "Missing closing ']]' for table array header.");
-    }
-    else
-    {
-        add_error(lexer, "Missing closing ']' for table header.");
-    }
-}
-
-
-void
-lex_expression(Lexer &lexer)
-{
-    if (match(lexer, TOKEN_LBRACKET))
-    {
-        bool table_array = match(lexer, TOKEN_LBRACKET);
-        lex_table(lexer, table_array);
-    }
-    else if (match(lexer, TOKEN_KEY))
-    {
-        lex_keyval(lexer, LEX_EOL);
-    }
-
-    if (!match(lexer, TOKEN_NEWLINE) && !match(lexer, TOKEN_EOF))
-    {
-        // TODO: Unexpected stuff after expression
-        assert(false);
-    }
-}
-
-
 } // namespace
 
 
@@ -2417,22 +2360,6 @@ resynchronize(Lexer &lexer, string message, u32 context)
             }
         }
     }
-}
-
-
-bool
-lex_toml(const string &toml, vector<Token> &tokens, vector<Error> &errors)
-{
-    Lexer lexer(toml, tokens, errors);
-
-    for (next_token(lexer, LEX_KEY); !match(lexer, TOKEN_EOF); next_token(lexer, LEX_KEY))
-    {
-        lex_expression(lexer);
-    }
-
-    add_token(lexer, TOKEN_EOF);
-
-    return errors.size() == 0;
 }
 
 

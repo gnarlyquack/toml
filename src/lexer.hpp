@@ -69,10 +69,6 @@ struct TomlIterator
 using Lexer = TomlIterator;
 
 
-bool
-lex_toml(const std::string &toml, std::vector<Token> &tokens, std::vector<Error> &errors);
-
-
 Token
 next_token(Lexer &lexer, u32 context);
 
