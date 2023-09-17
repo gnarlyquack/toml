@@ -74,9 +74,6 @@ struct LexDigitResult
 void
 eat_bytes(Lexer &lexer, u64 count, byte expected = INVALID_BYTE);
 
-void
-lex_keyval(Lexer &lexer, u32 context);
-
 bool
 lex_string_char(Lexer &lexer, string &result);
 
@@ -140,15 +137,6 @@ void
 add_error(Lexer &lexer, string message)
 {
     add_error(lexer, move(message), lexer.start_line, lexer.start_column);
-}
-
-
-void
-add_token(Lexer &lexer, TokenType type, string lexeme = "")
-{
-    Token token = { type, Value(), move(lexeme), lexer.start_position, lexer.start_line, lexer.start_column };
-    lexer.tokens.push_back(move(token));
-    advance(lexer);
 }
 
 
@@ -1720,139 +1708,6 @@ lex_string(Lexer &lexer, byte delimiter)
 }
 
 
-void
-lex_array(Lexer &lexer)
-{
-    eat_byte(lexer, '[');
-    add_token(lexer, TOKEN_LBRACKET);
-
-    ContainerState state = CONTAINER_START;
-    bool lexing = true;
-    while (lexing)
-    {
-        eat_whitespace(lexer);
-        if (end_of_file(lexer))
-        {
-            advance(lexer);
-            add_error(lexer, "Unterminated array.");
-            lexing = false;
-        }
-        else if (match_eol(lexer))
-        {
-            eat_newline(lexer);
-        }
-        else
-        {
-            switch (get_byte(lexer))
-            {
-                case ']':
-                {
-                    advance(lexer);
-                    eat_byte(lexer);
-                    add_token(lexer, TOKEN_RBRACKET);
-                    lexing = false;
-                } break;
-
-                case ',':
-                {
-                    if (state != CONTAINER_VALUE)
-                    {
-                        add_error(lexer, "Missing value for array.");
-                    }
-
-                    advance(lexer);
-                    eat_byte(lexer);
-                    add_token(lexer, TOKEN_COMMA);
-                    state = CONTAINER_SEPARATOR;
-                } break;
-
-                case '#':
-                {
-                    eat_comment(lexer);
-                    eat_newline(lexer);
-                } break;
-
-                default:
-                {
-                    if (state == CONTAINER_VALUE)
-                    {
-                        advance(lexer);
-                        add_error(lexer, "Missing ',' between array values.");
-                    }
-                    lex_value(lexer, LEX_ARRAY);
-                    state = CONTAINER_VALUE;
-                }
-            }
-        }
-    }
-}
-
-
-void
-lex_inline_table(Lexer &lexer)
-{
-    eat_byte(lexer, '{');
-    add_token(lexer, TOKEN_LBRACE);
-
-    ContainerState state = CONTAINER_START;
-    u32 comma_line = 0;
-    u32 comma_offset = 0;
-    bool lexing = true;
-    while (lexing)
-    {
-        eat_whitespace(lexer);
-        switch (get_byte(lexer))
-        {
-            case '}':
-            {
-                advance(lexer);
-                if (state == CONTAINER_SEPARATOR)
-                {
-                    add_error(lexer, "Trailing ',' is not allowed in an inline table.", comma_line, comma_offset);
-                }
-                eat_byte(lexer);
-                add_token(lexer, TOKEN_RBRACE);
-                lexing = false;
-            } break;
-
-            case ',':
-            {
-                advance(lexer);
-                if (state != CONTAINER_VALUE)
-                {
-                    add_error(lexer, "Missing value for inline table.");
-                }
-                comma_line = lexer.current_line;
-                comma_offset = lexer.current_column;
-                eat_byte(lexer);
-                add_token(lexer, TOKEN_COMMA);
-                state = CONTAINER_SEPARATOR;
-            } break;
-
-            default:
-            {
-                if (match_eol(lexer))
-                {
-                    advance(lexer);
-                    add_error(lexer, "Unterminated inline table.");
-                    lexing = false;
-                }
-                else
-                {
-                    if (state == CONTAINER_VALUE)
-                    {
-                        advance(lexer);
-                        add_error(lexer, "Missing ',' between inline table values.");
-                    }
-                    lex_keyval(lexer, LEX_TABLE);
-                    state = CONTAINER_VALUE;
-                }
-            }
-        }
-    }
-}
-
-
 Token
 lex_value(Lexer &lexer, u32 context)
 {
@@ -1951,18 +1806,6 @@ lex_value(Lexer &lexer, u32 context)
             {
                 eat_string(lexer, "false", context);
                 result = make_value(lexer, Value(false));
-            } break;
-
-            case '[':
-            {
-                assert(false);
-                lex_array(lexer);
-            } break;
-
-            case '{':
-            {
-                assert(false);
-                lex_inline_table(lexer);
             } break;
 
             // special handling for invalid cases
@@ -2129,28 +1972,6 @@ lex_key(Lexer &lexer, u32 context)
     return result;
 
 #endif
-}
-
-
-void
-lex_keyval(Lexer &lexer, u32 context)
-{
-    lex_key(lexer, context);
-
-    eat_whitespace(lexer);
-
-    if (match(lexer, '='))
-    {
-        eat_byte(lexer);
-        eat_whitespace(lexer);
-    }
-    else
-    {
-        advance(lexer);
-        add_error(lexer, "Missing '=' between key and value.");
-    }
-
-    lex_value(lexer, context);
 }
 
 

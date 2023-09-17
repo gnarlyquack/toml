@@ -326,9 +326,6 @@ struct Parser final
 {
     Lexer &lexer;
     Token token;
-    TokenList &tokens;
-    u64 length;
-    u64 position;
 
     DefinitionTable &table;
     TableMeta meta;
@@ -338,12 +335,9 @@ struct Parser final
 
     ErrorList &errors;
 
-    explicit Parser(Lexer &l, TokenList &token_list, DefinitionTable &definitions, ErrorList &error_list)
+    explicit Parser(Lexer &l, DefinitionTable &definitions, ErrorList &error_list)
         : lexer(l)
         , token()
-        , tokens(token_list)
-        , length(tokens.size())
-        , position(0)
         , table(definitions)
         , meta()
         , current_table(&table)
@@ -996,9 +990,8 @@ parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Err
 
 #else
 
-    vector<Token> tokens;
-    Lexer lexer(toml, tokens, errors);
-    Parser parser(lexer, tokens, definitions, errors);
+    Lexer lexer(toml, errors);
+    Parser parser(lexer, definitions, errors);
 
     for (advance(parser, LEX_HEADER | LEX_KEY); !match(parser, TOKEN_EOF); advance(parser, LEX_HEADER | LEX_KEY))
     {

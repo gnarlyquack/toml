@@ -47,11 +47,10 @@ struct Lexer
     u32 current_line;
     u32 current_column;
 
-    std::vector<Token> &tokens;
     std::vector<Error> &errors;
 
 
-    explicit Lexer(const std::string &t, std::vector<Token> &token_list, std::vector<Error> &error_list)
+    explicit Lexer(const std::string &t, std::vector<Error> &error_list)
         : toml(t)
         , length(toml.length())
         , start_position(0)
@@ -60,7 +59,6 @@ struct Lexer
         , current_position(0)
         , current_line(1)
         , current_column(1)
-        , tokens(token_list)
         , errors(error_list)
     {
     }
