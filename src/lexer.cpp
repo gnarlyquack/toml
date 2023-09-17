@@ -105,13 +105,6 @@ byte_to_hex(byte value, string &out)
 }
 
 
-void
-advance(Lexer &lexer)
-{
-    lexer.start = lexer.current;
-}
-
-
 string
 get_lexeme(const Lexer &lexer)
 {
@@ -127,7 +120,6 @@ add_error(Lexer &lexer, string message, const SourceLocation &location)
 {
     Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
-    advance(lexer);
 }
 
 void
@@ -140,13 +132,11 @@ add_error(Lexer &lexer, string message)
 Token
 make_token(Lexer &lexer, TokenType type, u64 length)
 {
-    advance(lexer);
     if (length)
     {
         eat_bytes(lexer, length);
     }
     Token result = { type, Value(), get_lexeme(lexer), lexer.start };
-    advance(lexer);
 
     return result;
 }
@@ -156,8 +146,6 @@ Token
 make_token(Lexer &lexer, TokenType type, string lexeme = "")
 {
     Token result = { type, Value(), move(lexeme), lexer.start };
-    advance(lexer);
-
     return result;
 }
 
@@ -166,7 +154,6 @@ Token
 make_value(Lexer &lexer, Value &&value)
 {
     Token result = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start };
-    advance(lexer);
     return result;
 }
 
@@ -344,9 +331,7 @@ eat_comment(Lexer &lexer)
 Token
 make_comment(Lexer &lexer)
 {
-    advance(lexer);
     eat_comment(lexer);
-
     Token result = make_token(lexer, TOKEN_COMMENT, get_lexeme(lexer));
     return result;
 }
@@ -1710,8 +1695,6 @@ lex_value(Lexer &lexer, u32 context)
     assert(!match_whitespace(lexer));
 
     Token result;
-
-    advance(lexer);
     byte c = get_byte(lexer);
     if (match_eol(lexer))
     {
@@ -1952,8 +1935,6 @@ lex_key(Lexer &lexer, u32 context)
 #else
 
     Token result;
-    advance(lexer);
-
     byte c = get_byte(lexer);
     if ((c == '"') || (c == '\''))
     {
@@ -1981,6 +1962,7 @@ next_token(Lexer &lexer, u32 context)
     bool lexing = true;
     while (lexing)
     {
+        lexer.start = lexer.current;
         if (end_of_file(lexer))
         {
             result = make_token(lexer, TOKEN_EOF, 0);
@@ -2102,7 +2084,6 @@ next_token(Lexer &lexer, u32 context)
 void
 resynchronize(Lexer &lexer, string message, u32 context)
 {
-    advance(lexer);
     u32 uneaten = 0;
     bool valid = true;
     bool whitespace = false;
