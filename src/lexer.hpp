@@ -62,7 +62,7 @@ next_token(Lexer &lexer, u32 context);
 
 
 void
-resynchronize(Lexer &Lexer, std::string message, u32 context);
+resynchronize(Lexer &Lexer, u32 context);
 
 
 } // namespace toml

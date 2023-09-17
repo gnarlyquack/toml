@@ -402,7 +402,7 @@ void
 resynchronize(Parser &parser, string message, u32 context)
 {
     add_error(parser, move(message));
-    resynchronize(parser.lexer, "", context);
+    resynchronize(parser.lexer, context);
     advance(parser, context);
 }
 

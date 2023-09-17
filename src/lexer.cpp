@@ -878,14 +878,14 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
         {
             valid = false;
             add_error(lexer, "Invalid or missing seconds for time.", lexer.current);
-            resynchronize(lexer, "Invalid or missing seconds for time: ", context);
+            resynchronize(lexer, context);
         }
     }
     else
     {
         valid = false;
         add_error(lexer, "Invalid or missing minutes for time.", lexer.current);
-        resynchronize(lexer, "Invalid or missing minutes for time: ", context);
+        resynchronize(lexer, context);
     }
 
     return valid;
@@ -1800,7 +1800,7 @@ lex_value(Lexer &lexer, u32 context)
 
             default:
             {
-                resynchronize(lexer, "Invalid value: ", context);
+                resynchronize(lexer, context);
                 add_error(lexer, "Invalid value.");
                 result = make_value(lexer, Value());
             } break;
@@ -2090,7 +2090,7 @@ next_token(Lexer &lexer, u32 context)
 
 
 void
-resynchronize(Lexer &lexer, string message, u32 context)
+resynchronize(Lexer &lexer, u32 context)
 {
     u32 uneaten = 0;
     bool valid = true;
@@ -2158,11 +2158,13 @@ resynchronize(Lexer &lexer, string message, u32 context)
             }
             else
             {
-                for ( ; uneaten; --uneaten)
+                if (uneaten)
                 {
-                    message += eat_byte(lexer);
+                    eat_bytes(lexer, uneaten);
+                    uneaten = 0;
                 }
-                valid = lex_string_char(lexer, message) && valid;
+                string temp;
+                valid = lex_string_char(lexer, temp) && valid;
             }
         }
     }
