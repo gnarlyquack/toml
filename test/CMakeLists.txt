@@ -6,7 +6,6 @@ add_custom_command(
     )
 
 add_executable(test_toml
-    #lexer.cpp
     parser.cpp
     valid_tests.cpp
     #invalid_tests.cpp
