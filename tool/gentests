@@ -69,9 +69,9 @@ using namespace toml;
 VALID_TEST_TEMPLATE = b'''\
 TEST(%b, %b)
 {
-    const string toml{"%b", %d};
+    const string toml("%b", %d);
 
-    const Table expected{%b};
+    const Table expected = {%b};
 
     assert_parsed(toml, expected);
 }
@@ -81,9 +81,9 @@ TEST(%b, %b)
 INVALID_TEST_TEMPLATE = b'''\
 TEST(%b, %b)
 {
-    const string toml{"%b", %d};
+    const string toml("%b", %d);
 
-    const vector<Error> expected{
+    const vector<Error> expected = {
         { 0, 0, 0, "" },
     };
 
@@ -254,8 +254,8 @@ def generate_invalid_tests(relative_src_dir, files):
                 with open(testpath, "rb") as fh:
                     current = fh.read()
 
-                replacement = (b'toml{"%b", %d};\n' % (escape_bytes(toml), len(toml))).replace(b'\\', b'\\\\')
-                result = re.sub(b'toml\\{.*\\};\n', replacement, current)
+                replacement = (b'toml("%b", %d);\n' % (escape_bytes(toml), len(toml))).replace(b'\\', b'\\\\')
+                result = re.sub(b'toml\\(.*\\);\n', replacement, current)
             else:
                 current = None
 
