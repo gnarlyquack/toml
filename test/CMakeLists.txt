@@ -8,7 +8,7 @@ add_custom_command(
 add_executable(test_toml
     parser.cpp
     valid_tests.cpp
-    #invalid_tests.cpp
+    invalid_tests.cpp
     )
 target_include_directories(test_toml PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(test_toml PRIVATE cxxflags toml gtest_main)

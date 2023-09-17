@@ -1048,11 +1048,7 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
     Token token;
     LexDigitResult result = lex_digits(lexer, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
 
-    if (result.digits.length() == 0)
-    {
-        resynchronize(lexer, "Invalid decimal value: ", context);
-    }
-    else if (match(lexer, '.'))
+    if (match(lexer, '.'))
     {
         bool valid = validate_digits(lexer, result, "whole part of decimal", true);
         value += move(result.digits);
@@ -1789,6 +1785,7 @@ lex_value(Lexer &lexer, u32 context)
 
             // special handling for invalid cases
             case '.':
+            case '_':
             {
                 result = lex_number(lexer, context);
             } break;
@@ -1802,6 +1799,7 @@ lex_value(Lexer &lexer, u32 context)
             default:
             {
                 resynchronize(lexer, "Invalid value: ", context);
+                result = make_value(lexer, Value());
             } break;
         }
     }
@@ -2007,7 +2005,14 @@ next_token(Lexer &lexer, u32 context)
 
                 case '.':
                 {
-                    result = make_token(lexer, TOKEN_PERIOD, 1);
+                    if (context & (LEX_KEY | LEX_HEADER))
+                    {
+                        result = make_token(lexer, TOKEN_PERIOD, 1);
+                    }
+                    else
+                    {
+                        result = lex_value(lexer, context);
+                    }
                     lexing = false;
                 } break;
 

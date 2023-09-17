@@ -513,7 +513,7 @@ TEST(parse, invalid_floats)
         ;
 
     const vector<Error> errors = {
-        { 35, 2, 19, "Invalid value." },
+        { 35, 2, 19, "Missing whole part of decimal number." },
         { 58, 3, 21, "Missing fractional part of decimal number." },
         { 79, 4, 21, "Missing fractional part of decimal number." },
     };
