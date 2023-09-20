@@ -488,15 +488,6 @@ missing_value(Parser &parser)
 }
 
 
-Token
-make_error(Parser &parser, TokenType type, string message)
-{
-    add_error(parser, move(message));
-    Token result = { type, Value(), "", SourceLocation() };
-    return result;
-}
-
-
 Definition
 array_definition(const Token &token)
 {
@@ -582,49 +573,53 @@ parse_array(Parser &parser, u32 context)
 Definition
 parse_inline_table(Parser &parser, u32 context)
 {
-    auto result = table_definition(eat(parser, context | LEX_TABLE | LEX_KEY, TOKEN_LBRACE));
+    Token prev = eat(parser, context | LEX_TABLE | LEX_KEY, TOKEN_LBRACE);
+    auto result = table_definition(prev);
     TableMeta meta;
-    TokenType prev = TOKEN_LBRACE;
+
     bool parsing = true;
     while (parsing)
     {
-        TokenType type = current_token_type(parser);
-        switch (type)
+        Token token = peek(parser);
+        switch (token.type)
         {
             case TOKEN_COMMA:
             {
-                if (prev != TOKEN_VALUE)
+                if (prev.type != TOKEN_VALUE)
                 {
                     add_error(parser, "Missing inline table value.");
                 }
                 eat(parser, context | LEX_TABLE | LEX_KEY);
-                prev = TOKEN_COMMA;
+                prev = token;
             } break;
 
             case TOKEN_RBRACE:
             {
-                if (prev == TOKEN_COMMA)
+                if (prev.type == TOKEN_COMMA)
                 {
-                    add_error(parser, "Trailing ',' is not allowed in an inline table.");
+                    add_error(parser, prev.location, "Trailing ',' is not allowed in an inline table.");
                 }
                 eat(parser, context);
                 parsing = false;
             } break;
 
+            case TOKEN_COMMENT:
             case TOKEN_EOF:
+            case TOKEN_NEWLINE:
             {
-                // TODO: handle unterminated table
-                assert(false);
+                add_error(parser, "Missing closing '}' for inline table.");
+                parsing = false;
             } break;
 
             default:
             {
-                if (prev == TOKEN_VALUE)
+                if (prev.type == TOKEN_VALUE)
                 {
                     add_error(parser, "Missing ',' between inline table values.");
                 }
-                parse_keyval(parser, &result.as_table(), &meta, LEX_TABLE);
-                prev = TOKEN_VALUE;
+                parse_keyval(parser, &result.as_table(), &meta, context | LEX_TABLE | LEX_KEY);
+                prev = token;
+                prev.type = TOKEN_VALUE;
             } break;
         }
     }
@@ -673,62 +668,110 @@ parse_value(Parser &parser, u32 context)
 
 
 void
-parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 context)
+add_dotted_table(Parser &parser, DefinitionTable *&table, TableMeta *&meta, Token &token, bool valid)
 {
-    Token token;
-    if (current_token_type(parser) == TOKEN_KEY)
-    {
-        token = eat(parser, context | LEX_KEY | LEX_VALUE, TOKEN_KEY);
-    }
-    else
-    {
-        token = make_error(parser, TOKEN_KEY, "Missing key.");
-    }
-
-    while (current_token_type(parser) == TOKEN_PERIOD)
-    {
-        Key key = {token.lexeme, token.location};
-        Definition &value = (*table)[key];
-        ValueMeta &value_meta = (*meta)[key.value];
-        if (value.type() == Value::Type::INVALID)
-        {
-            assert(value_meta.type() == ValueMeta::Type::INVALID);
-            value = Definition(Value::Type::TABLE, key.location);
-            value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
-        }
-        else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
-        {
-            value_meta.make_table_dotted();
-        }
-        else if (value_meta.type() != ValueMeta::Type::DOTTED_TABLE)
-        {
-            key_redefinition(parser, key, table->find(key)->first);
-            // Replacing the value and continuing on seems like maybe the
-            // best way to mitigate cascading errors.
-            value = Definition(Value::Type::TABLE, key.location);
-            value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
-        }
-
-        assert(value.type() == Value::Type::TABLE);
-        table = &value.as_table();
-
-        assert(value_meta.type() == ValueMeta::Type::DOTTED_TABLE);
-        meta = &value_meta.table();
-
-        eat(parser, context | LEX_KEY, TOKEN_PERIOD);
-        token = eat(parser, context | LEX_KEY | LEX_VALUE);
-    }
-
     Key key = {token.lexeme, token.location};
+
     Definition &value = (*table)[key];
     ValueMeta &value_meta = (*meta)[key.value];
-    if (value.type() != Value::Type::INVALID)
+    if (value.type() == Value::Type::INVALID)
+    {
+        assert(value_meta.type() == ValueMeta::Type::INVALID);
+        value = Definition(Value::Type::TABLE, key.location);
+        value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
+    }
+    else if (value_meta.type() == ValueMeta::Type::IMPLICIT_TABLE)
+    {
+        value_meta.make_table_dotted();
+    }
+    else if (value_meta.type() != ValueMeta::Type::DOTTED_TABLE)
+    {
+        if (valid)
+        {
+            key_redefinition(parser, key, table->find(key)->first);
+        }
+        // Replacing the value and continuing on seems like maybe the
+        // best way to mitigate cascading errors.
+        value = Definition(Value::Type::TABLE, key.location);
+        value_meta = ValueMeta(ValueMeta::Type::DOTTED_TABLE);
+    }
+
+    assert(value.type() == Value::Type::TABLE);
+    table = &value.as_table();
+
+    assert(value_meta.type() == ValueMeta::Type::DOTTED_TABLE);
+    meta = &value_meta.table();
+}
+
+
+void
+parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 context)
+{
+    Key key;
+    bool valid = true;
+    bool parsing = true;
+    while (parsing)
+    {
+        Token token = peek(parser);
+        switch (token.type)
+        {
+            case TOKEN_KEY:
+            {
+                eat(parser, LEX_KEY | LEX_VALUE);
+            } break;
+
+            case TOKEN_COMMENT:
+            case TOKEN_EOF:
+            case TOKEN_EQUAL:
+            case TOKEN_NEWLINE:
+            case TOKEN_PERIOD:
+            {
+                add_error(parser, "Missing key.");
+                valid = false;
+            }  break;
+
+            default:
+            {
+                if (((token.type == TOKEN_RBRACKET) && (context & LEX_ARRAY))
+                    || ((token.type == TOKEN_RBRACE) && (context & LEX_TABLE)))
+                {
+                    add_error(parser, "Missing key.");
+                }
+                else
+                {
+                    token.lexeme = resynchronize(parser, "Invalid key: ", LEX_KEY | LEX_VALUE);
+                }
+                valid = false;
+            } break;
+        }
+
+        if (peek(parser, TOKEN_PERIOD))
+        {
+            add_dotted_table(parser, table, meta, token, valid);
+            eat(parser, context | LEX_KEY);
+        }
+        else
+        {
+            key = {token.lexeme, token.location};
+            parsing = false;
+        }
+    }
+
+    Definition &value = (*table)[key];
+    ValueMeta &value_meta = (*meta)[key.value];
+    if ((value.type() != Value::Type::INVALID) && valid)
     {
         key_redefinition(parser, key, table->find(key)->first);
     }
 
-    assert(parser.token.type == TOKEN_EQUAL);
-    advance(parser, context | LEX_VALUE);
+    if (peek(parser, TOKEN_EQUAL))
+    {
+        eat(parser, context | LEX_VALUE);
+    }
+    else
+    {
+        add_error(parser, "Missing '=' between key and value.");
+    }
 
     value = parse_value(parser, context);
     value_meta = ValueMeta(ValueMeta::Type::LITERAL);
@@ -736,7 +779,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
 
 
 void
-add_subtable(Parser &parser, Token &token, bool valid)
+add_implicit_table(Parser &parser, Token &token, bool valid)
 {
     Key key = {token.lexeme, token.location};
 
@@ -811,15 +854,10 @@ parse_table_header(Parser &parser)
                 eat(parser, LEX_HEADER);
             } break;
 
-            case TOKEN_PERIOD:
-            {
-                add_error(parser, "Missing key.");
-                valid = false;
-            } break;
-
             case TOKEN_COMMENT:
             case TOKEN_EOF:
             case TOKEN_NEWLINE:
+            case TOKEN_PERIOD:
             case TOKEN_RBRACKET:
             case TOKEN_DOUBLE_RBRACKET:
             {
@@ -836,7 +874,7 @@ parse_table_header(Parser &parser)
 
         if (peek(parser, TOKEN_PERIOD))
         {
-            add_subtable(parser, token, valid);
+            add_implicit_table(parser, token, valid);
             eat(parser, LEX_HEADER);
         }
         else
@@ -1007,22 +1045,18 @@ parse_expression(Parser &parser)
             parse_table_array(parser);
         } break;
 
-        // invalid cases
+        case TOKEN_COMMENT:
+        case TOKEN_NEWLINE:
+        case TOKEN_EOF:
+        {
+            // do nothing
+        } break;
 
-        case TOKEN_EQUAL:
+        // invalid case
+        default:
         {
             parse_keyval(parser, parser.current_table, parser.current_meta, LEX_EOL);
         } break;
-
-        default:
-        {
-            // TODO: Handle error here?
-        } break;
-    }
-
-    if (current_token_type(parser) == TOKEN_COMMENT)
-    {
-        eat(parser, LEX_EOL);
     }
 
     Token token = parser.token;
