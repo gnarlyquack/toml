@@ -57,6 +57,10 @@ struct Lexer
 };
 
 
+std::string
+get_lexeme(const Lexer &lexer, u64 from);
+
+
 Token
 next_token(Lexer &lexer, u32 context);
 

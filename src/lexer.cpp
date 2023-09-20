@@ -108,9 +108,7 @@ byte_to_hex(byte value, string &out)
 string
 get_lexeme(const Lexer &lexer)
 {
-    string result = lexer.toml.substr(
-        lexer.start.index,
-        lexer.current.index - lexer.start.index);
+    string result = get_lexeme(lexer, lexer.start.index);
     return result;
 }
 
@@ -1089,7 +1087,7 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
         else
         {
             resynchronize(lexer, context);
-            add_error(lexer, "Invalid value.");
+            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
             token = make_value(lexer, Value());
         }
     }
@@ -1810,7 +1808,7 @@ lex_value(Lexer &lexer, u32 context)
             default:
             {
                 resynchronize(lexer, context);
-                add_error(lexer, "Invalid value.");
+                add_error(lexer, "Invalid value: " + get_lexeme(lexer));
                 result = make_value(lexer, Value());
             } break;
         }
@@ -1965,6 +1963,15 @@ lex_key(Lexer &lexer, u32 context)
 } // namespace
 
 
+string
+get_lexeme(const Lexer &lexer, u64 from)
+{
+    string result = lexer.toml.substr(from, lexer.current.index - from);
+    return result;
+}
+
+
+
 Token
 next_token(Lexer &lexer, u32 context)
 {
@@ -2084,9 +2091,14 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = lex_value(lexer, context);
                     }
-                    else
+                    else if (context & (LEX_KEY | LEX_HEADER))
                     {
                         result = lex_key(lexer, context);
+                    }
+                    else
+                    {
+                        resynchronize(lexer, context);
+                        result = make_token(lexer, TOKEN_ERROR);
                     }
                     lexing = false;
                 } break;

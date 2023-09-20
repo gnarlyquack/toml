@@ -381,12 +381,19 @@ eat(Parser &parser, TokenType expected = TOKEN_ERROR)
 }
 #endif
 
+
+void
+add_error(Parser &parser, SourceLocation location, string message)
+{
+    Error error = {location, move(message)};
+    parser.errors.push_back(move(error));
+}
+
+
 void
 add_error(Parser &parser, string message)
 {
-    Token token = parser.token;
-    Error error = {token.location, move(message)};
-    parser.errors.push_back(move(error));
+    add_error(parser, parser.token.location, move(message));
 }
 
 
@@ -398,12 +405,27 @@ advance(Parser &parser, u32 context, TokenType expected = TOKEN_ERROR)
 }
 
 
-void
+string
+resynchronize(Parser &parser, SourceLocation from, string message, u32 context)
+{
+    resynchronize(parser.lexer, context);
+
+    string result = get_lexeme(parser.lexer, from.index);
+    if (message.length())
+    {
+        add_error(parser, from, message + result);
+    }
+    advance(parser, context);
+
+    return result;
+}
+
+
+string
 resynchronize(Parser &parser, string message, u32 context)
 {
-    add_error(parser, move(message));
-    resynchronize(parser.lexer, context);
-    advance(parser, context);
+    string result = resynchronize(parser, parser.token.location, message, context);
+    return result;
 }
 
 
@@ -414,6 +436,21 @@ eat(Parser &parser, u32 context, TokenType expected = TOKEN_ERROR)
 
     Token result = parser.token;
     advance(parser, context);
+    return result;
+}
+
+
+Token&
+peek(Parser &parser)
+{
+    return parser.token;
+}
+
+
+bool
+peek(Parser &parser, TokenType expected)
+{
+    bool result = parser.token.type == expected;
     return result;
 }
 
@@ -698,70 +735,118 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
 }
 
 
+void
+add_subtable(Parser &parser, Token &token, bool valid)
+{
+    Key key = {token.lexeme, token.location};
+
+    Definition &value = (*parser.current_table)[key];
+    ValueMeta &value_meta = (*parser.current_meta)[key.value];
+    if (value.type() == Value::Type::INVALID)
+    {
+        assert(value_meta.type() == ValueMeta::Type::INVALID);
+        value = Definition(Value::Type::TABLE, key.location);
+        value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
+
+        parser.current_table = &value.as_table();
+        parser.current_meta = &value_meta.table();
+    }
+    else
+    {
+        switch (value_meta.type())
+        {
+            case ValueMeta::Type::TABLE_ARRAY:
+            {
+                DefinitionArray &array = value.as_array();
+                assert(array.size());
+
+                ArrayMeta &array_meta = value_meta.array();
+                assert(array_meta.back().type() == ValueMeta::Type::HEADER_TABLE);
+
+                parser.current_table = &array.back().as_table();
+                parser.current_meta = &array_meta.back().table();
+            } break;
+
+            case ValueMeta::Type::IMPLICIT_TABLE:
+            case ValueMeta::Type::DOTTED_TABLE:
+            case ValueMeta::Type::HEADER_TABLE:
+            {
+                assert(value.type() == Value::Type::TABLE);
+                parser.current_table = &value.as_table();
+                parser.current_meta = &value_meta.table();
+            } break;
+
+            default:
+            {
+                if (valid)
+                {
+                    key_redefinition(parser, key, parser.current_table->find(key)->first);
+                }
+                // Replacing the value and continuing on seems like maybe the
+                // best way to mitigate cascading errors.
+                value = Definition(Value::Type::TABLE, key.location);
+                value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
+
+                parser.current_table = &value.as_table();
+                parser.current_meta = &value_meta.table();
+            } break;
+        }
+    }
+}
+
+
 Key
 parse_table_header(Parser &parser)
 {
-    Token token = eat(parser, LEX_HEADER);
-
-    while (parser.token.type == TOKEN_PERIOD)
+    Key result;
+    bool valid = true;
+    bool parsing = true;
+    while (parsing)
     {
-        Key key = {token.lexeme, token.location};
-        Definition &value = (*parser.current_table)[key];
-        ValueMeta &value_meta = (*parser.current_meta)[key.value];
-        if (value.type() == Value::Type::INVALID)
+        Token token = peek(parser);
+        switch (token.type)
         {
-            assert(value_meta.type() == ValueMeta::Type::INVALID);
-            value = Definition(Value::Type::TABLE, key.location);
-            value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
+            case TOKEN_KEY:
+            {
+                eat(parser, LEX_HEADER);
+            } break;
 
-            parser.current_table = &value.as_table();
-            parser.current_meta = &value_meta.table();
+            case TOKEN_PERIOD:
+            {
+                add_error(parser, "Missing key.");
+                valid = false;
+            } break;
+
+            case TOKEN_COMMENT:
+            case TOKEN_EOF:
+            case TOKEN_NEWLINE:
+            case TOKEN_RBRACKET:
+            case TOKEN_DOUBLE_RBRACKET:
+            {
+                add_error(parser, "Missing key.");
+                valid = false;
+            }  break;
+
+            default:
+            {
+                token.lexeme = resynchronize(parser, "Invalid key: ", LEX_HEADER);
+                valid = false;
+            } break;
+        }
+
+        if (peek(parser, TOKEN_PERIOD))
+        {
+            add_subtable(parser, token, valid);
+            eat(parser, LEX_HEADER);
         }
         else
         {
-            switch (value_meta.type())
-            {
-                case ValueMeta::Type::TABLE_ARRAY:
-                {
-                    DefinitionArray &array = value.as_array();
-                    assert(array.size());
-
-                    ArrayMeta &array_meta = value_meta.array();
-                    assert(array_meta.back().type() == ValueMeta::Type::HEADER_TABLE);
-
-                    parser.current_table = &array.back().as_table();
-                    parser.current_meta = &array_meta.back().table();
-                } break;
-
-                case ValueMeta::Type::IMPLICIT_TABLE:
-                case ValueMeta::Type::DOTTED_TABLE:
-                case ValueMeta::Type::HEADER_TABLE:
-                {
-                    assert(value.type() == Value::Type::TABLE);
-                    parser.current_table = &value.as_table();
-                    parser.current_meta = &value_meta.table();
-                } break;
-
-                default:
-                {
-                    key_redefinition(parser, key, parser.current_table->find(key)->first);
-                    // Replacing the value and continuing on seems like maybe the
-                    // best way to mitigate cascading errors.
-                    value = Definition(Value::Type::TABLE, key.location);
-                    value_meta = ValueMeta(ValueMeta::Type::IMPLICIT_TABLE);
-
-                    parser.current_table = &value.as_table();
-                    parser.current_meta = &value_meta.table();
-                } break;
-            }
+            result = {token.lexeme, token.location};
+            parsing = false;
         }
-
-        eat(parser, LEX_HEADER, TOKEN_PERIOD);
-        token = eat(parser, LEX_HEADER);
     }
 
-    Key key = {token.lexeme, token.location};
-    return key;
+    return result;
 }
 
 
@@ -800,7 +885,35 @@ parse_table(Parser &parser)
     parser.current_table = &value.as_table();
     parser.current_meta = &value_meta.table();
 
-    eat(parser, LEX_EOL, TOKEN_RBRACKET);
+    Token token = peek(parser);
+    switch (token.type)
+    {
+        case TOKEN_RBRACKET:
+        {
+            eat(parser, LEX_EOL);
+        } break;
+
+        case TOKEN_DOUBLE_RBRACKET:
+        {
+            SourceLocation location = token.location;
+            ++location.index;
+            ++location.column;
+            resynchronize(parser, location, "Expected the end of the line but got: ", LEX_EOL);
+        } break;
+
+        case TOKEN_COMMENT:
+        case TOKEN_EOF:
+        case TOKEN_NEWLINE:
+        {
+            add_error(parser, "Missing closing ']' for table header.");
+        } break;
+
+        default:
+        {
+            add_error(parser, "Expected closing ']' for table header.");
+            resynchronize(parser, "", LEX_EOL);
+        }
+    }
 }
 
 
@@ -841,7 +954,36 @@ parse_table_array(Parser &parser)
     parser.current_table = &array.back().as_table();
     parser.current_meta = &array_meta.back().table();
 
-    eat(parser, LEX_EOL, TOKEN_DOUBLE_RBRACKET);
+    Token token = peek(parser);
+    switch (token.type)
+    {
+        case TOKEN_DOUBLE_RBRACKET:
+        {
+            eat(parser, LEX_EOL);
+        } break;
+
+        case TOKEN_RBRACKET:
+        {
+            SourceLocation location = token.location;
+            ++location.index;
+            ++location.column;
+            add_error(parser, location, "Expected closing ']' for table array header.");
+            resynchronize(parser, "", LEX_EOL);
+        } break;
+
+        case TOKEN_COMMENT:
+        case TOKEN_EOF:
+        case TOKEN_NEWLINE:
+        {
+            add_error(parser, "Missing closing ']]' for table array header.");
+        } break;
+
+        default:
+        {
+            add_error(parser, "Expected closing ']]' for table array header.");
+            resynchronize(parser, "", LEX_EOL);
+        }
+    }
 }
 
 
@@ -883,7 +1025,8 @@ parse_expression(Parser &parser)
         eat(parser, LEX_EOL);
     }
 
-    switch (current_token_type(parser))
+    Token token = parser.token;
+    switch (token.type)
     {
         case TOKEN_COMMENT:
         {
@@ -898,7 +1041,7 @@ parse_expression(Parser &parser)
 
         default:
         {
-            resynchronize(parser, "Expected the end of the line.", LEX_EOL);
+            resynchronize(parser, "Expected the end of the line but got: ", LEX_EOL);
         } break;
     }
 }
