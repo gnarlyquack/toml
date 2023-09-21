@@ -459,10 +459,14 @@ convert_unicode_to_utf8(u32 codepoint, string &out)
 }
 
 
-void
-format_unicode(ostream &o, u32 codepoint)
+string
+format_unicode(u32 codepoint)
 {
+    ostringstream o;
     o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
+
+    string result = o.str();
+    return result;
 }
 
 
@@ -1348,22 +1352,18 @@ lex_string_char(Lexer &lexer, string &result)
         {
             if ((nbytes == 2) && (codepoint < 0x80))
             {
-                ostringstream message;
-                message << "Overlong encoding of Unicode codepoint: ";
-                format_unicode(message, codepoint);
-                message << " should be encoded using 1 byte but was encoded using 2.";
-                add_error(lexer, message.str(), location);
+                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
+                               + " should be encoded using 1 byte but was encoded using 2.";
+                add_error(lexer, message, location);
                 valid = false;
             }
             else if ((nbytes == 3) && (codepoint < 0x800))
             {
                 string expected_bytes = (codepoint < 0x80) ? "1 byte" : "2 bytes";
 
-                ostringstream message;
-                message << "Overlong encoding of Unicode codepoint: ";
-                format_unicode(message, codepoint);
-                message << " should be encoded using " << expected_bytes << " but was encoded using 3.";
-                add_error(lexer, message.str(), location);
+                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
+                               + " should be encoded using " + expected_bytes + " but was encoded using 3.";
+                add_error(lexer, message, location);
                 valid = false;
             }
             else if ((nbytes == 4) && (codepoint < 0x10000))
@@ -1378,22 +1378,16 @@ lex_string_char(Lexer &lexer, string &result)
                     expected_bytes = "2 bytes";
                 }
 
-                ostringstream message;
-                message << "Overlong encoding of Unicode codepoint: ";
-                format_unicode(message, codepoint);
-                message << " should be encoded using " << expected_bytes << " but was encoded using 4.";
-                add_error(lexer, message.str(), location);
+                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
+                               + " should be encoded using " + expected_bytes + " but was encoded using 4.";
+                add_error(lexer, message, location);
                 valid = false;
             }
             else if (codepoint > 0x10ffff)
             {
-                ostringstream message;
-                message << "Invalid Unicode codepoint: ";
-                format_unicode(message, codepoint);
-                message << " (maximum codepoint is ";
-                format_unicode(message, 0x10ffff);
-                message << ")";
-                add_error(lexer, message.str(), location);
+                string message = "Invalid Unicode codepoint: " + format_unicode(codepoint)
+                               + " (maximum codepoint is " + format_unicode(0x10ffff) + ')';
+                add_error(lexer, message, location);
                 valid = false;
             }
             else if (!(
@@ -1402,11 +1396,8 @@ lex_string_char(Lexer &lexer, string &result)
                 || ((codepoint >= 0x80) && (codepoint <= 0xd7ff))
                 || (codepoint >= 0xe000)))
             {
-                ostringstream message;
-                message << "Unicode codepoint ";
-                format_unicode(message, codepoint);
-                message << " is not allowed.";
-                add_error(lexer, message.str(), location);
+                string message = "Unicode codepoint " + format_unicode(codepoint) + " is not allowed.";
+                add_error(lexer, message, location);
                 valid = false;
             }
 
@@ -2013,13 +2004,15 @@ next_token(Lexer &lexer, u32 context)
                     if (match(lexer, '\n', 1))
                     {
                         result = make_token(lexer, TOKEN_NEWLINE, 2);
+                        lexing = false;
                     }
                     else
                     {
                         // TODO: invalid unicode
-                        assert(false);
+                        string message = "Unicode codepoint " + format_unicode(b) + " is not allowed.";
+                        add_error(lexer, message, lexer.current);
+                        eat_byte(lexer);
                     }
-                    lexing = false;
                 } break;
 
                 case '.':
