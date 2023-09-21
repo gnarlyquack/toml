@@ -386,7 +386,18 @@ void
 add_error(Parser &parser, SourceLocation location, string message)
 {
     Error error = {location, move(message)};
-    parser.errors.push_back(move(error));
+
+    auto insert_at = parser.errors.end();
+    for ( ; insert_at != parser.errors.begin(); --insert_at)
+    {
+        auto check = insert_at - 1;
+        if (check->location.index <= error.location.index)
+        {
+            break;
+        }
+    }
+
+    parser.errors.insert(insert_at, move(error));
 }
 
 
@@ -659,7 +670,7 @@ parse_value(Parser &parser, u32 context)
 
         default:
         {
-            resynchronize(parser, "Invalid value.", LEX_EOL);
+            resynchronize(parser, "Invalid value: ", LEX_EOL);
         } break;
     }
 
