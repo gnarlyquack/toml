@@ -117,7 +117,18 @@ void
 add_error(Lexer &lexer, string message, const SourceLocation &location)
 {
     Error error = { location, move(message) };
-    lexer.errors.push_back(move(error));
+
+    auto insert_at = lexer.errors.end();
+    for ( ; insert_at != lexer.errors.begin(); --insert_at)
+    {
+        auto check = insert_at - 1;
+        if (check->location.index <= error.location.index)
+        {
+            break;
+        }
+    }
+
+    lexer.errors.insert(insert_at, move(error));
 }
 
 void

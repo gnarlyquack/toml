@@ -493,9 +493,7 @@ key_redefinition(Parser &parser, const Key &key, const Key &prev)
 void
 missing_value(Parser &parser)
 {
-    Token token = parser.token;
-    Error error = {token.location, "Missing value."};
-    parser.errors.push_back(move(error));
+    add_error(parser, "Missing value.");
 }
 
 
