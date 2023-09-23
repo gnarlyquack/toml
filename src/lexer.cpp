@@ -2099,6 +2099,11 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = lex_key(lexer, context);
                     }
+                    // special handling for invalid cases
+                    else if(context & LEX_ARRAY)
+                    {
+                        result = lex_value(lexer, context);
+                    }
                     else
                     {
                         resynchronize(lexer, context);

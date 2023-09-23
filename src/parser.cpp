@@ -558,7 +558,7 @@ parse_array(Parser &parser, u32 context)
             case TOKEN_EOF:
             {
                 // TODO: handle unterminated array
-                assert(false);
+                add_error(parser, "Missing closing ']' for array.");
                 parsing = false;
             } break;
 
