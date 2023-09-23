@@ -1064,7 +1064,7 @@ parse_expression(Parser &parser)
         // invalid case
         default:
         {
-            parse_keyval(parser, parser.current_table, parser.current_meta, LEX_EOL);
+            resynchronize(parser, "Invalid expression: ", LEX_EOL);
         } break;
     }
 

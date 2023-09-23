@@ -105,7 +105,7 @@ TEST(parse, empty_unqoted_key)
     const string toml = "= \"no key name\"  # INVALID";
 
     const vector<Error> errors = {
-        { 0, 1, 1, "Missing key." },
+        { 0, 1, 1, "Invalid expression: = \"no key name\"" },
     };
 
     assert_errors(toml, errors);
