@@ -495,6 +495,7 @@ invalid_escape(Lexer &lexer)
 {
     assert(lexer.current.column > 2);
     SourceLocation location = lexer.current;
+    --location.index;
     --location.column;
     invalid_escape(lexer, location);
 }
@@ -1435,6 +1436,7 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
     assert(lexer.current.column >= 3);
 
     SourceLocation location = lexer.current;
+    location.index -= 2;
     location.column -= 2;
     u32 codepoint = 0;
     bool valid = true;
@@ -2032,9 +2034,14 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = make_token(lexer, TOKEN_PERIOD, 1);
                     }
-                    else
+                    else if (context & LEX_VALUE)
                     {
                         result = lex_value(lexer, context);
+                    }
+                    else
+                    {
+                        resynchronize(lexer, context);
+                        result = make_token(lexer, TOKEN_ERROR);
                     }
                     lexing = false;
                 } break;
