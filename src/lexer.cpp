@@ -71,7 +71,7 @@ struct LexDigitResult
 //
 
 void
-eat_bytes(Lexer &lexer, u64 count, byte expected = INVALID_BYTE);
+advance(Lexer &lexer, u64 count);
 
 bool
 lex_string_char(Lexer &lexer, string &result);
@@ -141,10 +141,7 @@ add_error(Lexer &lexer, string message)
 Token
 make_token(Lexer &lexer, TokenType type, u64 length)
 {
-    if (length)
-    {
-        eat_bytes(lexer, length);
-    }
+    advance(lexer, length);
     Token result = { type, Value(), get_lexeme(lexer), lexer.start };
 
     return result;
@@ -167,17 +164,6 @@ make_value(Lexer &lexer, Value &&value)
 }
 
 
-#if 0
-void
-add_value(Lexer &lexer, Value &&value)
-{
-    Token token = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start_position, lexer.start_line, lexer.start_column };
-    lexer.tokens.push_back(move(token));
-    advance(lexer);
-}
-#endif
-
-
 bool
 end_of_file(const Lexer &lexer, u64 ahead = 0)
 {
@@ -188,7 +174,7 @@ end_of_file(const Lexer &lexer, u64 ahead = 0)
 
 
 byte
-get_byte(const Lexer &lexer, u64 ahead = 0)
+peek(const Lexer &lexer, u64 ahead = 0)
 {
     byte result = INVALID_BYTE;
     if (!end_of_file(lexer, ahead))
@@ -250,20 +236,13 @@ is_octal(byte value)
 bool
 match(const Lexer &lexer, byte value, u64 ahead = 0)
 {
-    assert(lexer.current.index <= lexer.length);
-
-    bool result = false;
-    if ((lexer.length - lexer.current.index) > ahead)
-    {
-        result = lexer.toml[lexer.current.index + ahead] == value;
-    }
-
+    bool result = peek(lexer, ahead) == value;
     return result;
 }
 
 
 bool
-match_eol(const Lexer &lexer, u32 ahead = 0)
+match_eol(const Lexer &lexer, u64 ahead = 0)
 {
     bool result = false;
 
@@ -281,23 +260,19 @@ match_eol(const Lexer &lexer, u32 ahead = 0)
 
 
 bool
-match_whitespace(Lexer &lexer)
+match_whitespace(Lexer &lexer, u64 ahead = 0)
 {
-    bool result = match(lexer, ' ') || match(lexer, '\t');
+    bool result = match(lexer, ' ', ahead) || match(lexer, '\t', ahead);
     return result;
 }
 
 
-byte
-eat_byte(Lexer &lexer, byte expected = INVALID_BYTE)
+void
+advance(Lexer &lexer)
 {
     assert(!end_of_file(lexer));
 
-    byte result = lexer.toml[lexer.current.index];
-    assert((expected == INVALID_BYTE) || (result == expected));
-
-    ++lexer.current.index;
-    if (result == '\n')
+    if (lexer.toml[lexer.current.index] == '\n')
     {
         ++lexer.current.line;
         lexer.current.column = 1;
@@ -307,18 +282,28 @@ eat_byte(Lexer &lexer, byte expected = INVALID_BYTE)
         ++lexer.current.column;
     }
 
-    return result;
+    ++lexer.current.index;
 }
 
 
 void
-eat_bytes(Lexer &lexer, u64 count, byte expected)
+advance(Lexer &lexer, u64 count)
 {
-    assert(count);
     for (u64 i = 0; i < count; ++i)
     {
-        eat_byte(lexer, expected);
+        advance(lexer);
     }
+}
+
+
+byte
+eat(Lexer &lexer)
+{
+    assert(!end_of_file(lexer));
+    advance(lexer);
+
+    byte result = lexer.toml[lexer.current.index - 1];
+    return result;
 }
 
 
@@ -327,7 +312,7 @@ eat_comment(Lexer &lexer)
 {
     if (match(lexer, '#'))
     {
-        eat_byte(lexer);
+        advance(lexer);
         string eaten;
         while (!match_eol(lexer))
         {
@@ -353,12 +338,12 @@ eat_newline(Lexer &lexer)
 
     if (match(lexer, '\n'))
     {
-        eat_byte(lexer);
+        advance(lexer);
         result = true;
     }
     else if (match(lexer, '\r') && match(lexer, '\n', 1))
     {
-        eat_bytes(lexer, 2);
+        advance(lexer, 2);
         result = true;
     }
 
@@ -375,7 +360,7 @@ eat_string(Lexer &lexer, const string &expected, u32 context)
     bool eating = true;
     while (eating && !match_eol(lexer) && !match_whitespace(lexer))
     {
-        byte c = get_byte(lexer);
+        byte c = peek(lexer);
         switch (c)
         {
             case ',':
@@ -397,7 +382,7 @@ eat_string(Lexer &lexer, const string &expected, u32 context)
         if (eating)
         {
             eaten.push_back(c);
-            eat_byte(lexer);
+            advance(lexer);
         }
     }
 
@@ -424,7 +409,7 @@ eat_whitespace(Lexer &lexer)
         result = true;
         do
         {
-            eat_byte(lexer);
+            advance(lexer);
         } while (match_whitespace(lexer));
     }
 
@@ -487,17 +472,6 @@ invalid_escape(Lexer &lexer, const SourceLocation &location)
     string message = "Invalid escape sequence.";
     Error error = { location, move(message) };
     lexer.errors.push_back(move(error));
-}
-
-
-void
-invalid_escape(Lexer &lexer)
-{
-    assert(lexer.current.column > 2);
-    SourceLocation location = lexer.current;
-    --location.index;
-    --location.column;
-    invalid_escape(lexer, location);
 }
 
 
@@ -754,16 +728,16 @@ lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
     bool lexing = true;
     while (lexing && !match_eol(lexer) && !match_whitespace(lexer))
     {
-        byte c = get_byte(lexer);
+        byte c = peek(lexer);
         if (is_digit(c))
         {
-            eat_byte(lexer);
+            advance(lexer);
             result.digits.push_back(c);
             underscore_allowed = true;
         }
         else if (c == '_')
         {
-            eat_byte(lexer);
+            advance(lexer);
             result.flags |= result.HAS_UNDERSCORE;
             if (underscore_allowed)
             {
@@ -790,7 +764,7 @@ lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
         }
         else
         {
-            result.digits.push_back(eat_byte(lexer));
+            result.digits.push_back(eat(lexer));
             result.flags |= result.INVALID_DIGIT;
         }
     }
@@ -809,7 +783,7 @@ lex_exponent(Lexer &lexer, u32 context, string &value)
 {
     if (match(lexer, '-') || match(lexer, '+'))
     {
-        value.push_back(eat_byte(lexer));
+        value.push_back(eat(lexer));
     }
 
     LexDigitResult exponent = lex_digits(lexer, is_decimal, context);
@@ -829,7 +803,7 @@ lex_fraction(Lexer &lexer, u32 context, string &value)
 
     if (match(lexer, 'e') || match(lexer, 'E'))
     {
-        value.push_back(eat_byte(lexer));
+        value.push_back(eat(lexer));
         valid = lex_exponent(lexer, context, value) && valid;
     }
 
@@ -850,7 +824,7 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 
     if (match(lexer, ':'))
     {
-        value += eat_byte(lexer);
+        value.push_back(eat(lexer));
 
         lexed = lex_digits(lexer, is_decimal, context | LEX_TIME | LEX_FRACTION);
         if (!validate_minute(lexer, lexed))
@@ -861,7 +835,7 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 
         if (match(lexer, ':'))
         {
-            value += eat_byte(lexer);
+            value.push_back(eat(lexer));
 
             lexed = lex_digits(lexer, is_decimal, context | LEX_FRACTION);
             if (!validate_second(lexer, lexed))
@@ -872,7 +846,7 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 
             if (match(lexer, '.'))
             {
-                value += eat_byte(lexer);
+                value.push_back(eat(lexer));
                 lexed = lex_digits(lexer, is_decimal, context);
                 if (lexed.flags)
                 {
@@ -929,7 +903,7 @@ lex_timezone(Lexer &lexer, string &value, u32 context)
 {
     bool result = true;
 
-    value += eat_byte(lexer);
+    value.push_back(eat(lexer));
     assert(value.back() == '-' || value.back() == '+');
 
     LexDigitResult lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
@@ -939,7 +913,8 @@ lex_timezone(Lexer &lexer, string &value, u32 context)
     }
     value += move(lexed.digits);
 
-    eat_byte(lexer, ':');
+    assert(match(lexer, ':'));
+    advance(lexer);
 
     lexed = lex_digits(lexer, is_decimal, context);
     if (!validate_minute(lexer, lexed))
@@ -969,7 +944,8 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     }
     value += move(lexed.digits);
 
-    value += eat_byte(lexer, '-');
+    assert(match(lexer, '-'));
+    value.push_back(eat(lexer));
 
     lexed = lex_digits(lexer, is_decimal, context | LEX_DATE | LEX_DATETIME);
     if (!validate_month(lexer, lexed))
@@ -978,7 +954,8 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     }
     value += move(lexed.digits);
 
-    value += eat_byte(lexer, '-');
+    assert(match(lexer, '-'));
+    value.push_back(eat(lexer));
 
     lexed = lex_digits(lexer, is_decimal, context | LEX_DATETIME);
     if (!validate_day(lexer, lexed))
@@ -988,10 +965,10 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     value += move(lexed.digits);
 
     if (match(lexer, 'T') || match(lexer, 't')
-        || (match(lexer, ' ') && !match_eol(lexer, 1) && is_decimal(get_byte(lexer, 1))))
+        || (match(lexer, ' ') && !match_eol(lexer, 1) && is_decimal(peek(lexer, 1))))
     {
         type = Value::Type::LOCAL_DATETIME;
-        eat_byte(lexer);
+        advance(lexer);
         value += ' ';
 
         if (!lex_hour(lexer, value, LEX_TIMEZONE))
@@ -1002,7 +979,7 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
         if (match(lexer, 'Z') ||match(lexer, 'z'))
         {
             type = Value::Type::OFFSET_DATETIME;
-            eat_byte(lexer);
+            advance(lexer);
             value += "+0000";
         }
         else if (match(lexer, '+') || match(lexer, '-'))
@@ -1068,7 +1045,7 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
     {
         bool valid = validate_digits(lexer, result, "whole part of decimal", true);
         value += move(result.digits);
-        value.push_back(eat_byte(lexer));
+        value.push_back(eat(lexer));
         valid = lex_fraction(lexer, context, value) && valid;
         if (valid)
         {
@@ -1083,7 +1060,7 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
     {
         bool valid = validate_digits(lexer, result, "whole part of decimal", true);
         value += move(result.digits);
-        value.push_back(eat_byte(lexer));
+        value.push_back(eat(lexer));
         valid = lex_exponent(lexer, context, value) && valid;
         if (valid)
         {
@@ -1263,17 +1240,17 @@ lex_number(Lexer &lexer, u32 context)
     {
         if (match(lexer, 'x', 1))
         {
-            eat_bytes(lexer, 2);
+            advance(lexer, 2);
             result = lex_hexadecimal(lexer, context, value);
         }
         else if (match(lexer, 'o', 1))
         {
-            eat_bytes(lexer, 2);
+            advance(lexer, 2);
             result = lex_octal(lexer, context, value);
         }
         else if (match(lexer, 'b', 1))
         {
-            eat_bytes(lexer, 2);
+            advance(lexer, 2);
             result = lex_binary(lexer, context, value);
         }
         else
@@ -1300,7 +1277,7 @@ lex_string_char(Lexer &lexer, string &result)
     u32 nbytes = 0;
     bool valid = true;
 
-    byte c = eat_byte(lexer);
+    byte c = eat(lexer);
     result.push_back(c);
 
     if ((c & B10000000) == 0)
@@ -1335,13 +1312,13 @@ lex_string_char(Lexer &lexer, string &result)
     u32 eaten = 1;
     for ( ; (eaten < nbytes) && valid && !end_of_file(lexer); ++eaten)
     {
-        c = get_byte(lexer);
+        c = peek(lexer);
         if ((c & B11000000) == B10000000)
         {
             byte masked = c & B00111111;
             u32 shift = 6 * (nbytes - 1 - eaten);
             codepoint |= (masked << shift);
-            result.push_back(eat_byte(lexer));
+            result.push_back(eat(lexer));
         }
         else
         {
@@ -1443,7 +1420,7 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
     u32 lexed = 0;
     for ( ; (lexed < count) && !end_of_file(lexer); ++lexed)
     {
-        byte c = get_byte(lexer);
+        byte c = peek(lexer);
 
         if ((c >= '0') && (c <= '9'))
         {
@@ -1467,7 +1444,7 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
 
         u64 shift = 4 * (count - 1 - lexed);
         codepoint |= (c << shift);
-        eat_byte(lexer);
+        advance(lexer);
     }
 
     if (valid && (lexed == count))
@@ -1491,76 +1468,77 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
 void
 lex_escape(Lexer &lexer, string &result)
 {
-    assert(!end_of_file(lexer));
+    assert(match(lexer, '\\'));
 
-    byte c = get_byte(lexer);
-    switch (c)
+    SourceLocation location = lexer.current;
+    advance(lexer);
+
+    // If we've hit the end of the file, then we'll error on an unterminated string
+    if (!end_of_file(lexer))
     {
-        case '"':
-        case '\'':
-        case '\\':
+        byte c = eat(lexer);
+        switch (c)
         {
-            eat_byte(lexer);
-            result.push_back(c);
-        } break;
+            case '"':
+            case '\'':
+            case '\\':
+            {
+                result.push_back(c);
+            } break;
 
-        case 'b':
-        {
-            eat_byte(lexer);
-            result.push_back('\b');
-        } break;
+            case 'b':
+            {
+                result.push_back('\b');
+            } break;
 
-        case 'f':
-        {
-            eat_byte(lexer);
-            result.push_back('\f');
-        } break;
+            case 'f':
+            {
+                result.push_back('\f');
+            } break;
 
-        case 'n':
-        {
-            eat_byte(lexer);
-            result.push_back('\n');
-        } break;
+            case 'n':
+            {
+                result.push_back('\n');
+            } break;
 
-        case 'r':
-        {
-            eat_byte(lexer);
-            result.push_back('\r');
-        } break;
+            case 'r':
+            {
+                result.push_back('\r');
+            } break;
 
-        case 't':
-        {
-            eat_byte(lexer);
-            result.push_back('\t');
-        } break;
+            case 't':
+            {
+                result.push_back('\t');
+            } break;
 
-        case 'u':
-        {
-            eat_byte(lexer);
-            lex_unicode(lexer, result, 4);
-        } break;
+            case 'u':
+            {
+                lex_unicode(lexer, result, 4);
+            } break;
 
-        case 'U':
-        {
-            eat_byte(lexer);
-            lex_unicode(lexer, result, 8);
-        } break;
+            case 'U':
+            {
+                lex_unicode(lexer, result, 8);
+            } break;
 
-        default:
-        {
-            invalid_escape(lexer);
-            eat_byte(lexer);
-            result.push_back(c);
+            default:
+            {
+                invalid_escape(lexer, location);
+                result.push_back(c);
+            }
         }
     }
 }
 
 
 string
-lex_multiline_string(Lexer &lexer, byte delimiter)
+lex_multiline_string(Lexer &lexer)
 {
+    byte delimiter = peek(lexer);
     assert((delimiter == '"') || (delimiter == '\''));
-    eat_bytes(lexer, 3, delimiter);
+    assert(match(lexer, delimiter, 1) && match(lexer, delimiter, 2));
+
+    advance(lexer, 3);
     eat_newline(lexer);
 
     string result;
@@ -1578,13 +1556,13 @@ lex_multiline_string(Lexer &lexer, byte delimiter)
         }
         else
         {
-            byte c = get_byte(lexer);
+            byte c = peek(lexer);
             if (c == delimiter)
             {
                 u32 i = 1;
                 for ( ; match(lexer, delimiter, i) && (i < 5); ++i);
 
-                eat_bytes(lexer, i);
+                advance(lexer, i);
                 switch (i)
                 {
                     case 1:
@@ -1615,74 +1593,29 @@ lex_multiline_string(Lexer &lexer, byte delimiter)
                         result.push_back(delimiter);
                         lexing = false;
                     } break;
+
+                    default:
+                    {
+                        assert(false);
+                    } break;
                 }
             }
             else if ((c == '\\') && (delimiter == '"'))
             {
-                SourceLocation location = lexer.current;
-                eat_byte(lexer);
-                if (!end_of_file(lexer))
+                u64 ahead = 1;
+                while (!end_of_file(lexer, ahead) && match_whitespace(lexer, ahead))
                 {
-                    if (eat_whitespace(lexer) || match_eol(lexer))
+                    ++ahead;
+                }
+                if (match_eol(lexer, ahead))
+                {
+                    advance(lexer, ahead);
+                    while (eat_newline(lexer))
                     {
-                        bool eating = eat_newline(lexer);
-                        if (eating)
-                        {
-                            while (eating)
-                            {
-                                eat_whitespace(lexer);
-                                eating = eat_newline(lexer);
-                            }
-                        }
-                        else
-                        {
-                            invalid_escape(lexer, location);
-                        }
-                    }
-                    else
-                    {
-                        lex_escape(lexer, result);
+                        eat_whitespace(lexer);
                     }
                 }
-            }
-            else
-            {
-                lex_string_char(lexer, result);
-            }
-        }
-    }
-
-    return result;
-}
-
-
-string
-lex_string(Lexer &lexer, byte delimiter)
-{
-    assert((delimiter == '"') || (delimiter == '\''));
-    eat_byte(lexer, delimiter);
-
-    string result;
-    bool lexing = true;
-    while (lexing)
-    {
-        if (match_eol(lexer))
-        {
-            unterminated_string(lexer);
-            lexing = false;
-        }
-        else
-        {
-            byte c = get_byte(lexer);
-            if (c == delimiter)
-            {
-                eat_byte(lexer);
-                lexing = false;
-            }
-            else if ((c == '\\') && (delimiter == '"'))
-            {
-                eat_byte(lexer);
-                if (!end_of_file(lexer))
+                else
                 {
                     lex_escape(lexer, result);
                 }
@@ -1698,19 +1631,50 @@ lex_string(Lexer &lexer, byte delimiter)
 }
 
 
+string
+lex_string(Lexer &lexer)
+{
+    byte delimiter = eat(lexer);
+    assert((delimiter == '"') || (delimiter == '\''));
+
+    string result;
+    bool lexing = true;
+    while (lexing)
+    {
+        if (match_eol(lexer))
+        {
+            unterminated_string(lexer);
+            lexing = false;
+        }
+        else
+        {
+            byte c = peek(lexer);
+            if (c == delimiter)
+            {
+                advance(lexer);
+                lexing = false;
+            }
+            else if ((c == '\\') && (delimiter == '"'))
+            {
+                lex_escape(lexer, result);
+            }
+            else
+            {
+                lex_string_char(lexer, result);
+            }
+        }
+    }
+
+    return result;
+}
+
+
 Token
 lex_value(Lexer &lexer, u32 context)
 {
-    assert(!match_whitespace(lexer));
-
     Token result;
-    byte c = get_byte(lexer);
-    if (match_eol(lexer))
-    {
-        add_error(lexer, "Missing value.");
-        result = make_token(lexer, TOKEN_ERROR);
-    }
-    else if (is_decimal(c))
+    byte c = peek(lexer);
+    if (is_decimal(c))
     {
         result = lex_number(lexer, context);
     }
@@ -1723,19 +1687,19 @@ lex_value(Lexer &lexer, u32 context)
             {
                 if (match(lexer, c, 1) && match(lexer, c, 2))
                 {
-                    string value = lex_multiline_string(lexer, c);
+                    string value = lex_multiline_string(lexer);
                     result = make_value(lexer, Value(move(value)));
                 }
                 else
                 {
-                    string value = lex_string(lexer, c);
+                    string value = lex_string(lexer);
                     result = make_value(lexer, Value(move(value)));
                 }
             } break;
 
             case '-':
             {
-                eat_byte(lexer);
+                advance(lexer);
                 if (match(lexer, 'i'))
                 {
                     eat_string(lexer, "inf", context);
@@ -1754,7 +1718,7 @@ lex_value(Lexer &lexer, u32 context)
 
             case '+':
             {
-                eat_byte(lexer);
+                advance(lexer);
                 if (match(lexer, 'i'))
                 {
                     eat_string(lexer, "inf", context);
@@ -1783,7 +1747,6 @@ lex_value(Lexer &lexer, u32 context)
                 result = make_value(lexer, Value(NAN64));
             } break;
 
-
             case 't':
             {
                 eat_string(lexer, "true", context);
@@ -1801,12 +1764,6 @@ lex_value(Lexer &lexer, u32 context)
             case '_':
             {
                 result = lex_number(lexer, context);
-            } break;
-
-            case '#':
-            {
-                add_error(lexer, "Missing value.");
-                result = make_token(lexer, TOKEN_ERROR);
             } break;
 
             default:
@@ -1830,11 +1787,11 @@ lex_unquoted_key(Lexer &lexer, u32 context)
     bool lexing = true;
     while (lexing && !end_of_file(lexer))
     {
-        byte b = get_byte(lexer);
+        byte b = peek(lexer);
 
         if (is_key_char(b))
         {
-            value += eat_byte(lexer);
+            value.push_back(eat(lexer));
         }
         else
         {
@@ -1895,72 +1852,28 @@ lex_unquoted_key(Lexer &lexer, u32 context)
 }
 
 
-#if 0
-void
-lex_simple_key(Lexer &lexer, u32 context)
-{
-    assert(!match_whitespace(lexer) && !match_eol(lexer));
-
-    byte c = get_byte(lexer);
-    if ((c == '"') || (c == '\''))
-    {
-        string key = lex_string(lexer, c);
-        add_token(lexer, TOKEN_KEY, move(key));
-    }
-    else
-    {
-        lex_unquoted_key(lexer, context);
-    }
-}
-#endif
-
-
 Token
 lex_key(Lexer &lexer, u32 context)
 {
-#if 0
-    bool lexing = true;
-    while (lexing)
-    {
-        advance(lexer);
-        if (match_eol(lexer))
-        {
-            missing_key(lexer);
-            lexing = false;
-        }
-        else
-        {
-            lex_simple_key(lexer, context);
-
-            eat_whitespace(lexer);
-            if (match(lexer, '.'))
-            {
-                eat_byte(lexer);
-                eat_whitespace(lexer);
-            }
-            else
-            {
-                lexing = false;
-            }
-        }
-    }
-#else
-
     Token result;
-    byte c = get_byte(lexer);
-    if ((c == '"') || (c == '\''))
+
+    byte c = peek(lexer);
+    switch (c)
     {
-        string key = lex_string(lexer, c);
-        result = make_token(lexer, TOKEN_KEY, move(key));
-    }
-    else
-    {
-        result = lex_unquoted_key(lexer, context);
+        case '"':
+        case '\'':
+        {
+            string key = lex_string(lexer);
+            result = make_token(lexer, TOKEN_KEY, move(key));
+        } break;
+
+        default:
+        {
+            result = lex_unquoted_key(lexer, context);
+        } break;
     }
 
     return result;
-
-#endif
 }
 
 
@@ -1991,13 +1904,13 @@ next_token(Lexer &lexer, u32 context)
         }
         else
         {
-            byte b = get_byte(lexer);
+            byte b = peek(lexer);
             switch (b)
             {
                 case ' ':
                 case '\t':
                 {
-                    eat_byte(lexer);
+                    eat_whitespace(lexer);
                 } break;
 
                 case '#':
@@ -2021,10 +1934,9 @@ next_token(Lexer &lexer, u32 context)
                     }
                     else
                     {
-                        // TODO: invalid unicode
                         string message = "Unicode codepoint " + format_unicode(b) + " is not allowed.";
                         add_error(lexer, message, lexer.current);
-                        eat_byte(lexer);
+                        advance(lexer);
                     }
                 } break;
 
@@ -2054,7 +1966,7 @@ next_token(Lexer &lexer, u32 context)
 
                 case '[':
                 {
-                    if ((context & LEX_HEADER) && (get_byte(lexer, 1) == '['))
+                    if ((context & LEX_HEADER) && match(lexer, '[', 1))
                     {
                         result = make_token(lexer, TOKEN_DOUBLE_LBRACKET, 2);
                     }
@@ -2067,7 +1979,7 @@ next_token(Lexer &lexer, u32 context)
 
                 case ']':
                 {
-                    if ((context & LEX_HEADER) && (get_byte(lexer, 1) == ']'))
+                    if ((context & LEX_HEADER) && match(lexer, ']', 1))
                     {
                         result = make_token(lexer, TOKEN_DOUBLE_RBRACKET, 2);
                     }
@@ -2133,13 +2045,13 @@ next_token(Lexer &lexer, u32 context)
 void
 resynchronize(Lexer &lexer, u32 context)
 {
-    u32 uneaten = 0;
+    u64 uneaten = 0;
     bool valid = true;
     bool whitespace = false;
     bool eating = true;
     while (eating && !end_of_file(lexer, uneaten))
     {
-        byte b = get_byte(lexer, uneaten);
+        byte b = peek(lexer, uneaten);
 
         switch (b)
         {
@@ -2199,11 +2111,8 @@ resynchronize(Lexer &lexer, u32 context)
             }
             else
             {
-                if (uneaten)
-                {
-                    eat_bytes(lexer, uneaten);
-                    uneaten = 0;
-                }
+                advance(lexer, uneaten);
+                uneaten = 0;
                 string temp;
                 valid = lex_string_char(lexer, temp) && valid;
             }
