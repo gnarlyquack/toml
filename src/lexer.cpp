@@ -2111,6 +2111,10 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = lex_value(lexer, context);
                     }
+                    else if(context & LEX_TABLE)
+                    {
+                        result = lex_key(lexer, context);
+                    }
                     else
                     {
                         resynchronize(lexer, context);
