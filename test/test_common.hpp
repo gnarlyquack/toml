@@ -6,12 +6,11 @@
 #ifndef TOML_TEST_COMMON_HPP
 #define TOML_TEST_COMMON_HPP
 
-#include <lexer.hpp>
+
 #include <parser.hpp>
 
 #include <gtest/gtest.h>
 
-//#include <cmath>
 
 namespace toml
 {
@@ -81,8 +80,8 @@ operator==(const Value &left, const Value &right)
 
             case Value::Type::FLOAT:
             {
-                f64 l = left.as_float();
-                f64 r = right.as_float();
+                double l = left.as_float();
+                double r = right.as_float();
                 result = (l == r) || (std::isnan(l) && std::isnan(r));
             } break;
 
@@ -162,23 +161,6 @@ operator==(const Table &left, const Table &right)
         }
     }
 
-    return result;
-}
-
-
-inline bool
-operator==(const Token &left, const Token &right)
-{
-    bool result =
-        (left.type == right.type)
-        && (left.location.index == right.location.index)
-        && (left.location.line == right.location.line)
-        && (left.location.column == right.location.column)
-        && (left.lexeme == right.lexeme);
-    if (result && (left.type == TOKEN_VALUE))
-    {
-        result = left.value == right.value;
-    }
     return result;
 }
 
@@ -294,31 +276,6 @@ operator<<(std::ostream &os, const Table &value)
         os << "(\"" << i.first << "\", " << i.second << ')';
     }
     os << " }";
-    return os;
-}
-
-
-inline std::ostream &
-operator<<(std::ostream &os, const Token &token)
-{
-    if (token.type == TOKEN_VALUE)
-    {
-        os << "VALUE("
-            << token.value << ", "
-            << token.lexeme << ", "
-            << token.location.index << ", "
-            << token.location.line << ", "
-            << token.location.column  << ")";
-    }
-    else
-    {
-        os << TOKEN_NAMES[token.type] << '('
-            << token.lexeme << ", "
-            << token.location.index << ", "
-            << token.location.line << ", "
-            << token.location.column  << ")";
-    }
-
     return os;
 }
 

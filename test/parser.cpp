@@ -532,9 +532,9 @@ TEST(parse, infinity)
         ;
 
     const Table result = {
-        { "sf1", Value(INF64) },
-        { "sf2", Value(+INF64) },
-        { "sf3", Value(-INF64) },
+        { "sf1", Value(numeric_limits<double>::infinity()) },
+        { "sf2", Value(+numeric_limits<double>::infinity()) },
+        { "sf3", Value(-numeric_limits<double>::infinity()) },
     };
 
     assert_parsed(toml, result);
@@ -551,9 +551,9 @@ TEST(parse, nan)
         ;
 
     const Table result = {
-        { "sf4", Value(NAN64) },
-        { "sf5", Value(+NAN64) },
-        { "sf6", Value(-NAN64) },
+        { "sf4", Value(numeric_limits<double>::quiet_NaN()) },
+        { "sf5", Value(+numeric_limits<double>::quiet_NaN()) },
+        { "sf6", Value(-numeric_limits<double>::quiet_NaN()) },
     };
 
     assert_parsed(toml, result);

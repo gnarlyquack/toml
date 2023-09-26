@@ -314,9 +314,9 @@ def convert_result(value, child=False):
             elif value['type'] == "float":
                 converted = value['value']
                 if "nan" in converted:
-                    converted = converted.replace("nan", "NAN64")
+                    converted = converted.replace("nan", "numeric_limits<double>::quiet_NaN()")
                 elif "inf" in converted:
-                    converted = converted.replace("inf", "INF64")
+                    converted = converted.replace("inf", "numeric_limits<double>::infinity()")
                 elif '.' not in converted:
                     converted += ".0"
                 result = "Value({})".format(converted)
