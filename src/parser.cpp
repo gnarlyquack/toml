@@ -364,6 +364,13 @@ Definition parse_value(Parser &parser, u32 context);
 //
 
 void
+advance(Parser &parser, u32 context)
+{
+    parser.token = next_token(parser.lexer, context);
+}
+
+
+void
 add_error(Parser &parser, string message)
 {
     Error error = {parser.token.location, move(message)};
@@ -382,10 +389,19 @@ add_error(Parser &parser, string message)
 }
 
 
-void
-advance(Parser &parser, u32 context)
+string
+resynchronize(Parser &parser, string message, u32 context)
 {
-    parser.token = next_token(parser.lexer, context);
+    resynchronize(parser.lexer, context);
+    string result = get_lexeme(parser.lexer, parser.token.location.index);
+
+    if (message.length())
+    {
+        add_error(parser, message + result);
+    }
+
+    advance(parser, context);
+    return result;
 }
 
 
@@ -409,22 +425,6 @@ bool
 peek(Parser &parser, TokenType expected)
 {
     bool result = parser.token.type == expected;
-    return result;
-}
-
-
-string
-resynchronize(Parser &parser, string message, u32 context)
-{
-    resynchronize(parser.lexer, context);
-
-    string result = get_lexeme(parser.lexer, parser.token.location.index);
-    if (message.length())
-    {
-        add_error(parser, message + result);
-    }
-    advance(parser, context);
-
     return result;
 }
 
@@ -494,6 +494,11 @@ parse_array(Parser &parser, u32 context)
                 {
                     add_error(parser, "Missing ',' between array values.");
                 }
+                if (token.type == TOKEN_NONE)
+                {
+                    advance(parser, context | LEX_ARRAY | LEX_VALUE);
+                }
+
                 array_context = context | LEX_ARRAY;
                 Definition value = parse_value(parser, array_context);
                 result.as_array().push_back(move(value));
@@ -557,6 +562,11 @@ parse_inline_table(Parser &parser, u32 context)
                 {
                     add_error(parser, "Missing ',' between inline table values.");
                 }
+                if (token.type == TOKEN_NONE)
+                {
+                    advance(parser, context | LEX_TABLE | LEX_KEY);
+                }
+
                 table_context = context | LEX_TABLE;
                 parse_keyval(parser, &result.as_table(), &meta, table_context);
                 prev = TOKEN_VALUE;
@@ -659,11 +669,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
         {
             case TOKEN_KEY:
             {
-                // Also allow a value here as special handling for invalid
-                // cases. If there is no separator after the key (either a '.'
-                // or '='), this will preferentially lex subsequent tokens as
-                // values instead of keys.
-                advance(parser, context | LEX_KEY | LEX_VALUE);
+                advance(parser, context);
             } break;
 
             case TOKEN_COMMENT:
@@ -685,7 +691,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
                 }
                 else
                 {
-                    token.lexeme = resynchronize(parser, "Invalid key: ", context | LEX_KEY | LEX_VALUE);
+                    token.lexeme = resynchronize(parser, "Invalid key: ", context | LEX_KEY);
                 }
                 valid = false;
             } break;
@@ -717,6 +723,10 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
     else
     {
         add_error(parser, "Missing '=' between key and value.");
+        if (peek(parser, TOKEN_NONE))
+        {
+            advance(parser, context | LEX_VALUE);
+        }
     }
 
     value = parse_value(parser, context);

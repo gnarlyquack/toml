@@ -18,8 +18,12 @@ namespace toml
 
 enum TokenType
 {
-    TOKEN_ERROR,
+    // No token was able to be lexed.
+    // Given that lexing is contextual, there are some contexts where, if the
+    // TOML file is invalid, we won't be able to figure out what token to lex.
+    TOKEN_NONE,
 
+    // Valid token types
     TOKEN_COMMA,
     TOKEN_COMMENT,
     TOKEN_DOUBLE_LBRACKET,
@@ -34,6 +38,9 @@ enum TokenType
     TOKEN_RBRACE,
     TOKEN_RBRACKET,
     TOKEN_VALUE,
+
+    // An error occurred while trying to a lex a token.
+    TOKEN_ERROR,
 };
 
 

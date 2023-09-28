@@ -2006,19 +2006,9 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = lex_key(lexer, context);
                     }
-                    // special handling for invalid cases
-                    else if(context & LEX_ARRAY)
-                    {
-                        result = lex_value(lexer, context);
-                    }
-                    else if(context & LEX_TABLE)
-                    {
-                        result = lex_key(lexer, context);
-                    }
                     else
                     {
-                        resynchronize(lexer, context);
-                        result = make_token(lexer, TOKEN_ERROR);
+                        result = make_token(lexer, TOKEN_NONE);
                     }
                     lexing = false;
                 } break;
