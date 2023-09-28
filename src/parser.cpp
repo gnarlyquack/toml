@@ -364,9 +364,9 @@ Definition parse_value(Parser &parser, u32 context);
 //
 
 void
-add_error(Parser &parser, SourceLocation location, string message)
+add_error(Parser &parser, string message)
 {
-    Error error = {location, move(message)};
+    Error error = {parser.token.location, move(message)};
 
     auto insert_at = parser.errors.end();
     for ( ; insert_at != parser.errors.begin(); --insert_at)
@@ -379,13 +379,6 @@ add_error(Parser &parser, SourceLocation location, string message)
     }
 
     parser.errors.insert(insert_at, move(error));
-}
-
-
-void
-add_error(Parser &parser, string message)
-{
-    add_error(parser, parser.token.location, move(message));
 }
 
 
@@ -421,25 +414,17 @@ peek(Parser &parser, TokenType expected)
 
 
 string
-resynchronize(Parser &parser, SourceLocation from, string message, u32 context)
+resynchronize(Parser &parser, string message, u32 context)
 {
     resynchronize(parser.lexer, context);
 
-    string result = get_lexeme(parser.lexer, from.index);
+    string result = get_lexeme(parser.lexer, parser.token.location.index);
     if (message.length())
     {
-        add_error(parser, from, message + result);
+        add_error(parser, message + result);
     }
     advance(parser, context);
 
-    return result;
-}
-
-
-string
-resynchronize(Parser &parser, string message, u32 context)
-{
-    string result = resynchronize(parser, parser.token.location, message, context);
     return result;
 }
 
@@ -530,7 +515,6 @@ parse_inline_table(Parser &parser, u32 context)
     u32 table_context = context | LEX_TABLE | LEX_KEY;
     Definition result(Value::Type::TABLE, eat(parser, table_context).location);
     TableMeta meta;
-    SourceLocation comma;
 
     bool parsing = true;
     while (parsing)
@@ -547,14 +531,13 @@ parse_inline_table(Parser &parser, u32 context)
                 table_context = context | LEX_TABLE | LEX_KEY;
                 advance(parser, table_context);
                 prev = TOKEN_COMMA;
-                comma = token.location;
             } break;
 
             case TOKEN_RBRACE:
             {
                 if (prev == TOKEN_COMMA)
                 {
-                    add_error(parser, comma, "Trailing ',' is not allowed in an inline table.");
+                    add_error(parser, "Unexpected end of table: a value is required after a comma.");
                 }
                 advance(parser, context);
                 parsing = false;
@@ -802,7 +785,7 @@ add_implicit_table(Parser &parser, Token &token, bool valid)
 
 
 Key
-parse_table_header(Parser &parser)
+parse_table_header(Parser &parser, u32 context)
 {
     Key result;
     bool valid = true;
@@ -814,7 +797,7 @@ parse_table_header(Parser &parser)
         {
             case TOKEN_KEY:
             {
-                advance(parser, LEX_HEADER);
+                advance(parser, context);
             } break;
 
             case TOKEN_COMMENT:
@@ -830,7 +813,7 @@ parse_table_header(Parser &parser)
 
             default:
             {
-                token.lexeme = resynchronize(parser, "Invalid key: ", LEX_HEADER);
+                token.lexeme = resynchronize(parser, "Invalid key: ", context);
                 valid = false;
             } break;
         }
@@ -838,7 +821,7 @@ parse_table_header(Parser &parser)
         if (peek(parser, TOKEN_PERIOD))
         {
             add_implicit_table(parser, token, valid);
-            advance(parser, LEX_HEADER);
+            advance(parser, context);
         }
         else
         {
@@ -859,8 +842,8 @@ parse_table(Parser &parser)
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
 
-    advance(parser, LEX_HEADER);
-    Key key = parse_table_header(parser);
+    advance(parser, LEX_TABLE_HEADER);
+    Key key = parse_table_header(parser, LEX_TABLE_HEADER);
 
     Definition &value = (*parser.current_table)[key];
     ValueMeta &value_meta = (*parser.current_meta)[key.value];
@@ -896,14 +879,6 @@ parse_table(Parser &parser)
             advance(parser, LEX_EOL);
         } break;
 
-        case TOKEN_DOUBLE_RBRACKET:
-        {
-            SourceLocation location = token.location;
-            ++location.index;
-            ++location.column;
-            resynchronize(parser, location, "Expected the end of the line but got: ", LEX_EOL);
-        } break;
-
         case TOKEN_COMMENT:
         case TOKEN_EOF:
         case TOKEN_NEWLINE:
@@ -928,8 +903,8 @@ parse_table_array(Parser &parser)
     parser.current_table = &parser.table;
     parser.current_meta = &parser.meta;
 
-    advance(parser, LEX_HEADER);
-    Key key = parse_table_header(parser);
+    advance(parser, LEX_ARRAY_HEADER);
+    Key key = parse_table_header(parser, LEX_ARRAY_HEADER);
 
     Definition &value = (*parser.current_table)[key];
     ValueMeta &value_meta = (*parser.current_meta)[key.value];
@@ -965,15 +940,6 @@ parse_table_array(Parser &parser)
         case TOKEN_DOUBLE_RBRACKET:
         {
             advance(parser, LEX_EOL);
-        } break;
-
-        case TOKEN_RBRACKET:
-        {
-            SourceLocation location = token.location;
-            ++location.index;
-            ++location.column;
-            add_error(parser, location, "Expected closing ']' for table array header.");
-            resynchronize(parser, "", LEX_EOL);
         } break;
 
         case TOKEN_COMMENT:
@@ -1120,7 +1086,9 @@ parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Err
     Lexer lexer(toml, errors);
     Parser parser(lexer, definitions, errors);
 
-    for (advance(parser, LEX_HEADER | LEX_KEY); !peek(parser, TOKEN_EOF); advance(parser, LEX_HEADER | LEX_KEY))
+    for (advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER);
+         !peek(parser, TOKEN_EOF);
+         advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER))
     {
         parse_expression(parser);
     }

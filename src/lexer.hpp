@@ -20,18 +20,19 @@ namespace toml
 
 enum LexingContext
 {
-    LEX_EOL         =       0,
-    LEX_FRACTION    = 1 <<  0,
-    LEX_EXPONENT    = 1 <<  1,
-    LEX_DATE        = 1 <<  2,
-    LEX_TIME        = 1 <<  3,
-    LEX_DATETIME    = 1 <<  4,
-    LEX_TIMEZONE    = 1 <<  5,
-    LEX_ARRAY       = 1 <<  6,
-    LEX_TABLE       = 1 <<  7,
-    LEX_HEADER      = 1 <<  8,
-    LEX_KEY         = 1 <<  9,
-    LEX_VALUE       = 1 << 10,
+    LEX_EOL          =       0,
+    LEX_FRACTION     = 1 <<  0,
+    LEX_EXPONENT     = 1 <<  1,
+    LEX_DATE         = 1 <<  2,
+    LEX_TIME         = 1 <<  3,
+    LEX_DATETIME     = 1 <<  4,
+    LEX_TIMEZONE     = 1 <<  5,
+    LEX_ARRAY        = 1 <<  6,
+    LEX_TABLE        = 1 <<  7,
+    LEX_TABLE_HEADER = 1 <<  8,
+    LEX_ARRAY_HEADER = 1 <<  9,
+    LEX_KEY          = 1 << 10,
+    LEX_VALUE        = 1 << 11,
 };
 
 

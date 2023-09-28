@@ -1818,7 +1818,7 @@ lex_unquoted_key(Lexer &lexer, u32 context)
 
                 case ']':
                 {
-                    lexing = !(context & LEX_HEADER);
+                    lexing = !(context & (LEX_ARRAY_HEADER | LEX_TABLE_HEADER));
                 } break;
 
                 case ',':
@@ -1954,7 +1954,7 @@ next_token(Lexer &lexer, u32 context)
 
                 case '[':
                 {
-                    if ((context & LEX_HEADER) && match(lexer, '[', 1))
+                    if ((context & LEX_ARRAY_HEADER) && match(lexer, '[', 1))
                     {
                         result = make_token(lexer, TOKEN_DOUBLE_LBRACKET, 2);
                     }
@@ -1967,7 +1967,7 @@ next_token(Lexer &lexer, u32 context)
 
                 case ']':
                 {
-                    if ((context & LEX_HEADER) && match(lexer, ']', 1))
+                    if ((context & LEX_ARRAY_HEADER) && match(lexer, ']', 1))
                     {
                         result = make_token(lexer, TOKEN_DOUBLE_RBRACKET, 2);
                     }
@@ -2002,7 +2002,7 @@ next_token(Lexer &lexer, u32 context)
                     {
                         result = lex_value(lexer, context);
                     }
-                    else if (context & (LEX_KEY | LEX_HEADER))
+                    else if (context & (LEX_KEY | LEX_ARRAY_HEADER | LEX_TABLE_HEADER))
                     {
                         result = lex_key(lexer, context);
                     }
@@ -2061,7 +2061,7 @@ resynchronize(Lexer &lexer, u32 context)
             } // fallthrough
             case '.':
             {
-                eating = (context & (LEX_KEY | LEX_HEADER)) == 0;
+                eating = !(context & (LEX_KEY | LEX_ARRAY_HEADER | LEX_TABLE_HEADER));
             } break;
 
             case '=':
@@ -2072,17 +2072,17 @@ resynchronize(Lexer &lexer, u32 context)
             case '#':
             {
                 // headers and inline tables cannot have comments
-                eating = context & (LEX_TABLE | LEX_HEADER);
+                eating = context & (LEX_TABLE | LEX_ARRAY_HEADER | LEX_TABLE_HEADER);
             } break;
 
             case ',':
             {
-                eating = (context & (LEX_TABLE | LEX_ARRAY)) == 0;
+                eating = !(context & (LEX_TABLE | LEX_ARRAY));
             } break;
 
             case ']':
             {
-                eating = (context & (LEX_HEADER | LEX_ARRAY)) == 0;
+                eating = !(context & (LEX_ARRAY | LEX_ARRAY_HEADER | LEX_TABLE_HEADER));
             } break;
 
             case '}':
