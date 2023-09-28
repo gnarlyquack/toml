@@ -1942,19 +1942,7 @@ next_token(Lexer &lexer, u32 context)
 
                 case '.':
                 {
-                    if (context & (LEX_KEY | LEX_HEADER))
-                    {
-                        result = make_token(lexer, TOKEN_PERIOD, 1);
-                    }
-                    else if (context & LEX_VALUE)
-                    {
-                        result = lex_value(lexer, context);
-                    }
-                    else
-                    {
-                        resynchronize(lexer, context);
-                        result = make_token(lexer, TOKEN_ERROR);
-                    }
+                    result = make_token(lexer, TOKEN_PERIOD, 1);
                     lexing = false;
                 } break;
 
