@@ -38,9 +38,6 @@ enum TokenType
     TOKEN_RBRACE,
     TOKEN_RBRACKET,
     TOKEN_VALUE,
-
-    // An error occurred while trying to a lex a token.
-    TOKEN_ERROR,
 };
 
 

@@ -1855,6 +1855,16 @@ lex_unquoted_key(Lexer &lexer, u32 context)
 Token
 lex_key(Lexer &lexer, u32 context)
 {
+    // We always return a key token, even if we lex an invalid key. This
+    // reduces the number of special cases that the parser needs to handle with
+    // the trade-off of potentially generating more key redefinition errors if
+    // invalid keys happen to collide with each other or other valid keys. It
+    // seems like the chances of this happening would be fairly unlikely, and
+    // even if it should occur, it's not evident while writing this that such
+    // errors would be completely useless since, depending on the nature of the
+    // invalid key(s), the collision might still be present even if all keys
+    // are valid. Regardless, we're currently opting for a simpler
+    // implementation rather than an arguably more "correct" one.
     Token result;
 
     byte c = peek(lexer);
