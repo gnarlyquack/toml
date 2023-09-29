@@ -157,7 +157,7 @@ make_token(Lexer &lexer, TokenType type, string lexeme = "")
 
 
 Token
-make_value(Lexer &lexer, Value &&value)
+make_value(Lexer &lexer, Value value)
 {
     Token result = { TOKEN_VALUE, std::move(value), get_lexeme(lexer), lexer.start };
     return result;
@@ -345,54 +345,6 @@ eat_newline(Lexer &lexer)
     {
         advance(lexer, 2);
         result = true;
-    }
-
-    return result;
-}
-
-
-bool
-eat_string(Lexer &lexer, const string &expected, u32 context)
-{
-    bool result = false;
-
-    string eaten;
-    bool eating = true;
-    while (eating && !match_eol(lexer) && !match_whitespace(lexer))
-    {
-        byte c = peek(lexer);
-        switch (c)
-        {
-            case ',':
-            {
-                eating = !(context & (LEX_ARRAY | LEX_TABLE));
-            } break;
-
-            case ']':
-            {
-                eating = !(context & LEX_ARRAY);
-            } break;
-
-            case '}':
-            {
-                eating = !(context & LEX_TABLE);
-            } break;
-        }
-
-        if (eating)
-        {
-            eaten.push_back(c);
-            advance(lexer);
-        }
-    }
-
-    if (eaten == expected)
-    {
-        result = true;
-    }
-    else
-    {
-        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
     }
 
     return result;
@@ -715,6 +667,49 @@ validate_day(Lexer &lexer, const LexDigitResult &result)
     }
 
     return valid;
+}
+
+
+Token
+lex_literal(Lexer &lexer, const string &expected, Value value, u32 context)
+{
+    string eaten;
+    bool eating = true;
+    while (eating && !match_eol(lexer) && !match_whitespace(lexer))
+    {
+        byte c = peek(lexer);
+        switch (c)
+        {
+            case ',':
+            {
+                eating = !(context & (LEX_ARRAY | LEX_TABLE));
+            } break;
+
+            case ']':
+            {
+                eating = !(context & LEX_ARRAY);
+            } break;
+
+            case '}':
+            {
+                eating = !(context & LEX_TABLE);
+            } break;
+        }
+
+        if (eating)
+        {
+            eaten.push_back(c);
+            advance(lexer);
+        }
+    }
+
+    if (eaten != expected)
+    {
+        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+    }
+
+    Token result = make_value(lexer, move(value));
+    return result;
 }
 
 
@@ -1229,7 +1224,7 @@ lex_binary(Lexer &lexer, u32 context, const string &value)
 
 
 Token
-lex_number(Lexer &lexer, u32 context)
+lex_numeric(Lexer &lexer, u32 context)
 {
     Token result;
 
@@ -1257,6 +1252,24 @@ lex_number(Lexer &lexer, u32 context)
         {
             result = lex_decimal(lexer, context, value);
         }
+    }
+    else if (match(lexer, 'i'))
+    {
+        double inf = INF64;
+        if (value == "-")
+        {
+            inf *= -1;
+        }
+        result = lex_literal(lexer, "inf", Value(inf), context);
+    }
+    else if (match(lexer, 'n'))
+    {
+        double nan = NAN64;
+        if (value == "-")
+        {
+            nan *= -1;
+        }
+        result = lex_literal(lexer, "nan", Value(nan), context);
     }
     else
     {
@@ -1676,7 +1689,7 @@ lex_value(Lexer &lexer, u32 context)
     byte c = peek(lexer);
     if (is_decimal(c))
     {
-        result = lex_number(lexer, context);
+        result = lex_numeric(lexer, context);
     }
     else
     {
@@ -1698,72 +1711,32 @@ lex_value(Lexer &lexer, u32 context)
             } break;
 
             case '-':
-            {
-                advance(lexer);
-                if (match(lexer, 'i'))
-                {
-                    eat_string(lexer, "inf", context);
-                    result = make_value(lexer, Value(-INF64));
-                }
-                else if (match(lexer, 'n'))
-                {
-                    eat_string(lexer, "nan", context);
-                    result = make_value(lexer, Value(-NAN64));
-                }
-                else
-                {
-                    result = lex_number(lexer, context);
-                }
-            } break;
-
             case '+':
             {
                 advance(lexer);
-                if (match(lexer, 'i'))
-                {
-                    eat_string(lexer, "inf", context);
-                    result = make_value(lexer, Value(+INF64));
-                }
-                else if (match(lexer, 'n'))
-                {
-                    eat_string(lexer, "nan", context);
-                    result = make_value(lexer, Value(+NAN64));
-                }
-                else
-                {
-                    result = lex_number(lexer, context);
-                }
+                result = lex_numeric(lexer, context);
             } break;
 
             case 'i':
-            {
-                eat_string(lexer, "inf", context);
-                result = make_value(lexer, Value(INF64));
-            } break;
-
             case 'n':
             {
-                eat_string(lexer, "nan", context);
-                result = make_value(lexer, Value(NAN64));
+                result = lex_numeric(lexer, context);
             } break;
 
             case 't':
             {
-                eat_string(lexer, "true", context);
-                result = make_value(lexer, Value(true));
+                result = lex_literal(lexer, "true", Value(true), context);
             } break;
 
             case 'f':
             {
-                eat_string(lexer, "false", context);
-                result = make_value(lexer, Value(false));
+                result = lex_literal(lexer, "false", Value(false), context);
             } break;
 
             // special handling for invalid cases
-            case '.':
             case '_':
             {
-                result = lex_number(lexer, context);
+                result = lex_numeric(lexer, context);
             } break;
 
             default:
