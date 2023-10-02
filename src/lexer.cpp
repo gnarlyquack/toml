@@ -54,15 +54,26 @@ enum ContainerState
 };
 
 
-struct LexDigitResult
+struct LexedDigits
 {
-    static constexpr u32 INVALID_DIGIT         = 1 << 0;
-    static constexpr u32 HAS_UNDERSCORE        = 1 << 1;
-    static constexpr u32 INVALID_UNDERSCORE    = 1 << 2;
+    enum Status
+    {
+        NONE,
+
+        FRACTION,
+        EXPONENT,
+        DATE,
+        TIME,
+        TIMEZONE,
+        ZULU,
+        DONE,
+
+        INVALID,
+    };
 
     string digits;
-    u32 flags = 0;
-    SourceLocation location;
+    SourceLocation start;
+    Status result;
 };
 
 
@@ -460,58 +471,28 @@ unterminated_string(Lexer &lexer)
 
 
 bool
-validate_digits(Lexer &lexer, const LexDigitResult &result, const string &type, bool no_leading_zero)
+validate_hour(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags & result.INVALID_DIGIT)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid " + type + " number: " + get_lexeme(lexer), result.location);
-        valid = false;
-    }
-    else if (result.flags & result.INVALID_UNDERSCORE)
-    {
-        add_error(lexer, "'_' must separate digits in " + type + " number: " + get_lexeme(lexer), result.location);
+        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing " + type + " number.", result.location);
-        valid = false;
-    }
-    else if (no_leading_zero && (result.digits[0] == '0') && (result.digits.length() > 1))
-    {
-        add_error(lexer, "Leading zeros are not allowed in " + type + " number.", result.location);
-        valid = false;
-    }
-
-    return valid;
-}
-
-
-bool
-validate_hour(Lexer &lexer, const LexDigitResult &result)
-{
-    bool valid = true;
-
-    if (result.flags)
-    {
-        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.location);
-        valid = false;
-    }
-    else if (result.digits.length() == 0)
-    {
-        add_error(lexer, "Missing hour", result.location);
+        add_error(lexer, "Missing hour", result.start);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Hour must be two digits.", result.location);
+        add_error(lexer, "Hour must be two digits.", result.start);
         valid = false;
     }
     else if ((result.digits[0] > '2') || ((result.digits[0] == '2') && (result.digits[1] > '3')))
     {
-        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.location);
+        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.start);
         valid = false;
     }
 
@@ -520,28 +501,28 @@ validate_hour(Lexer &lexer, const LexDigitResult &result)
 
 
 bool
-validate_minute(Lexer &lexer, const LexDigitResult &result)
+validate_minute(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.location);
+        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing minute.", result.location);
+        add_error(lexer, "Missing minute.", result.start);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Minute must be two digits.", result.location);
+        add_error(lexer, "Minute must be two digits.", result.start);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
-        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.location);
+        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.start);
         valid = false;
     }
 
@@ -550,29 +531,29 @@ validate_minute(Lexer &lexer, const LexDigitResult &result)
 
 
 bool
-validate_second(Lexer &lexer, const LexDigitResult &result)
+validate_second(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.location);
+        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing second.", result.location);
+        add_error(lexer, "Missing second.", result.start);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Second must be two digits.", result.location);
+        add_error(lexer, "Second must be two digits.", result.start);
         valid = false;
     }
     else if (result.digits[0] > '5')
     {
         // TODO support leap seconds?
-        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.location);
+        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.start);
         valid = false;
     }
 
@@ -581,23 +562,23 @@ validate_second(Lexer &lexer, const LexDigitResult &result)
 
 
 bool
-validate_year(Lexer &lexer, const LexDigitResult &result)
+validate_year(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.location);
+        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.start);
         valid = false;
     }
     else if (result.digits.length() != 4)
     {
-        add_error(lexer, "Year must be four digits", result.location);
+        add_error(lexer, "Year must be four digits", result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing year", result.location);
+        add_error(lexer, "Missing year", result.start);
         valid = false;
     }
 
@@ -606,30 +587,30 @@ validate_year(Lexer &lexer, const LexDigitResult &result)
 
 
 bool
-validate_month(Lexer &lexer, const LexDigitResult &result)
+validate_month(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.location);
+        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.start);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Month must be two digits.", result.location);
+        add_error(lexer, "Month must be two digits.", result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing month", result.location);
+        add_error(lexer, "Missing month", result.start);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
             || ((result.digits[0] == '1') && (result.digits[1] > '2'))
             || (result.digits[0] > '1'))
     {
-        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.location);
+        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.start);
         valid = false;
     }
 
@@ -638,23 +619,23 @@ validate_month(Lexer &lexer, const LexDigitResult &result)
 
 
 bool
-validate_day(Lexer &lexer, const LexDigitResult &result)
+validate_day(Lexer &lexer, const LexedDigits &result)
 {
     bool valid = true;
 
-    if (result.flags)
+    if (result.result == LexedDigits::INVALID)
     {
-        add_error(lexer, "Invalid day: " + result.digits, result.location);
+        add_error(lexer, "Invalid day: " + result.digits, result.start);
         valid = false;
     }
     else if (result.digits.length() != 2)
     {
-        add_error(lexer, "Day must be two digits.", result.location);
+        add_error(lexer, "Day must be two digits.", result.start);
         valid = false;
     }
     else if (result.digits.length() == 0)
     {
-        add_error(lexer, "Missing day", result.location);
+        add_error(lexer, "Missing day", result.start);
         valid = false;
     }
     else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
@@ -662,7 +643,7 @@ validate_day(Lexer &lexer, const LexDigitResult &result)
             || (result.digits[0] > '3'))
     {
         // TODO Validate day based on month and year while lexing?
-        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.location);
+        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.start);
         valid = false;
     }
 
@@ -713,101 +694,204 @@ lex_literal(Lexer &lexer, const string &expected, Value value, u32 context)
 }
 
 
-LexDigitResult
+LexedDigits
 lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
 {
-    LexDigitResult result;
-    result.location = lexer.current;
+    LexedDigits lexed;
+    lexed.start = lexer.current;
 
-    bool underscore_allowed = false;
+    bool valid = true;
+    bool has_underscore = false;
+    bool underscore_ok = false;
     bool lexing = true;
-    while (lexing && !match_eol(lexer) && !match_whitespace(lexer))
+    while (lexing)
     {
-        byte c = peek(lexer);
-        if (is_digit(c))
-        {
-            advance(lexer);
-            result.digits.push_back(c);
-            underscore_allowed = true;
-        }
-        else if (c == '_')
-        {
-            advance(lexer);
-            result.flags |= result.HAS_UNDERSCORE;
-            if (underscore_allowed)
-            {
-                underscore_allowed = false;
-            }
-            else
-            {
-                result.flags |= result.INVALID_UNDERSCORE;
-            }
-        }
-        else if (
-            ((c == '.') && (context & LEX_FRACTION))
-            || (((c == 'e') || (c == 'E')) && (context & LEX_EXPONENT))
-            || ((c == '-') && ((context & LEX_DATE) || (context & LEX_TIMEZONE)))
-            || ((c == ':') && (context & LEX_TIME))
-            || (((c == 'T') || (c == 't')) && (context & LEX_DATETIME))
-            || (((c == '+') || (c == 'Z') || (c == 'z')) && (context & LEX_TIMEZONE))
-            || ((c == ',') && ((context & LEX_ARRAY) || (context & LEX_TABLE)))
-            || ((c == ']') && (context & LEX_ARRAY))
-            || ((c == '}') && (context & LEX_TABLE))
-            || (c == '#'))
+        if (match_eol(lexer) || match_whitespace(lexer))
         {
             lexing = false;
+            lexed.result = LexedDigits::DONE;
         }
         else
         {
-            result.digits.push_back(eat(lexer));
-            result.flags |= result.INVALID_DIGIT;
+            byte b = peek(lexer);
+            if (is_digit(b))
+            {
+                advance(lexer);
+                lexed.digits.push_back(b);
+                underscore_ok = true;
+            }
+            else
+            {
+                switch (b)
+                {
+                    case '_':
+                    {
+                        advance(lexer);
+                        has_underscore = true;
+                        if (underscore_ok)
+                        {
+                            underscore_ok = false;
+                        }
+                        else
+                        {
+                            valid = false;
+                        }
+                        continue;
+                    } break;
+
+                    case '#':
+                    {
+                        lexing = false;
+                        lexed.result = LexedDigits::DONE;
+                    } break;
+
+                    case '.':
+                    {
+                        if (context & (LEX_NUMBER | LEX_TIME))
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::FRACTION;
+                        }
+                    } break;
+
+                    case 'e':
+                    case 'E':
+                    {
+                        if (context & LEX_NUMBER)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::EXPONENT;
+                        }
+                    } break;
+
+                    case '-':
+                    {
+                        if (context & LEX_DATE)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::DATE;
+                        }
+                        else if (context & LEX_TIME)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::TIMEZONE;
+                        }
+                    } break;
+
+                    case ':':
+                    {
+                        if (context & LEX_TIME)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::TIME;
+                        }
+                    } break;
+
+                    case 'T':
+                    case 't':
+                    {
+                        if (context & LEX_DATE)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::TIME;
+                        }
+                    } break;
+
+                    case '+':
+                    {
+                        if (context & LEX_TIME)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::TIMEZONE;
+                        }
+                    } break;
+
+                    case 'Z':
+                    case 'z':
+                    {
+                        if (context & LEX_TIME)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::ZULU;
+                        }
+                    } break;
+
+                    case ',':
+                    {
+                        if (context & (LEX_ARRAY | LEX_TABLE))
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::DONE;
+                        }
+                    } break;
+
+                    case ']':
+                    {
+                        if (context & LEX_ARRAY)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::DONE;
+                        }
+                    } break;
+
+                    case '}':
+                    {
+                        if (context & LEX_TABLE)
+                        {
+                            lexing = false;
+                            lexed.result = LexedDigits::DONE;
+                        }
+                    } break;
+                }
+
+                if (lexing)
+                {
+                    valid = false;
+                    lexed.digits.push_back(b);
+                    advance(lexer);
+                }
+            }
         }
     }
 
-    if ((result.flags & result.HAS_UNDERSCORE) && !underscore_allowed)
+    if (lexed.digits.length() == 0)
     {
-        result.flags |= result.INVALID_UNDERSCORE;
+        lexed.result = LexedDigits::NONE;
+    }
+    else if (!valid
+            // check for trailing underscore
+            || (has_underscore && !underscore_ok))
+    {
+        lexed.result = LexedDigits::INVALID;
+    }
+    else if (has_underscore)
+    {
+        switch (lexed.result)
+        {
+            case LexedDigits::DATE:
+            case LexedDigits::TIME:
+            case LexedDigits::TIMEZONE:
+            case LexedDigits::ZULU:
+            {
+                lexed.result = LexedDigits::INVALID;
+            } break;
+
+            default:
+            {
+                if (!(context & LEX_NUMBER))
+                {
+                    lexed.result = LexedDigits::INVALID;
+                }
+            } break;
+        }
     }
 
-    return result;
+    return lexed;
 }
 
 
 bool
-lex_exponent(Lexer &lexer, u32 context, string &value)
-{
-    if (match(lexer, '-') || match(lexer, '+'))
-    {
-        value.push_back(eat(lexer));
-    }
-
-    LexDigitResult exponent = lex_digits(lexer, is_decimal, context);
-    bool valid = validate_digits(lexer, exponent, "exponential part of decimal", false);
-    value += move(exponent.digits);
-
-    return valid;
-}
-
-
-bool
-lex_fraction(Lexer &lexer, u32 context, string &value)
-{
-    LexDigitResult fraction = lex_digits(lexer, is_decimal, context | LEX_EXPONENT);
-    bool valid = validate_digits(lexer, fraction, "fractional part of decimal", false);
-    value += move(fraction.digits);
-
-    if (match(lexer, 'e') || match(lexer, 'E'))
-    {
-        value.push_back(eat(lexer));
-        valid = lex_exponent(lexer, context, value) && valid;
-    }
-
-    return valid;
-}
-
-
-bool
-lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
+lex_time(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 {
     bool valid = true;
 
@@ -821,7 +905,7 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     {
         value.push_back(eat(lexer));
 
-        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME | LEX_FRACTION);
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
         if (!validate_minute(lexer, lexed))
         {
             valid = false;
@@ -832,7 +916,7 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
         {
             value.push_back(eat(lexer));
 
-            lexed = lex_digits(lexer, is_decimal, context | LEX_FRACTION);
+            lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
             if (!validate_second(lexer, lexed))
             {
                 valid = false;
@@ -842,15 +926,15 @@ lex_time(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
             if (match(lexer, '.'))
             {
                 value.push_back(eat(lexer));
-                lexed = lex_digits(lexer, is_decimal, context);
-                if (lexed.flags)
+                lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+                if (lexed.result == LexedDigits::INVALID)
                 {
-                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.location);
+                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.start);
                     valid = false;
                 }
                 else if (lexed.digits.length() == 0)
                 {
-                    add_error(lexer, "Missing fractional seconds", lexed.location);
+                    add_error(lexer, "Missing fractional seconds", lexed.start);
                     valid = false;
                 }
 
@@ -879,7 +963,7 @@ bool
 lex_hour(Lexer &lexer, string &value, u32 context)
 {
     bool result;
-    LexDigitResult lexed = lex_digits(lexer, is_decimal, context | LEX_TIME | LEX_FRACTION);
+    LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
     if (lexed.digits.length())
     {
         result = lex_time(lexer, value, lexed, context);
@@ -887,7 +971,7 @@ lex_hour(Lexer &lexer, string &value, u32 context)
     else
     {
         result = false;
-        add_error(lexer, "Missing time.", lexed.location);
+        add_error(lexer, "Missing time.", lexed.start);
     }
     return result;
 }
@@ -901,7 +985,7 @@ lex_timezone(Lexer &lexer, string &value, u32 context)
     value.push_back(eat(lexer));
     assert(value.back() == '-' || value.back() == '+');
 
-    LexDigitResult lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+    LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
     if (!validate_hour(lexer, lexed))
     {
         result = false;
@@ -911,7 +995,7 @@ lex_timezone(Lexer &lexer, string &value, u32 context)
     assert(match(lexer, ':'));
     advance(lexer);
 
-    lexed = lex_digits(lexer, is_decimal, context);
+    lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
     if (!validate_minute(lexer, lexed))
     {
         result = false;
@@ -923,7 +1007,7 @@ lex_timezone(Lexer &lexer, string &value, u32 context)
 
 
 Token
-lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
+lex_date(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 {
     bool valid = true;
     Value::Type type = Value::Type::LOCAL_DATE;
@@ -942,7 +1026,7 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     assert(match(lexer, '-'));
     value.push_back(eat(lexer));
 
-    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE | LEX_DATETIME);
+    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
     if (!validate_month(lexer, lexed))
     {
         valid = false;
@@ -952,7 +1036,7 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
     assert(match(lexer, '-'));
     value.push_back(eat(lexer));
 
-    lexed = lex_digits(lexer, is_decimal, context | LEX_DATETIME);
+    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
     if (!validate_day(lexer, lexed))
     {
         valid = false;
@@ -1031,130 +1115,191 @@ lex_date(Lexer &lexer, string &value, LexDigitResult &lexed, u32 context)
 
 
 Token
-lex_decimal(Lexer &lexer, u32 context, string &value)
+lex_exponent(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 {
-    Token token;
-    LexDigitResult result = lex_digits(lexer, is_decimal, context | LEX_FRACTION | LEX_EXPONENT | LEX_DATE | LEX_TIME);
+    assert(match(lexer, 'e') || match(lexer, 'E'));
+    value.push_back(eat(lexer));
 
-    if (match(lexer, '.'))
+    if (match(lexer, '-') || match(lexer, '+'))
     {
-        bool valid = validate_digits(lexer, result, "whole part of decimal", true);
-        value += move(result.digits);
         value.push_back(eat(lexer));
-        valid = lex_fraction(lexer, context, value) && valid;
-        if (valid)
-        {
-            token = make_value(lexer, Value(string_to_f64(value)));
-        }
-        else
-        {
-            token = make_value(lexer, Value());
-        }
     }
-    else if (match(lexer, 'e') || match(lexer, 'E'))
-    {
-        bool valid = validate_digits(lexer, result, "whole part of decimal", true);
-        value += move(result.digits);
-        value.push_back(eat(lexer));
-        valid = lex_exponent(lexer, context, value) && valid;
-        if (valid)
-        {
-            token = make_value(lexer, Value(string_to_f64(value)));
-        }
-        else
-        {
-            token = make_value(lexer, Value());
-        }
-    }
-    else if (match(lexer, '-'))
-    {
-        if (result.digits.length())
-        {
-            token = lex_date(lexer, value, result, context);
-        }
-        else
-        {
-            resynchronize(lexer, context);
-            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
-            token = make_value(lexer, Value());
-        }
-    }
-    else if (match(lexer, ':'))
-    {
-        bool valid = true;
-        if (value.length())
-        {
-            add_error(lexer, "'" + value + "' sign not allowed for time");
-            valid = false;
-        }
-        if (!lex_time(lexer, value, result, context))
-        {
-            valid = false;
-        }
 
-        if (valid)
-        {
-            // date::parse apparently doesn't work on bare time values
-            int hours = atoi(value.c_str());
-            int minutes = atoi(value.c_str() + 3);
-            int seconds = atoi(value.c_str() + 6);
-            int microseconds = 0;
-            if (value.length() > 9) {
-                value.resize(15, '0');
-                microseconds = atoi(value.c_str() + 9);
-            }
+    lexed = lex_digits(lexer, is_decimal, context | LEX_NUMBER);
 
-            LocalTime lexed{
-                chrono::hours{hours}
-                + chrono::minutes{minutes}
-                + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
-            token = make_value(lexer, Value(lexed));
-        }
-        else
-        {
-            token = make_value(lexer, Value());
-        }
+    Token result;
+    if (lexed.result == LexedDigits::DONE)
+    {
+        value += move(lexed.digits);
+        result = make_value(lexer, Value(string_to_f64(value)));
     }
     else
     {
-        if (validate_digits(lexer, result, "decimal", true))
-        {
-            value += move(result.digits);
-            token = make_value(lexer, Value(string_to_s64(value)));
-        }
-        else
-        {
-            token = make_value(lexer, Value());
-        }
+        resynchronize(lexer, context);
+        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+        result = make_value(lexer, Value());
     }
 
-    return token;
+    return result;
 }
 
 
 Token
-lex_hexadecimal(Lexer &lexer, u32 context, const string &value)
+lex_fraction(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 {
-    bool valid = true;
-    if (value.length())
-    {
-        add_error(lexer, "A leading '" + value + "' is not allowed in a hexadecimal integer.");
-        valid = false;
-    }
+    assert(match(lexer, '.'));
+    value.push_back(eat(lexer));
 
-    LexDigitResult lexed = lex_digits(lexer, is_hexadecimal, context);
-    if (!validate_digits(lexer, lexed, "hexadecimal", false))
-    {
-        valid = false;
-    }
+    lexed = lex_digits(lexer, is_decimal, context | LEX_NUMBER);
 
     Token result;
-    if (valid)
+    switch (lexed.result)
     {
+        case LexedDigits::DONE:
+        {
+            value += move(lexed.digits);
+            result = make_value(lexer, Value(string_to_f64(value)));
+        } break;
+
+        case LexedDigits::EXPONENT:
+        {
+            value += move(lexed.digits);
+            result = lex_exponent(lexer, value, lexed, context);
+        } break;
+
+        default:
+        {
+            resynchronize(lexer, context);
+            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            result = make_value(lexer, Value());
+        } break;
+    }
+
+    return result;
+}
+
+
+Token
+lex_number(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
+{
+    LexedDigits integer = lexed;
+
+    Token result;
+    switch (lexed.result)
+    {
+        case LexedDigits::DONE:
+        {
+            value += move(lexed.digits);
+            result = make_value(lexer, Value(string_to_s64(value)));
+        } break;
+
+        case LexedDigits::FRACTION:
+        {
+            value += move(lexed.digits);
+            result = lex_fraction(lexer, value, lexed, context);
+        } break;
+
+        case LexedDigits::EXPONENT:
+        {
+            value += move(lexed.digits);
+            result = lex_exponent(lexer, value, lexed, context);
+        } break;
+
+        default:
+        {
+            resynchronize(lexer, context);
+            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            result = make_value(lexer, Value());
+        } break;
+    }
+
+    if ((result.value.type() != Value::Type::INVALID)
+        && (integer.digits[0] == '0') && (integer.digits.length() > 1))
+    {
+        add_error(lexer, "Number may not have leading zeros.", integer.start);
+    }
+
+    return result;
+}
+
+
+Token
+lex_decimal(Lexer &lexer, u32 context, string &value)
+{
+    Token result;
+    LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_NUMBER | LEX_DATE | LEX_TIME);
+
+    switch (lexed.result)
+    {
+        case LexedDigits::DONE:
+        case LexedDigits::FRACTION:
+        case LexedDigits::EXPONENT:
+        {
+            result = lex_number(lexer, value, lexed, context);
+        } break;
+
+        case LexedDigits::DATE:
+        {
+            result = lex_date(lexer, value, lexed, context);
+        } break;
+
+        case LexedDigits::TIME:
+        {
+            if (lex_time(lexer, value, lexed, context))
+            {
+                // date::parse apparently doesn't work on bare time values
+                int hours = atoi(value.c_str());
+                int minutes = atoi(value.c_str() + 3);
+                int seconds = atoi(value.c_str() + 6);
+                int microseconds = 0;
+                if (value.length() > 9) {
+                    value.resize(15, '0');
+                    microseconds = atoi(value.c_str() + 9);
+                }
+
+                LocalTime localtime{
+                    chrono::hours{hours}
+                    + chrono::minutes{minutes}
+                    + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
+                result = make_value(lexer, Value(localtime));
+            }
+            else
+            {
+                result = make_value(lexer, Value());
+            }
+        } break;
+
+        default:
+        {
+            resynchronize(lexer, context);
+            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            result = make_value(lexer, Value());
+        } break;
+    }
+
+    return result;
+}
+
+
+Token
+lex_hexadecimal(Lexer &lexer, const string &value, u32 context)
+{
+    advance(lexer, 2);
+    LexedDigits lexed = lex_digits(lexer, is_hexadecimal, context | LEX_NUMBER);
+
+    Token result;
+    if (lexed.result == LexedDigits::DONE)
+    {
+        if (value.length())
+        {
+            add_error(lexer, "Hexadecimal number may not have a leading sign.");
+        }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 16)));
     }
     else
     {
+        resynchronize(lexer, context);
+        add_error(lexer, "Invalid hexadecimal number: " + get_lexeme(lexer));
         result = make_value(lexer, Value());
     }
 
@@ -1163,29 +1308,24 @@ lex_hexadecimal(Lexer &lexer, u32 context, const string &value)
 
 
 Token
-lex_octal(Lexer &lexer, u32 context, const string &value)
+lex_octal(Lexer &lexer, const string &value, u32 context)
 {
-    bool valid = true;
-
-    if (value.length())
-    {
-        add_error(lexer, "'" + value + "' is not allowed in an octal integer.");
-        valid = false;
-    }
-
-    LexDigitResult lexed = lex_digits(lexer, is_octal, context);
-    if (!validate_digits(lexer, lexed, "octal", false))
-    {
-        valid = false;
-    }
+    advance(lexer, 2);
+    LexedDigits lexed = lex_digits(lexer, is_octal, context | LEX_NUMBER);
 
     Token result;
-    if (valid)
+    if (lexed.result == LexedDigits::DONE)
     {
+        if (value.length())
+        {
+            add_error(lexer, "Octal number may not have a leading sign.");
+        }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 8)));
     }
     else
     {
+        resynchronize(lexer, context);
+        add_error(lexer, "Invalid octal number: " + get_lexeme(lexer));
         result = make_value(lexer, Value());
     }
 
@@ -1194,31 +1334,27 @@ lex_octal(Lexer &lexer, u32 context, const string &value)
 
 
 Token
-lex_binary(Lexer &lexer, u32 context, const string &value)
+lex_binary(Lexer &lexer, const string &value, u32 context)
 {
-    bool valid = true;
-
-    if (value.length())
-    {
-        add_error(lexer, "'" + value + "' is not allowed in a binary integer.");
-        valid = false;
-    }
-
-    LexDigitResult lexed = lex_digits(lexer, is_binary, context);
-    if (!validate_digits(lexer, lexed, "binary", false))
-    {
-        valid = false;
-    }
+    advance(lexer, 2);
+    LexedDigits lexed = lex_digits(lexer, is_binary, context | LEX_NUMBER);
 
     Token result;
-    if (valid)
+    if (lexed.result == LexedDigits::DONE)
     {
+        if (value.length())
+        {
+            add_error(lexer, "Binary number may not have a leading sign.");
+        }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 2)));
     }
     else
     {
+        resynchronize(lexer, context);
+        add_error(lexer, "Invalid binary number: " + get_lexeme(lexer));
         result = make_value(lexer, Value());
     }
+
     return result;
 }
 
@@ -1235,18 +1371,15 @@ lex_numeric(Lexer &lexer, u32 context)
     {
         if (match(lexer, 'x', 1))
         {
-            advance(lexer, 2);
-            result = lex_hexadecimal(lexer, context, value);
+            result = lex_hexadecimal(lexer, value, context);
         }
         else if (match(lexer, 'o', 1))
         {
-            advance(lexer, 2);
-            result = lex_octal(lexer, context, value);
+            result = lex_octal(lexer, value, context);
         }
         else if (match(lexer, 'b', 1))
         {
-            advance(lexer, 2);
-            result = lex_binary(lexer, context, value);
+            result = lex_binary(lexer, value, context);
         }
         else
         {
@@ -1731,12 +1864,6 @@ lex_value(Lexer &lexer, u32 context)
             case 'f':
             {
                 result = lex_literal(lexer, "false", Value(false), context);
-            } break;
-
-            // special handling for invalid cases
-            case '_':
-            {
-                result = lex_numeric(lexer, context);
             } break;
 
             default:

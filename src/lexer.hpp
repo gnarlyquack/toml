@@ -33,6 +33,7 @@ enum LexingContext
     LEX_ARRAY_HEADER = 1 <<  9,
     LEX_KEY          = 1 << 10,
     LEX_VALUE        = 1 << 11,
+    LEX_NUMBER       = 1 << 12,
 };
 
 
