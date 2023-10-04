@@ -46,14 +46,6 @@ constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                               'A', 'B', 'C', 'D', 'E', 'F' };
 
 
-enum ContainerState
-{
-    CONTAINER_START,
-    CONTAINER_VALUE,
-    CONTAINER_SEPARATOR,
-};
-
-
 struct LexedDigits
 {
     enum Status
@@ -74,6 +66,36 @@ struct LexedDigits
     string digits;
     SourceLocation start;
     Status result;
+};
+
+
+struct LexedDateTimePart
+{
+    u64 length;
+    SourceLocation source;
+};
+
+
+struct LexedDateTime
+{
+    string &value;
+    Value::Type type;
+    LexedDateTimePart year;
+    LexedDateTimePart month;
+    LexedDateTimePart day;
+    LexedDateTimePart hour;
+    LexedDateTimePart minute;
+    LexedDateTimePart second;
+    LexedDateTimePart microsecond;
+    LexedDateTimePart tz_hour;
+    LexedDateTimePart tz_minute;
+
+    LexedDateTime(string &value_, Value::Type type_)
+        : value(value_)
+        , type(type_)
+    {
+        assert((type == Value::Type::LOCAL_DATE) || (type == Value::Type::LOCAL_TIME));
+    }
 };
 
 
@@ -471,183 +493,260 @@ unterminated_string(Lexer &lexer)
 
 
 bool
-validate_hour(Lexer &lexer, const LexedDigits &result)
+validate_second(Lexer &lexer, const string &value, u64 index, const LexedDateTimePart &part)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (part.length != 2)
     {
-        add_error(lexer, "Invalid hour: " + get_lexeme(lexer), result.start);
-        valid = false;
+        add_error(lexer, "Second must be two digits.", part.source);
+        result = false;
     }
-    else if (result.digits.length() == 0)
+    else if (value[index] > '5')
     {
-        add_error(lexer, "Missing hour", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 2)
-    {
-        add_error(lexer, "Hour must be two digits.", result.start);
-        valid = false;
-    }
-    else if ((result.digits[0] > '2') || ((result.digits[0] == '2') && (result.digits[1] > '3')))
-    {
-        add_error(lexer, "Hour must be between 00 and 23 inclusive but value was: " + result.digits, result.start);
-        valid = false;
+        add_error(lexer, "Second must be between 00 and 59 inclusive.", part.source);
+        result = false;
     }
 
-    return valid;
+    return result;
 }
 
 
 bool
-validate_minute(Lexer &lexer, const LexedDigits &result)
+validate_minute(Lexer &lexer, const string &value, u64 index, const LexedDateTimePart &part)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (part.length != 2)
     {
-        add_error(lexer, "Invalid minute: " + get_lexeme(lexer), result.start);
-        valid = false;
+        add_error(lexer, "Minute must be two digits.", part.source);
+        result = false;
     }
-    else if (result.digits.length() == 0)
+    else if (value[index] > '5')
     {
-        add_error(lexer, "Missing minute.", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 2)
-    {
-        add_error(lexer, "Minute must be two digits.", result.start);
-        valid = false;
-    }
-    else if (result.digits[0] > '5')
-    {
-        add_error(lexer, "Minute must be between 00 and 59 inclusive but value was: " + result.digits, result.start);
-        valid = false;
+        add_error(lexer, "Minute must be between 00 and 59 inclusive.", part.source);
+        result = false;
     }
 
-    return valid;
+    return result;
 }
 
 
 bool
-validate_second(Lexer &lexer, const LexedDigits &result)
+validate_hour(Lexer &lexer, const string &value, u64 index, const LexedDateTimePart &part)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (part.length != 2)
     {
-        add_error(lexer, "Invalid second: " + get_lexeme(lexer), result.start);
-        valid = false;
+        add_error(lexer, "Hour must be two digits.", part.source);
+        result = false;
     }
-    else if (result.digits.length() == 0)
+    else if ((value[index] > '2') || ((value[index] == '2') && (value[index + 1] > '3')))
     {
-        add_error(lexer, "Missing second.", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 2)
-    {
-        add_error(lexer, "Second must be two digits.", result.start);
-        valid = false;
-    }
-    else if (result.digits[0] > '5')
-    {
-        // TODO support leap seconds?
-        add_error(lexer, "Second must be between 00 and 59 inclusive but value was: " + result.digits, result.start);
-        valid = false;
+        add_error(lexer, "Hour must be between 00 and 23 inclusive.", part.source);
+        result = false;
     }
 
-    return valid;
+    return result;
 }
 
 
 bool
-validate_year(Lexer &lexer, const LexedDigits &result)
+validate_timezone(Lexer &lexer, const LexedDateTime &datetime)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (datetime.type == Value::Type::OFFSET_DATETIME)
     {
-        add_error(lexer, "Invalid year: " + get_lexeme(lexer), result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 4)
-    {
-        add_error(lexer, "Year must be four digits", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() == 0)
-    {
-        add_error(lexer, "Missing year", result.start);
-        valid = false;
+        // offset datetime format
+        // 0         1         2         3
+        // 01234567890123456789012345678901
+        // YYYY-MM-DD HH:MM:SS.SSSSSS+HH:MM
+        u64 index = 27;
+        result = validate_hour(lexer, datetime.value, index, datetime.tz_hour)
+            && validate_minute(lexer, datetime.value, index + 3, datetime.tz_minute);
     }
 
-    return valid;
+    return result;
 }
 
 
 bool
-validate_month(Lexer &lexer, const LexedDigits &result)
+validate_time(Lexer &lexer, const LexedDateTime &datetime)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (datetime.type != Value::Type::LOCAL_DATE)
     {
-        add_error(lexer, "Invalid month: " + get_lexeme(lexer), result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 2)
-    {
-        add_error(lexer, "Month must be two digits.", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() == 0)
-    {
-        add_error(lexer, "Missing month", result.start);
-        valid = false;
-    }
-    else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
-            || ((result.digits[0] == '1') && (result.digits[1] > '2'))
-            || (result.digits[0] > '1'))
-    {
-        add_error(lexer, "Month must be between 01 and 12 inclusive but value was: " + result.digits, result.start);
-        valid = false;
+        // datetime format
+        // 0         1         2
+        // 01234567890123456789012345
+        // YYYY-MM-DD HH:MM:SS.SSSSSS
+        u64 index = datetime.type == Value::Type::LOCAL_TIME ? 0 : 11;
+        result = validate_hour(lexer, datetime.value, index, datetime.hour)
+            && validate_minute(lexer, datetime.value, index + 3, datetime.minute)
+            && validate_second(lexer, datetime.value, index + 6, datetime.second);
+        // microseconds don't need be validated: any numerical value is valid
+        // and they're normalized to 6 digits when parsing
     }
 
-    return valid;
+    return result;
 }
 
 
 bool
-validate_day(Lexer &lexer, const LexedDigits &result)
+validate_date(Lexer &lexer, const LexedDateTime &datetime)
 {
-    bool valid = true;
+    bool result = true;
 
-    if (result.result == LexedDigits::INVALID)
+    if (datetime.type != Value::Type::LOCAL_TIME)
     {
-        add_error(lexer, "Invalid day: " + result.digits, result.start);
-        valid = false;
-    }
-    else if (result.digits.length() != 2)
-    {
-        add_error(lexer, "Day must be two digits.", result.start);
-        valid = false;
-    }
-    else if (result.digits.length() == 0)
-    {
-        add_error(lexer, "Missing day", result.start);
-        valid = false;
-    }
-    else if (((result.digits[0] == '0') && (result.digits[1] == '0'))
-            || ((result.digits[0] == '3') && (result.digits[1] > '1'))
-            || (result.digits[0] > '3'))
-    {
-        // TODO Validate day based on month and year while lexing?
-        add_error(lexer, "Day must be between 01 and 31 inclusive but value was: " + result.digits, result.start);
-        valid = false;
+        if (datetime.year.length != 4)
+        {
+            add_error(lexer, "Year must be four digits", datetime.year.source);
+            result = false;
+        }
+        else if (datetime.month.length != 2)
+        {
+            add_error(lexer, "Month must be two digits.", datetime.month.source);
+            result = false;
+        }
+        else if (datetime.day.length != 2)
+        {
+            add_error(lexer, "Day must be two digits.", datetime.day.source);
+            result = false;
+        }
+        else
+        {
+            // date format
+            // 0123456789
+            // YYYY-MM-DD
+            const char *value = datetime.value.c_str();
+            int year = atoi(value);
+            int month = atoi(value + 5);
+            int day = atoi(value + 8);
+
+            if ((month < 1) || (month > 12))
+            {
+                add_error(lexer, "Month must be between 01 and 12 inclusive.", datetime.month.source);
+                result = false;
+            }
+            else
+            {
+                constexpr int days_in_months[] = {
+                    31, // January
+                    28, // February
+                    31, // March
+                    30, // April
+                    31, // May
+                    30, // June
+                    31, // July
+                    31, // August
+                    30, // September
+                    31, // October
+                    30, // November
+                    31, // December
+                };
+
+                int days_in_month = days_in_months[month - 1];
+                // leap years
+                if ((month == 2) && ((year % 4) == 0) && (((year % 100) != 0) || (year % 400) == 0))
+                {
+                    days_in_month = 29;
+                }
+
+                if ((day < 1) || (day > days_in_month))
+                {
+                    add_error(
+                        lexer,
+                        "Day must be between 01 and " + to_string(days_in_month) + " inclusive.",
+                        datetime.day.source);
+                    result = false;
+                }
+            }
+        }
     }
 
-    return valid;
+    return result;
+}
+
+
+Token
+validate_datetime(Lexer &lexer, const LexedDateTime &datetime, u32 context)
+{
+    Token result;
+    if (datetime.type == Value::Type::INVALID)
+    {
+        resynchronize(lexer, context);
+        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+        result = make_value(lexer, Value());
+    }
+    else
+    {
+        if (validate_date(lexer, datetime)
+            && validate_time(lexer, datetime)
+            && validate_timezone(lexer, datetime))
+        {
+            switch (datetime.type)
+            {
+                case Value::Type::LOCAL_DATE:
+                {
+                    istringstream in(datetime.value);
+                    LocalDate value;
+                    in >> date::parse("%Y-%m-%d", value);
+                    result = make_value(lexer, Value(value));
+                } break;
+
+                case Value::Type::LOCAL_DATETIME:
+                {
+                    istringstream in(datetime.value);
+                    LocalDateTime value;
+                    in >> date::parse("%Y-%m-%d %T", value);
+                    result = make_value(lexer, Value(value));
+                } break;
+
+                case Value::Type::OFFSET_DATETIME:
+                {
+                    istringstream in(datetime.value);
+                    OffsetDateTime value;
+                    in >> date::parse("%Y-%m-%d %T%z", value);
+                    result = make_value(lexer, Value(value));
+                } break;
+
+
+                case Value::Type::LOCAL_TIME:
+                {
+                    // time format
+                    // 0         1
+                    // 012345678901234
+                    // HH:MM:SS.SSSSSS
+                    const char *localtime = datetime.value.c_str();
+                    int hour = atoi(localtime);
+                    int minute = atoi(localtime + 3);
+                    int second = atoi(localtime + 6);
+                    int microsecond = atoi(localtime + 9);
+
+                    LocalTime value(
+                        chrono::hours(hour)
+                        + chrono::minutes(minute)
+                        + chrono::seconds(second) + chrono::microseconds(microsecond));
+                    result = make_value(lexer, Value(value));
+                } break;
+
+                default:
+                {
+                    assert(false);
+                } break;
+            }
+        }
+        else
+        {
+            result = make_value(lexer, Value());
+        }
+    }
+
+    return result;
 }
 
 
@@ -890,227 +989,283 @@ lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
 }
 
 
-bool
-lex_time(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
+void
+lex_timezone(Lexer &lexer, LexedDateTime &datetime, LexedDigits &lexed, u32 context)
 {
-    bool valid = true;
+    assert(datetime.type == Value::Type::OFFSET_DATETIME);
+    assert(lexed.result == LexedDigits::TIMEZONE);
+    assert(match(lexer, '-') || match(lexer, '+'));
+    datetime.value.push_back(eat(lexer));
 
-    if (!validate_hour(lexer, lexed))
+    lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+    if (lexed.result == LexedDigits::TIME)
     {
-        valid = false;
+        datetime.tz_hour.length = lexed.digits.length();
+        datetime.tz_hour.source = lexed.start;
+        datetime.value += move(lexed.digits);
     }
-    value += move(lexed.digits);
-
-    if (match(lexer, ':'))
+    else
     {
-        value.push_back(eat(lexer));
+        datetime.type = Value::Type::INVALID;
+    }
+
+    if (datetime.type == Value::Type::OFFSET_DATETIME)
+    {
+        assert(match(lexer, ':'));
+        datetime.value.push_back(eat(lexer));
 
         lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-        if (!validate_minute(lexer, lexed))
+        if (lexed.result == LexedDigits::DONE)
         {
-            valid = false;
-        }
-        value += move(lexed.digits);
-
-        if (match(lexer, ':'))
-        {
-            value.push_back(eat(lexer));
-
-            lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-            if (!validate_second(lexer, lexed))
-            {
-                valid = false;
-            }
-            value += move(lexed.digits);
-
-            if (match(lexer, '.'))
-            {
-                value.push_back(eat(lexer));
-                lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-                if (lexed.result == LexedDigits::INVALID)
-                {
-                    add_error(lexer, "Invalid value for fractional seconds: " + get_lexeme(lexer), lexed.start);
-                    valid = false;
-                }
-                else if (lexed.digits.length() == 0)
-                {
-                    add_error(lexer, "Missing fractional seconds", lexed.start);
-                    valid = false;
-                }
-
-                value += move(lexed.digits);
-            }
+            datetime.tz_minute.length = lexed.digits.length();
+            datetime.tz_minute.source = lexed.start;
+            datetime.value += move(lexed.digits);
         }
         else
         {
-            valid = false;
-            add_error(lexer, "Invalid or missing seconds for time.", lexer.current);
-            resynchronize(lexer, context);
+            datetime.type = Value::Type::INVALID;
         }
+    }
+}
+
+
+void
+lex_time(Lexer &lexer, LexedDateTime &datetime, LexedDigits &lexed, u32 context)
+{
+    assert(lexed.result == LexedDigits::TIME);
+    assert((datetime.type == Value::Type::LOCAL_DATETIME) || (datetime.type == Value::Type::LOCAL_TIME));
+
+    if ((datetime.type == Value::Type::LOCAL_DATETIME) || (datetime.value.length() == 0))
+    {
+        datetime.hour.length = lexed.digits.length();
+        datetime.hour.source = lexed.start;
+        datetime.value += move(lexed.digits);
     }
     else
     {
-        valid = false;
-        add_error(lexer, "Invalid or missing minutes for time.", lexer.current);
-        resynchronize(lexer, context);
+        datetime.type = Value::Type::INVALID;
     }
 
-    return valid;
-}
-
-
-bool
-lex_hour(Lexer &lexer, string &value, u32 context)
-{
-    bool result;
-    LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-    if (lexed.digits.length())
+    if (datetime.type != Value::Type::INVALID)
     {
-        result = lex_time(lexer, value, lexed, context);
-    }
-    else
-    {
-        result = false;
-        add_error(lexer, "Missing time.", lexed.start);
-    }
-    return result;
-}
+        assert(match(lexer, ':'));
+        datetime.value.push_back(eat(lexer));
 
-
-bool
-lex_timezone(Lexer &lexer, string &value, u32 context)
-{
-    bool result = true;
-
-    value.push_back(eat(lexer));
-    assert(value.back() == '-' || value.back() == '+');
-
-    LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-    if (!validate_hour(lexer, lexed))
-    {
-        result = false;
-    }
-    value += move(lexed.digits);
-
-    assert(match(lexer, ':'));
-    advance(lexer);
-
-    lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
-    if (!validate_minute(lexer, lexed))
-    {
-        result = false;
-    }
-    value += move(lexed.digits);
-
-    return result;
-}
-
-
-Token
-lex_date(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
-{
-    bool valid = true;
-    Value::Type type = Value::Type::LOCAL_DATE;
-
-    if (value.length())
-    {
-        add_error(lexer, "'" + value + "' sign not allowed for date");
-        valid = false;
-    }
-    if (!validate_year(lexer, lexed))
-    {
-        valid = false;
-    }
-    value += move(lexed.digits);
-
-    assert(match(lexer, '-'));
-    value.push_back(eat(lexer));
-
-    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
-    if (!validate_month(lexer, lexed))
-    {
-        valid = false;
-    }
-    value += move(lexed.digits);
-
-    assert(match(lexer, '-'));
-    value.push_back(eat(lexer));
-
-    lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
-    if (!validate_day(lexer, lexed))
-    {
-        valid = false;
-    }
-    value += move(lexed.digits);
-
-    if (match(lexer, 'T') || match(lexer, 't')
-        || (match(lexer, ' ') && !match_eol(lexer, 1) && is_decimal(peek(lexer, 1))))
-    {
-        type = Value::Type::LOCAL_DATETIME;
-        advance(lexer);
-        value += ' ';
-
-        if (!lex_hour(lexer, value, LEX_TIMEZONE))
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+        if (lexed.result == LexedDigits::TIME)
         {
-            valid = false;
+            datetime.minute.length = lexed.digits.length();
+            datetime.minute.source = lexed.start;
+            datetime.value += move(lexed.digits);
         }
-
-        if (match(lexer, 'Z') ||match(lexer, 'z'))
+        else
         {
-            type = Value::Type::OFFSET_DATETIME;
-            advance(lexer);
-            value += "+0000";
+            datetime.type = Value::Type::INVALID;
         }
-        else if (match(lexer, '+') || match(lexer, '-'))
+    }
+
+    if (datetime.type != Value::Type::INVALID)
+    {
+        assert(match(lexer, ':'));
+        datetime.value.push_back(eat(lexer));
+
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+        switch (lexed.result)
         {
-            type = Value::Type::OFFSET_DATETIME;
-            if (!lex_timezone(lexer, value, context))
+            case LexedDigits::DONE:
             {
-                valid = false;
-            }
-        }
-    }
+                datetime.second.length = lexed.digits.length();
+                datetime.second.source = lexed.start;
+                datetime.value += move(lexed.digits);
 
-    Token token;
-    if (valid)
-    {
-        istringstream in{value};
-        switch (type)
-        {
-            case Value::Type::LOCAL_DATE:
+                datetime.value += ".000000";
+                datetime.microsecond.length = 6;
+                datetime.microsecond.source = lexer.current;
+            }  break;
+
+            case LexedDigits::FRACTION:
             {
-                LocalDate result;
-                in >> date::parse("%Y-%m-%d", result);
-                token = make_value(lexer, Value(result));
+                datetime.second.length = lexed.digits.length();
+                datetime.second.source = lexed.start;
+                datetime.value += move(lexed.digits);
             } break;
 
-            case Value::Type::LOCAL_DATETIME:
+            case LexedDigits::TIMEZONE:
+            case LexedDigits::ZULU:
             {
-                LocalDateTime result;
-                in >> date::parse("%Y-%m-%d %T", result);
-                token = make_value(lexer, Value(result));
-            } break;
+                if (datetime.type == Value::Type::LOCAL_DATETIME)
+                {
+                    datetime.type = Value::Type::OFFSET_DATETIME;
+                    datetime.second.length = lexed.digits.length();
+                    datetime.second.source = lexed.start;
+                    datetime.value += move(lexed.digits);
 
-            case Value::Type::OFFSET_DATETIME:
-            {
-                assert(type == Value::Type::OFFSET_DATETIME);
-                OffsetDateTime result;
-                in >> date::parse("%Y-%m-%d %T%z", result);
-                token = make_value(lexer, Value(result));
+                    datetime.value += ".000000";
+                    datetime.microsecond.length = 6;
+                    datetime.microsecond.source = lexer.current;
+                }
+                else
+                {
+                    datetime.type = Value::Type::INVALID;
+                }
             } break;
 
             default:
             {
-                assert(false);
+                datetime.type = Value::Type::INVALID;
             } break;
         }
     }
+
+    if ((datetime.type != Value::Type::INVALID) && (lexed.result == LexedDigits::FRACTION))
+    {
+        assert(match(lexer, '.'));
+        datetime.value.push_back(eat(lexer));
+
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+        switch (lexed.result)
+        {
+            case LexedDigits::DONE:
+            {
+                lexed.digits.resize(6, '0');
+                datetime.microsecond.length = lexed.digits.length();
+                datetime.microsecond.source = lexed.start;
+                datetime.value += move(lexed.digits);
+            } break;
+
+            case LexedDigits::TIMEZONE:
+            case LexedDigits::ZULU:
+            {
+                if (datetime.type == Value::Type::LOCAL_DATETIME)
+                {
+                    datetime.type = Value::Type::OFFSET_DATETIME;
+                    lexed.digits.resize(6, '0');
+                    datetime.microsecond.length = lexed.digits.length();
+                    datetime.microsecond.source = lexed.start;
+                    datetime.value += move(lexed.digits);
+                }
+                else
+                {
+                    datetime.type = Value::Type::INVALID;
+                }
+            } break;
+
+            default:
+            {
+                datetime.type = Value::Type::INVALID;
+            }
+        }
+    }
+}
+
+
+void
+lex_date(Lexer &lexer, LexedDateTime &datetime, LexedDigits &lexed, u32 context)
+{
+    assert(lexed.result == LexedDigits::DATE);
+
+    if (datetime.value.length() == 0)
+    {
+        datetime.year.length = lexed.digits.length();
+        datetime.year.source = lexed.start;
+        datetime.value += move(lexed.digits);
+    }
     else
     {
-        token = make_value(lexer, Value());
+        datetime.type = Value::Type::INVALID;
     }
 
-    return token;
+    if (datetime.type == Value::Type::LOCAL_DATE)
+    {
+        assert(match(lexer, '-'));
+        datetime.value.push_back(eat(lexer));
+
+        lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
+        if (lexed.result == LexedDigits::DATE)
+        {
+            datetime.month.length = lexed.digits.length();
+            datetime.month.source = lexed.start;
+            datetime.value += move(lexed.digits);
+        }
+        else
+        {
+            datetime.type = Value::Type::INVALID;
+        }
+    }
+
+    if (datetime.type == Value::Type::LOCAL_DATE)
+    {
+        assert(match(lexer, '-'));
+        datetime.value.push_back(eat(lexer));
+
+        lexed = lex_digits(lexer, is_decimal, context | LEX_DATE);
+        switch (lexed.result)
+        {
+            case LexedDigits::DONE:
+            {
+                if (match(lexer, ' ') && is_decimal(peek(lexer, 1)))
+                {
+                    datetime.type = Value::Type::LOCAL_DATETIME;
+                }
+                datetime.day.length = lexed.digits.length();
+                datetime.day.source = lexed.start;
+                datetime.value += move(lexed.digits);
+            } break;
+
+            case LexedDigits::TIME:
+            {
+                datetime.type = Value::Type::LOCAL_DATETIME;
+                datetime.day.length = lexed.digits.length();
+                datetime.day.source = lexed.start;
+                datetime.value += move(lexed.digits);
+            } break;
+
+            default:
+            {
+                datetime.type = Value::Type::INVALID;
+            } break;
+        }
+    }
+
+    if (datetime.type == Value::Type::LOCAL_DATETIME)
+    {
+        assert(match(lexer, 'T') || match(lexer, 't') || match(lexer, ' '));
+        advance(lexer);
+        datetime.value.push_back(' ');
+
+        lexed = lex_digits(lexer, is_decimal, context | LEX_TIME);
+
+        if (lexed.result == LexedDigits::TIME)
+        {
+            lex_time(lexer, datetime, lexed, context);
+        }
+        else
+        {
+            datetime.type = Value::Type::INVALID;
+        }
+    }
+
+    if (datetime.type == Value::Type::OFFSET_DATETIME)
+    {
+        if (lexed.result == LexedDigits::ZULU)
+        {
+            // synthesize an offset timezone
+            datetime.value += "+00:00";
+            datetime.tz_hour.length = 2;
+            datetime.tz_hour.source = lexer.current;
+            datetime.tz_minute.length = 2;
+            datetime.tz_hour.source = lexer.current;
+
+            // eat the 'Z'
+            advance(lexer);
+        }
+        else
+        {
+            assert(lexed.result == LexedDigits::TIMEZONE);
+            datetime.type = Value::Type::OFFSET_DATETIME;
+            lex_timezone(lexer, datetime, lexed, context);
+        }
+    }
 }
 
 
@@ -1224,7 +1379,7 @@ lex_number(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 
 
 Token
-lex_decimal(Lexer &lexer, u32 context, string &value)
+lex_decimal(Lexer &lexer, string &value, u32 context)
 {
     Token result;
     LexedDigits lexed = lex_digits(lexer, is_decimal, context | LEX_NUMBER | LEX_DATE | LEX_TIME);
@@ -1240,33 +1395,16 @@ lex_decimal(Lexer &lexer, u32 context, string &value)
 
         case LexedDigits::DATE:
         {
-            result = lex_date(lexer, value, lexed, context);
+            LexedDateTime datetime(value, Value::Type::LOCAL_DATE);
+            lex_date(lexer, datetime, lexed, context);
+            result = validate_datetime(lexer, datetime, context);
         } break;
 
         case LexedDigits::TIME:
         {
-            if (lex_time(lexer, value, lexed, context))
-            {
-                // date::parse apparently doesn't work on bare time values
-                int hours = atoi(value.c_str());
-                int minutes = atoi(value.c_str() + 3);
-                int seconds = atoi(value.c_str() + 6);
-                int microseconds = 0;
-                if (value.length() > 9) {
-                    value.resize(15, '0');
-                    microseconds = atoi(value.c_str() + 9);
-                }
-
-                LocalTime localtime{
-                    chrono::hours{hours}
-                    + chrono::minutes{minutes}
-                    + chrono::seconds{seconds} + chrono::microseconds{microseconds}};
-                result = make_value(lexer, Value(localtime));
-            }
-            else
-            {
-                result = make_value(lexer, Value());
-            }
+            LexedDateTime datetime(value, Value::Type::LOCAL_TIME);
+            lex_time(lexer, datetime, lexed, context);
+            result = validate_datetime(lexer, datetime, context);
         } break;
 
         default:
@@ -1383,7 +1521,7 @@ lex_numeric(Lexer &lexer, u32 context)
         }
         else
         {
-            result = lex_decimal(lexer, context, value);
+            result = lex_decimal(lexer, value, context);
         }
     }
     else if (match(lexer, 'i'))
@@ -1406,7 +1544,7 @@ lex_numeric(Lexer &lexer, u32 context)
     }
     else
     {
-        result = lex_decimal(lexer, context, value);
+        result = lex_decimal(lexer, value, context);
     }
 
     return result;
