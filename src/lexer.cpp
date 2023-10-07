@@ -493,12 +493,12 @@ validate_second(Lexer &lexer, const string &value, u64 index, const LexedDateTim
 
     if (part.length != 2)
     {
-        add_error(lexer, "Second must be two digits.", part.source);
+        second_wrong_length(lexer, part.source);
         result = false;
     }
     else if (value[index] > '5')
     {
-        add_error(lexer, "Second must be between 00 and 59 inclusive.", part.source);
+        second_out_of_range(lexer, part.source);
         result = false;
     }
 
@@ -513,12 +513,12 @@ validate_minute(Lexer &lexer, const string &value, u64 index, const LexedDateTim
 
     if (part.length != 2)
     {
-        add_error(lexer, "Minute must be two digits.", part.source);
+        minute_wrong_length(lexer, part.source);
         result = false;
     }
     else if (value[index] > '5')
     {
-        add_error(lexer, "Minute must be between 00 and 59 inclusive.", part.source);
+        minute_out_of_range(lexer, part.source);
         result = false;
     }
 
@@ -533,12 +533,12 @@ validate_hour(Lexer &lexer, const string &value, u64 index, const LexedDateTimeP
 
     if (part.length != 2)
     {
-        add_error(lexer, "Hour must be two digits.", part.source);
+        hour_wrong_length(lexer, part.source);
         result = false;
     }
     else if ((value[index] > '2') || ((value[index] == '2') && (value[index + 1] > '3')))
     {
-        add_error(lexer, "Hour must be between 00 and 23 inclusive.", part.source);
+        hour_out_of_range(lexer, part.source);
         result = false;
     }
 
@@ -598,17 +598,17 @@ validate_date(Lexer &lexer, const LexedDateTime &datetime)
     {
         if (datetime.year.length != 4)
         {
-            add_error(lexer, "Year must be four digits", datetime.year.source);
+            year_wrong_length(lexer, datetime.year.source);
             result = false;
         }
         else if (datetime.month.length != 2)
         {
-            add_error(lexer, "Month must be two digits.", datetime.month.source);
+            month_wrong_length(lexer, datetime.month.source);
             result = false;
         }
         else if (datetime.day.length != 2)
         {
-            add_error(lexer, "Day must be two digits.", datetime.day.source);
+            day_wrong_length(lexer, datetime.day.source);
             result = false;
         }
         else
@@ -623,7 +623,7 @@ validate_date(Lexer &lexer, const LexedDateTime &datetime)
 
             if ((month < 1) || (month > 12))
             {
-                add_error(lexer, "Month must be between 01 and 12 inclusive.", datetime.month.source);
+                month_out_of_range(lexer, datetime.month.source);
                 result = false;
             }
             else
@@ -652,10 +652,7 @@ validate_date(Lexer &lexer, const LexedDateTime &datetime)
 
                 if ((day < 1) || (day > days_in_month))
                 {
-                    add_error(
-                        lexer,
-                        "Day must be between 01 and " + to_string(days_in_month) + " inclusive.",
-                        datetime.day.source);
+                    day_out_of_range(lexer, datetime.day.source, days_in_month);
                     result = false;
                 }
             }
@@ -801,6 +798,18 @@ lex_digits(Lexer &lexer, IsDigit is_digit, u32 context)
     bool has_underscore = false;
     bool underscore_ok = false;
     bool lexing = true;
+    // TODO stop at first invalid character instead of lexing as much as possible?
+    // As a test case, consider the invalid (datetime) value: 1987-07-0517:45:00Z
+    // This is missing a separator between the date and time, and since a ':'
+    // is only valid within the context of a time (and we'd currently be lexing
+    // a date), we eat the remainder of the value and return an invalid result
+    // (emitting the rather generic error "invalid value"). But if we instead
+    // stopped at the ':' and indicated the date as "done", we could instead
+    // emit two errors: the first that the day should be 2 digits (since we'll
+    // have lexed '0517'), and the second that we expected something else
+    // (e.g., end-of-line) but instead found the remainder of the invalid
+    // value. Despite (or because of) the increased verbosity, this could give
+    // a more user-friendly indication that the problem is a missing separator.
     while (lexing)
     {
         if (match_eol(lexer) || match_whitespace(lexer))

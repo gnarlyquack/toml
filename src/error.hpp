@@ -21,6 +21,50 @@ expected_end_of_line(Parser &parser);
 
 
 void
+year_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+month_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+day_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+hour_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+minute_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+second_wrong_length(Lexer &lexer, const SourceLocation &location);
+
+
+void
+month_out_of_range(Lexer &lexer, const SourceLocation &location);
+
+
+void
+day_out_of_range(Lexer &lexer, const SourceLocation &location, s32 days_in_month);
+
+
+void
+hour_out_of_range(Lexer &lexer, const SourceLocation &location);
+
+
+void
+minute_out_of_range(Lexer &lexer, const SourceLocation &location);
+
+
+void
+second_out_of_range(Lexer &lexer, const SourceLocation &location);
+
+
+void
 invalid_value(Lexer &lexer, u32 context);
 
 
@@ -41,7 +85,7 @@ missing_value(Parser &parser);
 
 
 void
-unallowed_unicode_codepoint(Lexer &lexer, SourceLocation location, u32 codepoint);
+unallowed_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint);
 
 
 //

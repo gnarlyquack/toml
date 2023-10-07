@@ -43,7 +43,7 @@ add_error(Lexer &lexer, string &&message)
 
 
 void
-add_error(Lexer &lexer, SourceLocation location, string &&message)
+add_error(Lexer &lexer, const SourceLocation &location, string &&message)
 {
     add_error(lexer.errors, location, move(message));
 }
@@ -81,6 +81,82 @@ expected_end_of_line(Parser &parser)
         add_error(parser, move(message));
     }
     advance(parser, context);
+}
+
+void
+day_out_of_range(Lexer &lexer, const SourceLocation &location, s32 days_in_month)
+{
+    add_error(lexer, location, "Day must be between 01 and " + to_string(days_in_month) + " inclusive.");
+}
+
+
+void
+year_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Year must be four digits");
+}
+
+
+void
+month_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Month must be two digits.");
+}
+
+
+void
+day_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Day must be two digits.");
+}
+
+
+void
+hour_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Hour must be two digits.");
+}
+
+
+void
+minute_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Minute must be two digits.");
+}
+
+
+void
+second_wrong_length(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Second must be two digits.");
+}
+
+
+void
+month_out_of_range(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Month must be between 01 and 12 inclusive.");
+}
+
+
+void
+hour_out_of_range(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Hour must be between 00 and 23 inclusive.");
+}
+
+
+void
+minute_out_of_range(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Minute must be between 00 and 59 inclusive.");
+}
+
+
+void
+second_out_of_range(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Second must be between 00 and 59 inclusive.");
 }
 
 
@@ -128,7 +204,7 @@ missing_value(Parser &parser)
 
 
 void
-unallowed_unicode_codepoint(Lexer &lexer, SourceLocation location, u32 codepoint)
+unallowed_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint)
 {
     string message = "Unicode codepoint " + format_unicode(codepoint) + " is not allowed.";
     add_error(lexer, location, move(message));
