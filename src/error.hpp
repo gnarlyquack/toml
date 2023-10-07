@@ -7,19 +7,45 @@
 #define TOML_ERROR_HPP
 
 #include "types.hpp"
+#include "parser.hpp"
 
-#include <string>
+#include <vector>
 
 
 namespace toml
 {
 
 
-struct Error
-{
-    SourceLocation location;
-    std::string message;
-};
+void
+invalid_value(Lexer &lexer, u32 context);
+
+
+void
+invalid_value(Parser &parser, u32 context);
+
+
+void
+key_redefinition(Parser &parser, const Key &key, const Key &prev);
+
+
+void
+missing_array_separator(Parser &parser);
+
+
+void
+missing_value(Parser &parser);
+
+
+//
+// TODO Distinguish between unexpected end of file and unterminated value?
+//
+
+void
+unterminated_array(Parser &parser);
+
+
+void
+unterminated_inline_table(Parser& parser);
 
 
 }

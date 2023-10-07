@@ -5,7 +5,7 @@ TEST(invalid_encoding_tests, test_utf16)
     const vector<Error> expected = {
         {  0, 1,  1, "Unicode codepoint U+0000 is not allowed." },
         {  1, 1,  2, "Missing '=' between key and value." },
-        {  1, 1,  2, "Missing value." },
+        {  1, 1,  2, "Expected a value." },
         {  2, 1,  3, "Unicode codepoint U+0000 is not allowed." },
         {  4, 1,  5, "Unicode codepoint U+0000 is not allowed." },
         {  6, 1,  7, "Unicode codepoint U+0000 is not allowed." },

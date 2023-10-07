@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "error.hpp"
 #include "token.hpp"
 #include "types.hpp"
 
@@ -63,11 +62,19 @@ std::string
 get_lexeme(const Lexer &lexer, u64 from);
 
 
+inline std::string
+get_lexeme(const Lexer &lexer)
+{
+    std::string result = get_lexeme(lexer, lexer.start.index);
+    return result;
+}
+
+
 Token
 next_token(Lexer &lexer, u32 context);
 
 
-void
+bool
 resynchronize(Lexer &Lexer, u32 context);
 
 

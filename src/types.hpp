@@ -904,6 +904,13 @@ private:
 };
 
 
+struct Error
+{
+    SourceLocation location;
+    std::string message;
+};
+
+
 } // namespace toml
 
 

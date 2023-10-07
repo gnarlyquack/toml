@@ -5,12 +5,14 @@
 
 #include "lexer.hpp"
 
+#include "common.hpp"
+#include "error.hpp"
+
 #include <cstdio> // fputs
 #include <iomanip>
 #include <sstream>
 #include <utility> // move
 
-#include "common.hpp"
 
 
 using namespace std;
@@ -135,14 +137,6 @@ byte_to_hex(byte value, string &out)
     out += "0x";
     out.push_back(HEX2CHAR[(value >> 4) & 0xf]);
     out.push_back(HEX2CHAR[value & 0xf]);
-}
-
-
-string
-get_lexeme(const Lexer &lexer)
-{
-    string result = get_lexeme(lexer, lexer.start.index);
-    return result;
 }
 
 
@@ -678,8 +672,7 @@ validate_datetime(Lexer &lexer, const LexedDateTime &datetime, u32 context)
     Token result;
     if (datetime.type == Value::Type::INVALID)
     {
-        resynchronize(lexer, context);
-        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+        invalid_value(lexer, context);
         result = make_value(lexer, Value());
     }
     else
@@ -790,7 +783,7 @@ lex_literal(Lexer &lexer, const string &expected, Value value, u32 context)
 
     if (eaten != expected)
     {
-        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+        invalid_value(lexer, context);
     }
 
     Token result = make_value(lexer, move(value));
@@ -1295,8 +1288,7 @@ lex_exponent(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
     }
     else
     {
-        resynchronize(lexer, context);
-        add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+        invalid_value(lexer, context);
         result = make_value(lexer, Value());
     }
 
@@ -1329,8 +1321,7 @@ lex_fraction(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 
         default:
         {
-            resynchronize(lexer, context);
-            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            invalid_value(lexer, context);
             result = make_value(lexer, Value());
         } break;
     }
@@ -1367,8 +1358,7 @@ lex_number(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
 
         default:
         {
-            resynchronize(lexer, context);
-            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            invalid_value(lexer, context);
             result = make_value(lexer, Value());
         } break;
     }
@@ -1414,8 +1404,7 @@ lex_decimal(Lexer &lexer, string &value, u32 context)
 
         default:
         {
-            resynchronize(lexer, context);
-            add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+            invalid_value(lexer, context);
             result = make_value(lexer, Value());
         } break;
     }
@@ -2011,8 +2000,7 @@ lex_value(Lexer &lexer, u32 context)
 
             default:
             {
-                resynchronize(lexer, context);
-                add_error(lexer, "Invalid value: " + get_lexeme(lexer));
+                invalid_value(lexer, context);
                 result = make_value(lexer, Value());
             } break;
         }
@@ -2273,7 +2261,7 @@ next_token(Lexer &lexer, u32 context)
 }
 
 
-void
+bool
 resynchronize(Lexer &lexer, u32 context)
 {
     u64 uneaten = 0;
@@ -2349,6 +2337,8 @@ resynchronize(Lexer &lexer, u32 context)
             }
         }
     }
+
+    return valid;
 }
 
 

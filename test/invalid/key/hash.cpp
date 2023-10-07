@@ -4,7 +4,7 @@ TEST(invalid_key_tests, test_hash)
 
     const vector<Error> expected = {
         { 1, 1, 2, "Missing '=' between key and value." },
-        { 1, 1, 2, "Missing value." },
+        { 1, 1, 2, "Expected a value." },
     };
 
     assert_errors(toml, expected);

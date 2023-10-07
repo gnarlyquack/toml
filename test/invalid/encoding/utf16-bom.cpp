@@ -7,7 +7,7 @@ TEST(invalid_encoding_tests, test_utf16_bom)
         {  1, 1,  2, "Invalid UTF-8 byte: 0xFF" },
         {  2, 1,  3, "Unicode codepoint U+0000 is not allowed." },
         {  3, 1,  4, "Missing '=' between key and value." },
-        {  3, 1,  4, "Missing value." },
+        {  3, 1,  4, "Expected a value." },
         {  4, 1,  5, "Unicode codepoint U+0000 is not allowed." },
         {  6, 1,  7, "Unicode codepoint U+0000 is not allowed." },
         {  8, 1,  9, "Unicode codepoint U+0000 is not allowed." },

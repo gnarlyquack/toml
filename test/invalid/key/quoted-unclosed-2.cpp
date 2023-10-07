@@ -5,7 +5,7 @@ TEST(invalid_key_tests, test_quoted_unclosed_2)
     const vector<Error> expected = {
         { 4, 1, 5, "Unterminated string." },
         { 4, 1, 5, "Missing '=' between key and value." },
-        { 4, 1, 5, "Missing value." },
+        { 4, 1, 5, "Expected a value." },
     };
 
     assert_errors(toml, expected);

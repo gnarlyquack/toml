@@ -42,6 +42,7 @@ FetchContent_MakeAvailable(datetime)
 
 
 add_library(toml
+    src/error.cpp
     src/lexer.cpp
     src/parser.cpp
     )

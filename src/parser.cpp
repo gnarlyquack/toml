@@ -6,7 +6,7 @@
 #include "parser.hpp"
 
 #include "common.hpp"
-#include "lexer.hpp"
+#include "error.hpp"
 
 
 using namespace std;
@@ -14,10 +14,6 @@ using namespace std;
 
 namespace toml
 {
-
-
-using ErrorList = vector<Error>;
-using TokenList = vector<Token>;
 
 
 namespace {
@@ -91,263 +87,6 @@ namespace {
 // the context in which tables are created:
 
 
-struct ValueMeta;
-
-using ArrayMeta = vector<ValueMeta>;
-using TableMeta = unordered_map<string, ValueMeta>;
-
-
-struct ValueMeta final
-{
-    enum class Type {
-        INVALID,
-        LITERAL,
-        IMPLICIT_TABLE,
-        DOTTED_TABLE,
-        HEADER_TABLE,
-        TABLE_ARRAY,
-    };
-
-
-    explicit ValueMeta()
-        : _type(Type::INVALID)
-    {
-    }
-
-
-    explicit ValueMeta(Type type)
-        : _type(type)
-    {
-        switch (_type)
-        {
-            case Type::IMPLICIT_TABLE:
-            case Type::DOTTED_TABLE:
-            case Type::HEADER_TABLE:
-            {
-                _table = new TableMeta;
-            } break;
-
-            case Type::TABLE_ARRAY:
-            {
-                _array = new ArrayMeta;
-            } break;
-
-            default:
-            {
-                assert(_type == Type::LITERAL);
-            } break;
-        }
-    }
-
-
-    ValueMeta(const ValueMeta &other)
-        : _type(other._type)
-    {
-        switch (_type)
-        {
-            case Type::IMPLICIT_TABLE:
-            case Type::DOTTED_TABLE:
-            case Type::HEADER_TABLE:
-            {
-                _table = new TableMeta(*other._table);
-            } break;
-
-            case Type::TABLE_ARRAY:
-            {
-                _array = new ArrayMeta(*other._array);
-            } break;
-
-            default:
-            {
-                // do nothing
-            } break;
-        }
-    }
-
-
-    ValueMeta(ValueMeta &&other)
-    {
-        take(other);
-    }
-
-
-    ~ValueMeta()
-    {
-        destroy();
-    }
-
-
-    ValueMeta &
-    operator=(const ValueMeta &other)
-    {
-        if (this != &other)
-        {
-            ValueMeta temp(other);
-            destroy();
-            take(temp);
-        }
-        return *this;
-    }
-
-
-    ValueMeta &
-    operator=(ValueMeta &&other)
-    {
-        if (this != &other)
-        {
-            destroy();
-            take(other);
-        }
-        return *this;
-    }
-
-
-    void
-    make_table_dotted()
-    {
-        assert(_type == Type::IMPLICIT_TABLE);
-        _type = Type::DOTTED_TABLE;
-    }
-
-
-    void
-    make_table_header()
-    {
-        assert(_type == Type::IMPLICIT_TABLE);
-        _type = Type::HEADER_TABLE;
-    }
-
-
-    Type
-    type() const
-    {
-        return _type;
-    }
-
-
-    ArrayMeta &
-    array()
-    {
-        assert(_type == Type::TABLE_ARRAY);
-        return *_array;
-    }
-
-
-    const ArrayMeta &
-    array() const
-    {
-        assert(_type == Type::TABLE_ARRAY);
-        return *_array;
-    }
-
-
-    TableMeta &
-    table()
-    {
-        assert((_type == Type::IMPLICIT_TABLE) || (_type == Type::DOTTED_TABLE) || (_type == Type::HEADER_TABLE));
-        return *_table;
-    }
-
-
-    const TableMeta &
-    table() const
-    {
-        assert((_type == Type::IMPLICIT_TABLE) || (_type == Type::DOTTED_TABLE) || (_type == Type::HEADER_TABLE));
-        return *_table;
-    }
-
-
-private:
-
-    Type _type;
-
-    union
-    {
-        ArrayMeta *_array;
-        TableMeta *_table;
-    };
-
-
-    void
-    take(ValueMeta &other)
-    {
-        switch (other._type)
-        {
-            case Type::IMPLICIT_TABLE:
-            case Type::DOTTED_TABLE:
-            case Type::HEADER_TABLE:
-            {
-                _table = other._table;
-            } break;
-
-            case Type::TABLE_ARRAY:
-            {
-                _array = other._array;
-            } break;
-
-            default:
-            {
-                // do nothing
-            } break;
-        }
-
-        _type = other._type;
-        other._type = Type::INVALID;
-    }
-
-
-    void
-    destroy()
-    {
-        switch (_type)
-        {
-            case Type::IMPLICIT_TABLE:
-            case Type::DOTTED_TABLE:
-            case Type::HEADER_TABLE:
-            {
-                delete _table;
-            } break;
-
-            case Type::TABLE_ARRAY:
-            {
-                delete _array;
-            } break;
-
-            default:
-            {
-                // do nothing
-            } break;
-        }
-    }
-};
-
-
-struct Parser final
-{
-    Lexer &lexer;
-    Token token;
-
-    DefinitionTable &table;
-    TableMeta meta;
-
-    DefinitionTable *current_table;
-    TableMeta *current_meta;
-
-    ErrorList &errors;
-
-    explicit Parser(Lexer &l, DefinitionTable &definitions, ErrorList &error_list)
-        : lexer(l)
-        , token()
-        , table(definitions)
-        , meta()
-        , current_table(&table)
-        , current_meta(&meta)
-        , errors(error_list)
-    {
-    }
-};
-
-
 
 //
 // Predeclarations
@@ -362,13 +101,6 @@ Definition parse_value(Parser &parser, u32 context);
 //
 // Implementation
 //
-
-void
-advance(Parser &parser, u32 context)
-{
-    parser.token = next_token(parser.lexer, context);
-}
-
 
 void
 add_error(Parser &parser, string message)
@@ -429,21 +161,6 @@ peek(Parser &parser, TokenType expected)
 }
 
 
-void
-key_redefinition(Parser &parser, const Key &key, const Key &prev)
-{
-    Error error = {key.location, "Key '" + key.value + "' has already been defined on line " + to_string(prev.location.line) + ", character " + to_string(prev.location.column) + "."};
-    parser.errors.push_back(move(error));
-}
-
-
-void
-missing_value(Parser &parser)
-{
-    add_error(parser, "Missing value.");
-}
-
-
 Definition
 parse_array(Parser &parser, u32 context)
 {
@@ -463,7 +180,7 @@ parse_array(Parser &parser, u32 context)
             {
                 if (prev != TOKEN_VALUE)
                 {
-                    add_error(parser, "Missing array value.");
+                    missing_value(parser);
                 }
                 array_context = context | LEX_ARRAY | LEX_VALUE;
                 advance(parser, array_context);
@@ -484,7 +201,7 @@ parse_array(Parser &parser, u32 context)
 
             case TOKEN_EOF:
             {
-                add_error(parser, "Missing closing ']' for array.");
+                unterminated_array(parser);
                 parsing = false;
             } break;
 
@@ -492,7 +209,7 @@ parse_array(Parser &parser, u32 context)
             {
                 if (prev == TOKEN_VALUE)
                 {
-                    add_error(parser, "Missing ',' between array values.");
+                    missing_array_separator(parser);
                 }
                 if (token.type == TOKEN_NONE)
                 {
@@ -552,7 +269,7 @@ parse_inline_table(Parser &parser, u32 context)
             case TOKEN_EOF:
             case TOKEN_NEWLINE:
             {
-                add_error(parser, "Missing closing '}' for inline table.");
+                unterminated_inline_table(parser);
                 parsing = false;
             } break;
 
@@ -611,7 +328,7 @@ parse_value(Parser &parser, u32 context)
 
         default:
         {
-            resynchronize(parser, "Invalid value: ", context);
+            invalid_value(parser, context);
         } break;
     }
 
@@ -1069,6 +786,13 @@ value_from_definition(Definition &definition)
 
 
 } // namespace
+
+
+void
+advance(Parser &parser, u32 context)
+{
+    parser.token = next_token(parser.lexer, context);
+}
 
 
 bool

@@ -4,8 +4,6 @@ TEST(invalid_control_tests, test_bare_formfeed)
 
     const vector<Error> expected = {
         { 16, 1, 17, "Unicode codepoint U+000C is not allowed." },
-        // TODO: remove this error
-        { 16, 1, 17, "Invalid value: \f" },
     };
 
     assert_errors(toml, expected);
