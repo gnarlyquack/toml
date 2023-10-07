@@ -760,6 +760,11 @@ lex_literal(Lexer &lexer, const string &expected, Value value, u32 context)
         byte c = peek(lexer);
         switch (c)
         {
+            case '#':
+            {
+                eating = false;
+            } break;
+
             case ',':
             {
                 eating = !(context & (LEX_ARRAY | LEX_TABLE));

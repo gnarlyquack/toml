@@ -1205,3 +1205,23 @@ TEST(parse, tables_and_table_arrays_cannot_redefine_each_other)
 
     assert_errors(toml, errors);
 }
+
+
+TEST(parse, comment_after_literals)
+{
+    const string toml =
+        "inf=inf#infinity\n"
+        "nan=nan#not a number\n"
+        "true=true#true\n"
+        "false=false#false\n"
+        ;
+
+    const Table result = {
+        { "inf", Value(numeric_limits<double>::infinity()) },
+        { "nan", Value(numeric_limits<double>::quiet_NaN()) },
+        { "true", Value(true) },
+        { "false", Value(false) },
+    };
+
+    assert_parsed(toml, result);
+}
