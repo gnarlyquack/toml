@@ -412,13 +412,13 @@ convert_unicode_to_utf8(u32 codepoint, string &out)
     {
         out.push_back(codepoint & B01111111);
     }
-    else if (codepoint <= 0x800)
+    else if (codepoint < 0x800)
     {
         nbytes = 2;
         byte c = B11000000 | ((codepoint >> 6) & B00011111);
         out.push_back(c);
     }
-    else if (codepoint <= 0x10000)
+    else if (codepoint < 0x10000)
     {
         nbytes = 3;
         byte c = B11100000 | ((codepoint >> 12) & B00001111);

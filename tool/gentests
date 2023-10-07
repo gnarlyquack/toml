@@ -15,12 +15,6 @@ SOURCE_DIR = os.path.join(ROOT_PATH, "dep", "toml-test", "tests")
 
 TEST_DIR = os.path.join(ROOT_PATH, "test")
 
-STRING_CONVERT = str.maketrans({
-    '\n':   r'\n',
-    '"':    r'\"',
-    '\\':   r'\\',
-})
-
 
 NAME_CONVERT = str.maketrans({
     '/': '_',
@@ -28,15 +22,16 @@ NAME_CONVERT = str.maketrans({
 })
 
 
-EXCLUDE = {
-    # These tests are no longer valid for TOML 1.0.0
-    os.path.join(SOURCE_DIR, "valid", "string", "escape-esc"),
-}
+INCLUDE = set()
 
 
 def main():
     # ensure test directory exists
     os.makedirs(TEST_DIR, exist_ok=True)
+
+    with open(os.path.join(SOURCE_DIR, "files-toml-1.0.0")) as fh:
+        for line in fh:
+            INCLUDE.add(line.strip())
 
     files = []
     updated_files = generate_valid_tests("valid", files)
@@ -108,11 +103,11 @@ def generate_valid_tests(relative_src_dir, files):
                 # append directory separator to ensure no clashes with file names
                 name = entry.name + os.path.sep
                 sources.add(name)
-            elif entry.path.endswith(".toml"):
+            elif entry.path.endswith(".toml") \
+                    and (os.path.join(relative_src_dir, entry.name) in INCLUDE):
                 # use the base name so we can match TOML files to C++ files
                 name = entry.name.rsplit('.', 1)[0]
-                if os.path.join(src_dir, name) not in EXCLUDE:
-                    sources.add(name)
+                sources.add(name)
 
     with os.scandir(test_dir) as it:
         for entry in it:
@@ -210,11 +205,11 @@ def generate_invalid_tests(relative_src_dir, files):
                 # append directory separator to ensure no clashes with file names
                 name = entry.name + os.path.sep
                 sources.add(name)
-            elif entry.path.endswith(".toml"):
+            elif entry.path.endswith(".toml") \
+                    and (os.path.join(relative_src_dir, entry.name) in INCLUDE):
                 # use the base name so we can match TOML files to C++ files
                 name = entry.name.rsplit('.', 1)[0]
-                if os.path.join(src_dir, name) not in EXCLUDE:
-                    sources.add(name)
+                sources.add(name)
 
     with os.scandir(test_dir) as it:
         for entry in it:
@@ -317,7 +312,9 @@ def convert_result(value, child=False):
                     converted = converted.replace("nan", "numeric_limits<double>::quiet_NaN()")
                 elif "inf" in converted:
                     converted = converted.replace("inf", "numeric_limits<double>::infinity()")
-                elif '.' not in converted:
+                elif "Inf" in converted:
+                    converted = converted.replace("Inf", "numeric_limits<double>::infinity()")
+                elif ('.' not in converted) and ('e' not in converted) and ('E' not in converted):
                     converted += ".0"
                 result = "Value({})".format(converted)
 
@@ -369,7 +366,8 @@ def convert_result(value, child=False):
 
             else:
                 assert value['type'] == "string"
-                result = "Value(std::string(\"{}\"))".format(escape_string(value['value']))
+                converted, length = escape_string(value['value'])
+                result = "Value(std::string(\"{}\", {}))".format(converted, length)
 
         else:
             result = ""
@@ -379,7 +377,8 @@ def convert_result(value, child=False):
             children = []
             for k, v in value.items():
                 converted = convert_result(v, True)
-                children.append("{{ \"{}\", {} }}".format(k.translate(STRING_CONVERT), converted))
+                key, length = escape_string(k)
+                children.append("{{ std::string(\"{}\", {}), {} }}".format(key, length, converted))
             result += ','.join(children)
 
             if child:
@@ -389,7 +388,8 @@ def convert_result(value, child=False):
 
 
 def convert_error(error):
-    result = "{{ {}, {}, \"{}\" }},".format(error['line'], error['char'], escape_string(error['message']))
+    converted, length = escape_string(error['message'])
+    result = "{{ {}, {}, std::string(\"{}\", {}) }},".format(error['line'], error['char'], converted, length)
     return result;
 
 
@@ -424,13 +424,13 @@ def escape_bytes(value):
 def escape_string(value):
     result = ''
 
+    length = len(value.encode('utf8'))
+
     for c in value:
         if c == '"':
             result += '\\"'
         elif c == '\\':
             result += '\\\\'
-        elif c.isprintable():
-            result += c
         elif c == '\b':
             result += '\\b'
         elif c == '\t':
@@ -443,14 +443,16 @@ def escape_string(value):
             result += '\\f'
         elif c == '\r':
             result += '\\r'
+        elif c.isprintable():
+            result += c
         else:
             c = ord(c)
-            if c > 9999:
+            if c > 0xffff:
                 result += '\\U{:0>8X}""'.format(c)
             else:
                 result += '\\u{:0>4X}'.format(c)
 
-    return result
+    return result, length
 
 
 if __name__ == "__main__":
