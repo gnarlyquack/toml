@@ -17,6 +17,10 @@ namespace toml
 
 
 void
+expected_end_of_line(Parser &parser);
+
+
+void
 invalid_value(Lexer &lexer, u32 context);
 
 
@@ -34,6 +38,10 @@ missing_array_separator(Parser &parser);
 
 void
 missing_value(Parser &parser);
+
+
+void
+unallowed_unicode_codepoint(Lexer &lexer, SourceLocation location, u32 codepoint);
 
 
 //

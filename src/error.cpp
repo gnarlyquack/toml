@@ -1,5 +1,8 @@
 #include "error.hpp"
 
+#include <iomanip>
+#include <sstream>
+
 
 using namespace std;
 
@@ -40,13 +43,45 @@ add_error(Lexer &lexer, string &&message)
 
 
 void
+add_error(Lexer &lexer, SourceLocation location, string &&message)
+{
+    add_error(lexer.errors, location, move(message));
+}
+
+
+void
 add_error(Parser &parser, string &&message)
 {
     add_error(parser.errors, parser.token.location, move(message));
 }
 
 
+string
+format_unicode(u32 codepoint)
+{
+    ostringstream o;
+    o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
+
+    string result = o.str();
+    return result;
+}
+
+
 } // namespace
+
+
+void
+expected_end_of_line(Parser &parser)
+{
+    constexpr u32 context = LEX_EOL;
+
+    if (resynchronize(parser.lexer, context))
+    {
+        string message = "Expected the end of the line but got: " + get_lexeme(parser.lexer, parser.token.location.index);
+        add_error(parser, move(message));
+    }
+    advance(parser, context);
+}
 
 
 void
@@ -65,8 +100,8 @@ invalid_value(Parser &parser, u32 context)
     if (resynchronize(parser.lexer, context))
     {
         add_error(parser, "Invalid value: " + get_lexeme(parser.lexer, parser.token.location.index));
-        advance(parser, context);
     }
+    advance(parser, context);
 }
 
 
@@ -89,6 +124,14 @@ void
 missing_value(Parser &parser)
 {
     add_error(parser, "Expected a value.");
+}
+
+
+void
+unallowed_unicode_codepoint(Lexer &lexer, SourceLocation location, u32 codepoint)
+{
+    string message = "Unicode codepoint " + format_unicode(codepoint) + " is not allowed.";
+    add_error(lexer, location, move(message));
 }
 
 

@@ -736,7 +736,7 @@ parse_expression(Parser &parser)
 
         default:
         {
-            resynchronize(parser, "Expected the end of the line but got: ", LEX_EOL);
+            expected_end_of_line(parser);
         } break;
     }
 }

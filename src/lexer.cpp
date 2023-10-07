@@ -1663,8 +1663,7 @@ lex_string_char(Lexer &lexer, string &result)
                 || ((codepoint >= 0x80) && (codepoint <= 0xd7ff))
                 || (codepoint >= 0xe000)))
             {
-                string message = "Unicode codepoint " + format_unicode(codepoint) + " is not allowed.";
-                add_error(lexer, message, location);
+                unallowed_unicode_codepoint(lexer, location, codepoint);
                 valid = false;
             }
 
@@ -2175,8 +2174,7 @@ next_token(Lexer &lexer, u32 context)
                     }
                     else
                     {
-                        string message = "Unicode codepoint " + format_unicode(b) + " is not allowed.";
-                        add_error(lexer, message, lexer.current);
+                        unallowed_unicode_codepoint(lexer, lexer.current, b);
                         advance(lexer);
                     }
                 } break;

@@ -4,7 +4,6 @@ TEST(invalid_encoding_tests, test_bad_utf8_at_end)
 
     const vector<Error> expected = {
         { 241, 5, 11, "Unable to decode UTF-8 codepoint: unexpected end of file after decoding 1 of 2 bytes." },
-        { 241, 5, 11, "Expected the end of the line but got: \332" }, // TODO remove this error
     };
 
     assert_errors(toml, expected);
