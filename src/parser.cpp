@@ -775,33 +775,17 @@ advance(Parser &parser, u32 context)
 bool
 parse_with_metadata(const string &toml, DefinitionTable &definitions, vector<Error> &errors)
 {
-#if 0
-    cout << "sizeof(string) = " << sizeof(string) << '\n';
-    cout << "sizeof(integer) = " << sizeof(s64) << '\n';
-    cout << "sizeof(float) = " << sizeof(f64) << '\n';
-    cout << "sizeof(boolean) = " << sizeof(bool) << '\n';
-    cout << "sizeof(OffsetDateTime) = " << sizeof(OffsetDateTime) << '\n';
-    cout << "sizeof(LocalDateTime) = " << sizeof(LocalDateTime) << '\n';
-    cout << "sizeof(LocalDate) = " << sizeof(LocalDate) << '\n';
-    cout << "sizeof(LocalTime) = " << sizeof(LocalTime) << '\n';
-    cout << "sizeof(Array) = " << sizeof(Array) << '\n';
-    cout << "sizeof(Table) = " << sizeof(Table) << '\n';
-    cout << "sizeof(void *) = " << sizeof(void *) << '\n';
-    cout << "sizeof(unique_ptr<string>) = " << sizeof(unique_ptr<string>) << '\n';
-    cout << "sizeof(unique_ptr<Array>) = " << sizeof(unique_ptr<Array>) << '\n';
-    cout << "sizeof(unique_ptr<Table>) = " << sizeof(unique_ptr<Table>) << '\n';
-    cout << "sizeof(Value) = " << sizeof(Value) << '\n';
-    cout << "sizeof(Definition) = " << sizeof(Definition) << '\n';
-#endif
-
     Lexer lexer(toml, errors);
-    Parser parser(lexer, definitions, errors);
-
-    for (advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER);
-         !peek(parser, TOKEN_EOF);
-         advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER))
+    if (check_bom(lexer))
     {
-        parse_expression(parser);
+        Parser parser(lexer, definitions, errors);
+
+        for (advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER);
+             !peek(parser, TOKEN_EOF);
+             advance(parser, LEX_KEY | LEX_TABLE_HEADER | LEX_ARRAY_HEADER))
+        {
+            parse_expression(parser);
+        }
     }
 
     bool result = errors.size() == 0;

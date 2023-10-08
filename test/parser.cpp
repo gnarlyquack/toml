@@ -1225,3 +1225,15 @@ TEST(parse, comment_after_literals)
 
     assert_parsed(toml, result);
 }
+
+
+TEST(parse, bom_mark)
+{
+    const string toml = "\357\273\277foo=\"bar\"";
+
+    const Table result = {
+        { "foo", Value(string("bar")) },
+    };
+
+    assert_parsed(toml, result);
+}

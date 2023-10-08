@@ -123,6 +123,14 @@ invalid_utf8_byte(Lexer &lexer, const SourceLocation &location, byte b)
 
 
 void
+invalid_encoding(Lexer &lexer, const std::string type)
+{
+    string message = "Detected " + type + " file encoding. TOML files must be Unicode documents encoded in UTF-8.";
+    add_error(lexer, move(message));
+}
+
+
+void
 invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint)
 {
     string message = "Invalid Unicode codepoint: " + format_unicode(codepoint);

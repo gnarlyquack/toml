@@ -58,6 +58,10 @@ struct Lexer
 };
 
 
+bool
+check_bom(Lexer &lexer);
+
+
 std::string
 get_lexeme(const Lexer &lexer, u64 from);
 

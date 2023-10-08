@@ -223,7 +223,8 @@ is_octal(byte value)
 bool
 match(const Lexer &lexer, byte value, u64 ahead = 0)
 {
-    bool result = peek(lexer, ahead) == value;
+    bool result = (peek(lexer, ahead) == value)
+                && ((value != INVALID_BYTE) || !end_of_file(lexer, ahead));
     return result;
 }
 
@@ -2012,6 +2013,85 @@ lex_key(Lexer &lexer, u32 context)
 
 
 } // namespace
+
+
+bool
+check_bom(Lexer &lexer)
+{
+    bool result = true;
+
+    if (match(lexer, '\xef'))
+    {
+        if (match(lexer, '\xbb', 1) && match(lexer, '\xbf', 2))
+        {
+            // UTF-8 BOM
+            advance(lexer, 3);
+        }
+        else
+        {
+            invalid_encoding(lexer);
+            result = false;
+        }
+    }
+    // Let's check for other Unicode BOMs
+    // UTF-16 LE
+    else if (match(lexer, '\xff'))
+    {
+        if (match(lexer, '\xfe', 1))
+        {
+            // UTF-32 LE
+            if (match(lexer, '\x00', 2) && match(lexer, '\x00', 3))
+            {
+                invalid_encoding(lexer, "UTF-32 (LE)");
+            }
+            else
+            {
+                invalid_encoding(lexer, "UTF-16 (LE)");
+            }
+        }
+        else
+        {
+            invalid_encoding(lexer);
+        }
+        result = false;
+    }
+    // UTF-16 BE
+    else if (match(lexer, '\xfe'))
+    {
+        if (match(lexer, '\xff', 1))
+        {
+            invalid_encoding(lexer, "UTF-16 (BE)");
+        }
+        else
+        {
+            invalid_encoding(lexer);
+        }
+        result = false;
+    }
+    // UTF-32 BE
+    else if (match(lexer, '\x00'))
+    {
+        if (match(lexer, '\x00', 1) && match(lexer, '\xfe', 2) && match(lexer, '\xff', 3))
+        {
+            invalid_encoding(lexer, "UTF-32 (BE)");
+        }
+        else
+        {
+            invalid_encoding(lexer);
+        }
+        result = false;
+    }
+    // Let's peek ahead up to the size of a UTF-32 codepoint. Especially for LE
+    // encodings that aren't encoding characters in the upper Unicode ranges,
+    // we may still detect them by the presence of null bytes.
+    else if (match(lexer, '\x00', 1) || match(lexer, '\x00', 2) || match(lexer, '\x00', 3))
+    {
+        invalid_encoding(lexer);
+        result = false;
+    }
+
+    return result;
+}
 
 
 string

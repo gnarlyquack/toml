@@ -25,6 +25,10 @@ incomplete_unicode_codepoint(Lexer &lexer, const SourceLocation &location, s32 e
 
 
 void
+invalid_encoding(Lexer &lexer, const std::string type = "invalid");
+
+
+void
 invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint);
 
 
