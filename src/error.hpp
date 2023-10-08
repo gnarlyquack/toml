@@ -85,6 +85,10 @@ invalid_expression(Parser &parser, u32 context);
 
 
 void
+invalid_key(Lexer &lexer, const std::string &key);
+
+
+void
 invalid_key(Parser &parser, u32 context);
 
 
@@ -145,15 +149,24 @@ unallowed_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 co
 
 
 //
-// TODO Distinguish between unexpected end of file and unterminated value?
+// TODO Distinguish between unexpected end of file/line and unclosed value?
+// TODO Limit errors caused by end of file/line and/or unclosed values?
 //
 
 void
-unterminated_array(Parser &parser);
+unclosed_table_header(Parser &parser, u32 context);
 
 
 void
-unterminated_inline_table(Parser& parser);
+unclosed_array(Parser &parser);
+
+
+void
+unclosed_inline_table(Parser& parser);
+
+
+void
+unclosed_string(Lexer &lexer);
 
 
 }

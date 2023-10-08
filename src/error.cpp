@@ -227,6 +227,13 @@ invalid_expression(Parser &parser, u32 context)
 
 
 void
+invalid_key(Lexer &lexer, const string &key)
+{
+    add_error(lexer, "Invalid key: " + key);
+}
+
+
+void
 invalid_key(Parser &parser, u32 context)
 {
     if (resynchronize(parser.lexer, context))
@@ -348,16 +355,47 @@ unallowed_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 co
 
 
 void
-unterminated_array(Parser &parser)
+unclosed_array(Parser &parser)
 {
     add_error(parser, "Missing closing ']' for array.");
 }
 
 
 void
-unterminated_inline_table(Parser& parser)
+unclosed_inline_table(Parser& parser)
 {
     add_error(parser, "Missing closing '}' for inline table.");
+}
+
+
+void
+unclosed_string(Lexer &lexer)
+{
+    add_error(lexer, lexer.current, "Unterminated string.");
+}
+
+
+void
+unclosed_table_header(Parser &parser, u32 context)
+{
+    switch (parser.token.type)
+    {
+        case TOKEN_COMMENT:
+        case TOKEN_NEWLINE:
+        case TOKEN_EOF:
+        {
+            add_error(parser, "Missing closing ']' for table header.");
+        } break;
+
+        default:
+        {
+            if (resynchronize(parser.lexer, context))
+            {
+            add_error(parser, "Expected closing ']' for table header.");
+            }
+            advance(parser, context);
+        } break;
+    }
 }
 
 

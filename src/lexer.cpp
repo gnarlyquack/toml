@@ -453,13 +453,6 @@ missing_key(Lexer &lexer)
 }
 
 
-void
-unterminated_string(Lexer &lexer)
-{
-    add_error(lexer, "Unterminated string.", lexer.current);
-}
-
-
 bool
 validate_second(Lexer &lexer, const string &value, u64 index, const LexedDateTimePart &part)
 {
@@ -1706,7 +1699,7 @@ lex_escape(Lexer &lexer, string &result)
     SourceLocation location = lexer.current;
     advance(lexer);
 
-    // If we've hit the end of the file, then we'll error on an unterminated string
+    // If we've hit the end of the file, then we'll error on an unclosed string
     if (!end_of_file(lexer))
     {
         byte c = eat(lexer);
@@ -1780,7 +1773,7 @@ lex_multiline_string(Lexer &lexer)
     {
         if (end_of_file(lexer))
         {
-            unterminated_string(lexer);
+            unclosed_string(lexer);
             lexing = false;
         }
         else if (eat_newline(lexer))
@@ -1876,7 +1869,7 @@ lex_string(Lexer &lexer)
     {
         if (match_eol(lexer))
         {
-            unterminated_string(lexer);
+            unclosed_string(lexer);
             lexing = false;
         }
         else
@@ -2026,7 +2019,7 @@ lex_unquoted_key(Lexer &lexer, u32 context)
 
     if (!valid)
     {
-        add_error(lexer, "Invalid key: " + value);
+        invalid_key(lexer, value);
     }
     else if (value.length() == 0)
     {

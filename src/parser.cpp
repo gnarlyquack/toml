@@ -201,7 +201,7 @@ parse_array(Parser &parser, u32 context)
 
             case TOKEN_EOF:
             {
-                unterminated_array(parser);
+                unclosed_array(parser);
                 parsing = false;
             } break;
 
@@ -273,7 +273,7 @@ parse_inline_table(Parser &parser, u32 context)
                 {
                     missing_keyval(parser);
                 }
-                unterminated_inline_table(parser);
+                unclosed_inline_table(parser);
                 parsing = false;
             } break;
 
@@ -634,17 +634,9 @@ parse_table(Parser &parser)
             advance(parser, LEX_EOL);
         } break;
 
-        case TOKEN_COMMENT:
-        case TOKEN_EOF:
-        case TOKEN_NEWLINE:
-        {
-            add_error(parser, "Missing closing ']' for table header.");
-        } break;
-
         default:
         {
-            add_error(parser, "Expected closing ']' for table header.");
-            resynchronize(parser, "", LEX_EOL);
+            unclosed_table_header(parser, LEX_EOL);
         }
     }
 }
@@ -741,7 +733,7 @@ parse_expression(Parser &parser)
             // do nothing
         } break;
 
-        // invalid case
+        // TODO special case matching on '.' and '=' to handle missing keys?
         default:
         {
             invalid_expression(parser, LEX_EOL);
