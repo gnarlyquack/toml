@@ -8,9 +8,6 @@
 #include "common.hpp"
 #include "error.hpp"
 
-#include <cstdio> // fputs
-#include <iomanip>
-#include <sstream>
 #include <utility> // move
 
 
@@ -43,9 +40,6 @@ constexpr byte B00001111 = 0x0f;
 constexpr byte B00011111 = 0x1f;
 constexpr byte B00111111 = 0x3f;
 constexpr byte B01111111 = 0x7f;
-
-constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                              'A', 'B', 'C', 'D', 'E', 'F' };
 
 
 struct LexedDigits
@@ -128,15 +122,6 @@ string_to_s64(const std::string &value, int base = 10)
 {
     s64 result = stoll(value, nullptr, base);
     return result;
-}
-
-
-void
-byte_to_hex(byte value, string &out)
-{
-    out += "0x";
-    out.push_back(HEX2CHAR[(value >> 4) & 0xf]);
-    out.push_back(HEX2CHAR[value & 0xf]);
 }
 
 
@@ -431,17 +416,6 @@ convert_unicode_to_utf8(u32 codepoint, string &out)
         byte c = B10000000 | ((codepoint >> shift) & B00111111);
         out.push_back(c);
     }
-}
-
-
-string
-format_unicode(u32 codepoint)
-{
-    ostringstream o;
-    o << "U+" << setw(4) << setfill('0') << uppercase << hex << codepoint;
-
-    string result = o.str();
-    return result;
 }
 
 
@@ -1589,9 +1563,7 @@ lex_string_char(Lexer &lexer, string &result)
     }
     else
     {
-        string message = "Invalid UTF-8 byte: ";
-        byte_to_hex(c, message);
-        add_error(lexer, move(message), location);
+        invalid_utf8_byte(lexer, location, c);
         nbytes = 1; // Let's just eat the byte and (try to) keep going
         valid = false;
     }
@@ -1609,61 +1581,40 @@ lex_string_char(Lexer &lexer, string &result)
         }
         else
         {
-            string message = "Invalid UTF-8 continuation byte: ";
-            byte_to_hex(c, message);
-            message += ". Expected a byte in the range of ";
-            byte_to_hex(0x80, message);
-            message += '-';
-            byte_to_hex(0xbf, message);
-            message += '.';
-            add_error(lexer, move(message), location);
+            incomplete_unicode_codepoint(lexer, location, nbytes, eaten);
             valid = false;
         }
     }
 
-    // if eaten < nbytes, then we'll err on an unterminated string
     if (valid)
     {
         if (eaten == nbytes)
         {
-            if ((nbytes == 2) && (codepoint < 0x80))
+            if (codepoint <= 0x7f)
             {
-                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
-                               + " should be encoded using 1 byte but was encoded using 2.";
-                add_error(lexer, message, location);
-                valid = false;
+                nbytes = 1;
             }
-            else if ((nbytes == 3) && (codepoint < 0x800))
+            else if (codepoint <= 0x7ff)
             {
-                string expected_bytes = (codepoint < 0x80) ? "1 byte" : "2 bytes";
-
-                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
-                               + " should be encoded using " + expected_bytes + " but was encoded using 3.";
-                add_error(lexer, message, location);
-                valid = false;
+                nbytes = 2;
             }
-            else if ((nbytes == 4) && (codepoint < 0x10000))
+            else if (codepoint <= 0xffff)
             {
-                string expected_bytes = "1 byte";
-                if (codepoint < 0x800)
-                {
-                    expected_bytes = "3 bytes";
-                }
-                else if (codepoint < 0x80)
-                {
-                    expected_bytes = "2 bytes";
-                }
+                nbytes = 3;
+            }
+            else
+            {
+                nbytes = 4;
+            }
 
-                string message = "Overlong encoding of Unicode codepoint: " + format_unicode(codepoint)
-                               + " should be encoded using " + expected_bytes + " but was encoded using 4.";
-                add_error(lexer, message, location);
+            if (eaten > nbytes)
+            {
+                overlong_utf8_encoding(lexer, location, codepoint, nbytes, eaten);
                 valid = false;
             }
             else if (codepoint > 0x10ffff)
             {
-                string message = "Invalid Unicode codepoint: " + format_unicode(codepoint)
-                               + " (maximum codepoint is " + format_unicode(0x10ffff) + ')';
-                add_error(lexer, message, location);
+                invalid_unicode_codepoint(lexer, location, codepoint);
                 valid = false;
             }
             else if (!(
@@ -1675,18 +1626,17 @@ lex_string_char(Lexer &lexer, string &result)
                 unallowed_unicode_codepoint(lexer, location, codepoint);
                 valid = false;
             }
-
-            // Adjust the current column to reflect only 1 "character". Although
-            // this probably falls apart with combining characters, etc. Pull
-            // requests accepted. :-)
-            lexer.current.column -= (nbytes - 1);
         }
         else
         {
+            incomplete_unicode_codepoint(lexer, location, nbytes, eaten);
             valid = false;
-            add_error(lexer, "Unable to decode UTF-8 codepoint: unexpected end of file after decoding " + to_string(eaten) + " of " + to_string(nbytes) + " bytes.");
         }
     }
+
+    // Adjust the current column to reflect only 1 "character".
+    // TODO Actually do this correctly (e.g., combining characters)
+    lexer.current.column -= (eaten - 1);
 
     return valid;
 }

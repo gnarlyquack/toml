@@ -15,6 +15,10 @@ namespace
 {
 
 
+constexpr char HEX2CHAR[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                              'A', 'B', 'C', 'D', 'E', 'F' };
+
+
 void
 add_error(vector<Error> &errors, const SourceLocation &location, string &&message)
 {
@@ -57,6 +61,16 @@ add_error(Parser &parser, string &&message)
 
 
 string
+byte_to_hex(byte value)
+{
+    string result = "0x";
+    result.push_back(HEX2CHAR[(value >> 4) & 0xf]);
+    result.push_back(HEX2CHAR[value & 0xf]);
+    return result;
+}
+
+
+string
 format_unicode(u32 codepoint)
 {
     ostringstream o;
@@ -82,6 +96,39 @@ expected_end_of_line(Parser &parser)
     }
     advance(parser, context);
 }
+
+
+void
+incomplete_unicode_codepoint(Lexer &lexer, const SourceLocation &location, s32 expected, s32 actual)
+{
+    string message = "Invalid UTF-8: expected a " + to_string(expected) + "-byte Unicode codepoint but encountered invalid or missing bytes after decoding " + to_string(actual) + " byte(s).";
+    add_error(lexer, location, move(message));
+}
+
+
+void
+invalid_utf8_byte(Lexer &lexer, const SourceLocation &location, byte b)
+{
+    string message = "Invalid UTF-8 byte: " + byte_to_hex(b);
+    add_error(lexer, location, move(message));
+}
+
+
+void
+invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint)
+{
+    string message = "Invalid Unicode codepoint: " + format_unicode(codepoint);
+    add_error(lexer, location, move(message));
+}
+
+
+void
+overlong_utf8_encoding(Lexer &lexer, const SourceLocation &location, u32 codepoint, u32 expected, u32 actual)
+{
+    string message = "Invalid UTF-8: Unicode codepoint " + format_unicode(codepoint) + " should be " + to_string(expected) + " bytes but was in encoded using " + to_string(actual) + " bytes.";
+    add_error(lexer, location, move(message));
+}
+
 
 void
 day_out_of_range(Lexer &lexer, const SourceLocation &location, s32 days_in_month)

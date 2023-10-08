@@ -21,6 +21,22 @@ expected_end_of_line(Parser &parser);
 
 
 void
+incomplete_unicode_codepoint(Lexer &lexer, const SourceLocation &location, s32 expected, s32 actual);
+
+
+void
+invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 codepoint);
+
+
+void
+invalid_utf8_byte(Lexer &lexer, const SourceLocation &location, byte b);
+
+
+void
+overlong_utf8_encoding(Lexer &lexer, const SourceLocation &location, u32 codepoint, u32 expected, u32 actual);
+
+
+void
 year_wrong_length(Lexer &lexer, const SourceLocation &location);
 
 
