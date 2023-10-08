@@ -89,6 +89,18 @@ invalid_key(Parser &parser, u32 context);
 
 
 void
+invalid_binary(Lexer &lexer, u32 context);
+
+
+void
+invalid_hexadecimal(Lexer &lexer, u32 context);
+
+
+void
+invalid_octal(Lexer &lexer, u32 context);
+
+
+void
 invalid_value(Lexer &lexer, u32 context);
 
 
@@ -122,6 +134,10 @@ missing_keyval_separator(Parser &parser);
 
 void
 missing_value(Parser &parser);
+
+
+void
+unallowed_sign(Lexer &lexer);
 
 
 void

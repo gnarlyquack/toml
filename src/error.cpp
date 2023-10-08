@@ -238,6 +238,30 @@ invalid_key(Parser &parser, u32 context)
 
 
 void
+invalid_binary(Lexer &lexer, u32 context)
+{
+    resynchronize(lexer, context);
+    add_error(lexer, "Invalid binary number: " + get_lexeme(lexer));
+}
+
+
+void
+invalid_hexadecimal(Lexer &lexer, u32 context)
+{
+    resynchronize(lexer, context);
+    add_error(lexer, "Invalid hexadecimal number: " + get_lexeme(lexer));
+}
+
+
+void
+invalid_octal(Lexer &lexer, u32 context)
+{
+    resynchronize(lexer, context);
+    add_error(lexer, "Invalid octal number: " + get_lexeme(lexer));
+}
+
+
+void
 invalid_value(Lexer &lexer, u32 context)
 {
     if (resynchronize(lexer, context))
@@ -305,6 +329,13 @@ void
 missing_value(Parser &parser)
 {
     add_error(parser, "Expected a value.");
+}
+
+
+void
+unallowed_sign(Lexer &lexer)
+{
+    add_error(lexer, "A leading sign is not allowed.");
 }
 
 

@@ -1407,14 +1407,13 @@ lex_hexadecimal(Lexer &lexer, const string &value, u32 context)
     {
         if (value.length())
         {
-            add_error(lexer, "Hexadecimal number may not have a leading sign.");
+            unallowed_sign(lexer);
         }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 16)));
     }
     else
     {
-        resynchronize(lexer, context);
-        add_error(lexer, "Invalid hexadecimal number: " + get_lexeme(lexer));
+        invalid_hexadecimal(lexer, context);
         result = make_value(lexer, Value());
     }
 
@@ -1433,14 +1432,13 @@ lex_octal(Lexer &lexer, const string &value, u32 context)
     {
         if (value.length())
         {
-            add_error(lexer, "Octal number may not have a leading sign.");
+            unallowed_sign(lexer);
         }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 8)));
     }
     else
     {
-        resynchronize(lexer, context);
-        add_error(lexer, "Invalid octal number: " + get_lexeme(lexer));
+        invalid_octal(lexer, context);
         result = make_value(lexer, Value());
     }
 
@@ -1459,14 +1457,13 @@ lex_binary(Lexer &lexer, const string &value, u32 context)
     {
         if (value.length())
         {
-            add_error(lexer, "Binary number may not have a leading sign.");
+            unallowed_sign(lexer);
         }
         result = make_value(lexer, Value(string_to_s64(lexed.digits, 2)));
     }
     else
     {
-        resynchronize(lexer, context);
-        add_error(lexer, "Invalid binary number: " + get_lexeme(lexer));
+        invalid_binary(lexer, context);
         result = make_value(lexer, Value());
     }
 
