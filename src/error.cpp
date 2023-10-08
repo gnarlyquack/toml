@@ -131,6 +131,14 @@ invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 code
 
 
 void
+invalid_unicode_escape(Lexer &lexer, const SourceLocation &location, u32 expected, u32 actual)
+{
+    string message = "Invalid or incomplete Unicode escape sequence: expected " + to_string(expected) + " hexadecimal characters but found " + to_string(actual) + ".";
+    add_error(lexer, location, move(message));
+}
+
+
+void
 overlong_utf8_encoding(Lexer &lexer, const SourceLocation &location, u32 codepoint, u32 expected, u32 actual)
 {
     string message = "Invalid UTF-8: Unicode codepoint " + format_unicode(codepoint) + " should be " + to_string(expected) + " bytes but was in encoded using " + to_string(actual) + " bytes.";
@@ -212,6 +220,13 @@ void
 second_out_of_range(Lexer &lexer, const SourceLocation &location)
 {
     add_error(lexer, location, "Second must be between 00 and 59 inclusive.");
+}
+
+
+void
+invalid_escape(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Invalid escape sequence: " + get_lexeme(lexer, location.index));
 }
 
 
@@ -371,7 +386,7 @@ unclosed_inline_table(Parser& parser)
 void
 unclosed_string(Lexer &lexer)
 {
-    add_error(lexer, lexer.current, "Unterminated string.");
+    add_error(lexer, lexer.current, "Unclosed string.");
 }
 
 

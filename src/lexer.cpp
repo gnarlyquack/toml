@@ -420,33 +420,6 @@ convert_unicode_to_utf8(u32 codepoint, string &out)
 
 
 void
-invalid_escape(Lexer &lexer, const SourceLocation &location)
-{
-    string message = "Invalid escape sequence.";
-    Error error = { location, move(message) };
-    lexer.errors.push_back(move(error));
-}
-
-
-void
-invalid_unicode(Lexer &lexer, const SourceLocation &location)
-{
-    string message = "Unicode escape sequence specified an invalid or non-allowed codepoint.";
-    Error error = { location, move(message) };
-    lexer.errors.push_back(move(error));
-}
-
-
-void
-invalid_unicode_escape(Lexer &lexer, u32 lexed, u32 count, const SourceLocation &location)
-{
-    string message = "Invalid or incomplete Unicode escape sequence: expected " + to_string(count) + " hexadecimal characters but parsed " + to_string(lexed) + ".";
-    Error error = { location, move(message) };
-    lexer.errors.push_back(move(error));
-}
-
-
-void
 missing_key(Lexer &lexer)
 {
     add_error(lexer, "Missing key.");
@@ -1675,18 +1648,22 @@ lex_unicode(Lexer &lexer, string &result, u32 count)
 
     if (valid && (lexed == count))
     {
-        if ((codepoint <= 0xd7ff) || ((codepoint >= 0xe000) && (codepoint <= 0x10ffff)))
+        if ((codepoint > 0xd7ff) && (codepoint < 0xe000))
         {
-            convert_unicode_to_utf8(codepoint, result);
+            unallowed_unicode_codepoint(lexer, location, codepoint);
+        }
+        else if (codepoint > 0x10ffff)
+        {
+            invalid_unicode_codepoint(lexer, location, codepoint);
         }
         else
         {
-            invalid_unicode(lexer, location);
+            convert_unicode_to_utf8(codepoint, result);
         }
     }
     else if (!valid)
     {
-        invalid_unicode_escape(lexer, lexed, count, location);
+        invalid_unicode_escape(lexer, location, count, lexed);
     }
 }
 

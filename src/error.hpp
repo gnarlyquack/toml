@@ -29,6 +29,10 @@ invalid_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 code
 
 
 void
+invalid_unicode_escape(Lexer &lexer, const SourceLocation &location, u32 expected, u32 actual);
+
+
+void
 invalid_utf8_byte(Lexer &lexer, const SourceLocation &location, byte b);
 
 
@@ -78,6 +82,10 @@ minute_out_of_range(Lexer &lexer, const SourceLocation &location);
 
 void
 second_out_of_range(Lexer &lexer, const SourceLocation &location);
+
+
+void
+invalid_escape(Lexer &lexer, const SourceLocation &location);
 
 
 void
