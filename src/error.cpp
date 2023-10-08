@@ -237,6 +237,13 @@ key_redefinition(Parser &parser, const Key &key, const Key &prev)
 
 
 void
+leading_zeros(Lexer &lexer, const SourceLocation &location)
+{
+    add_error(lexer, location, "Number may not have leading zeros.");
+}
+
+
+void
 missing_array_separator(Parser &parser)
 {
     add_error(parser, "Missing ',' between array values.");

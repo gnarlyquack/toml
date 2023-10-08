@@ -93,6 +93,10 @@ key_redefinition(Parser &parser, const Key &key, const Key &prev);
 
 
 void
+leading_zeros(Lexer &lexer, const SourceLocation &location);
+
+
+void
 missing_array_separator(Parser &parser);
 
 

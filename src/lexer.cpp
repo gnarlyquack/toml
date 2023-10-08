@@ -1349,7 +1349,7 @@ lex_number(Lexer &lexer, string &value, LexedDigits &lexed, u32 context)
     if ((result.value.type() != Value::Type::INVALID)
         && (integer.digits[0] == '0') && (integer.digits.length() > 1))
     {
-        add_error(lexer, "Number may not have leading zeros.", integer.start);
+        leading_zeros(lexer, integer.start);
     }
 
     return result;
