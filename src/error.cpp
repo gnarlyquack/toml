@@ -334,6 +334,20 @@ missing_inline_table_separator(Parser &parser)
 
 
 void
+missing_key(Lexer &lexer)
+{
+    add_error(lexer, "Missing key.");
+}
+
+
+void
+missing_key(Parser &parser)
+{
+    add_error(parser, "Missing key.");
+}
+
+
+void
 missing_keyval(Parser &parser)
 {
     add_error(parser, "Expected a key-value pair.");
@@ -377,6 +391,30 @@ unclosed_array(Parser &parser)
 
 
 void
+unclosed_array_header(Parser &parser)
+{
+    switch (parser.token.type)
+    {
+        case TOKEN_COMMENT:
+        case TOKEN_EOF:
+        case TOKEN_NEWLINE:
+        {
+            add_error(parser, "Missing closing ']]' for table array header.");
+        } break;
+
+        default:
+        {
+            if (resynchronize(parser.lexer, LEX_EOL))
+            {
+                add_error(parser, "Expected closing ']]' for table array header.");
+            }
+            advance(parser, LEX_EOL);
+        } break;
+    }
+}
+
+
+void
 unclosed_inline_table(Parser& parser)
 {
     add_error(parser, "Missing closing '}' for inline table.");
@@ -391,7 +429,7 @@ unclosed_string(Lexer &lexer)
 
 
 void
-unclosed_table_header(Parser &parser, u32 context)
+unclosed_table_header(Parser &parser)
 {
     switch (parser.token.type)
     {
@@ -404,11 +442,11 @@ unclosed_table_header(Parser &parser, u32 context)
 
         default:
         {
-            if (resynchronize(parser.lexer, context))
+            if (resynchronize(parser.lexer, LEX_EOL))
             {
-            add_error(parser, "Expected closing ']' for table header.");
+                add_error(parser, "Expected closing ']' for table header.");
             }
-            advance(parser, context);
+            advance(parser, LEX_EOL);
         } break;
     }
 }

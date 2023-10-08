@@ -125,31 +125,6 @@ string_to_s64(const std::string &value, int base = 10)
 }
 
 
-void
-add_error(Lexer &lexer, string message, const SourceLocation &location)
-{
-    Error error = { location, move(message) };
-
-    auto insert_at = lexer.errors.end();
-    for ( ; insert_at != lexer.errors.begin(); --insert_at)
-    {
-        auto check = insert_at - 1;
-        if (check->location.index <= error.location.index)
-        {
-            break;
-        }
-    }
-
-    lexer.errors.insert(insert_at, move(error));
-}
-
-void
-add_error(Lexer &lexer, string message)
-{
-    add_error(lexer, move(message), lexer.start);
-}
-
-
 Token
 make_token(Lexer &lexer, TokenType type, u64 length)
 {
@@ -416,13 +391,6 @@ convert_unicode_to_utf8(u32 codepoint, string &out)
         byte c = B10000000 | ((codepoint >> shift) & B00111111);
         out.push_back(c);
     }
-}
-
-
-void
-missing_key(Lexer &lexer)
-{
-    add_error(lexer, "Missing key.");
 }
 
 

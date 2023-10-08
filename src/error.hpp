@@ -137,6 +137,14 @@ missing_inline_table_separator(Parser &parser);
 
 
 void
+missing_key(Lexer &lexer);
+
+
+void
+missing_key(Parser &parser);
+
+
+void
 missing_keyval(Parser &parser);
 
 
@@ -162,11 +170,15 @@ unallowed_unicode_codepoint(Lexer &lexer, const SourceLocation &location, u32 co
 //
 
 void
-unclosed_table_header(Parser &parser, u32 context);
+unclosed_table_header(Parser &parser);
 
 
 void
 unclosed_array(Parser &parser);
+
+
+void
+unclosed_array_header(Parser &parser);
 
 
 void

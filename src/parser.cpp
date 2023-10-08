@@ -102,41 +102,6 @@ Definition parse_value(Parser &parser, u32 context);
 // Implementation
 //
 
-void
-add_error(Parser &parser, string message)
-{
-    Error error = {parser.token.location, move(message)};
-
-    auto insert_at = parser.errors.end();
-    for ( ; insert_at != parser.errors.begin(); --insert_at)
-    {
-        auto check = insert_at - 1;
-        if (check->location.index <= error.location.index)
-        {
-            break;
-        }
-    }
-
-    parser.errors.insert(insert_at, move(error));
-}
-
-
-string
-resynchronize(Parser &parser, string message, u32 context)
-{
-    resynchronize(parser.lexer, context);
-    string result = get_lexeme(parser.lexer, parser.token.location.index);
-
-    if (message.length())
-    {
-        add_error(parser, message + result);
-    }
-
-    advance(parser, context);
-    return result;
-}
-
-
 Token
 eat(Parser &parser, u32 context)
 {
@@ -423,7 +388,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
             case TOKEN_NEWLINE:
             case TOKEN_PERIOD:
             {
-                add_error(parser, "Missing key.");
+                missing_key(parser);
                 valid = false;
             }  break;
 
@@ -432,7 +397,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
                 if (((token.type == TOKEN_RBRACKET) && (context & LEX_ARRAY))
                     || ((token.type == TOKEN_RBRACE) && (context & LEX_TABLE)))
                 {
-                    add_error(parser, "Missing key.");
+                    missing_key(parser);
                 }
                 else
                 {
@@ -562,7 +527,7 @@ parse_table_header(Parser &parser, u32 context)
             case TOKEN_RBRACKET:
             case TOKEN_DOUBLE_RBRACKET:
             {
-                add_error(parser, "Missing key.");
+                missing_key(parser);
                 valid = false;
             }  break;
 
@@ -636,7 +601,7 @@ parse_table(Parser &parser)
 
         default:
         {
-            unclosed_table_header(parser, LEX_EOL);
+            unclosed_table_header(parser);
         }
     }
 }
@@ -689,17 +654,9 @@ parse_table_array(Parser &parser)
             advance(parser, LEX_EOL);
         } break;
 
-        case TOKEN_COMMENT:
-        case TOKEN_EOF:
-        case TOKEN_NEWLINE:
-        {
-            add_error(parser, "Missing closing ']]' for table array header.");
-        } break;
-
         default:
         {
-            add_error(parser, "Expected closing ']]' for table array header.");
-            resynchronize(parser, "", LEX_EOL);
+            unclosed_array_header(parser);
         }
     }
 }
