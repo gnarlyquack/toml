@@ -2027,125 +2027,105 @@ Token
 next_token(Lexer &lexer, u32 context)
 {
     Token result;
-    bool lexing = true;
-    while (lexing)
+
+    eat_whitespace(lexer);
+    lexer.start = lexer.current;
+
+    if (end_of_file(lexer))
     {
-        lexer.start = lexer.current;
-        if (end_of_file(lexer))
+        result = make_token(lexer, TOKEN_EOF, 0);
+    }
+    else
+    {
+        byte b = peek(lexer);
+        switch (b)
         {
-            result = make_token(lexer, TOKEN_EOF, 0);
-            lexing = false;
-        }
-        else
-        {
-            byte b = peek(lexer);
-            switch (b)
+            case '#':
             {
-                case ' ':
-                case '\t':
-                {
-                    eat_whitespace(lexer);
-                } break;
+                result = make_comment(lexer);
+            } break;
 
-                case '#':
-                {
-                    result = make_comment(lexer);
-                    lexing = false;
-                } break;
+            case '\n':
+            {
+                result = make_token(lexer, TOKEN_NEWLINE, 1);
+            } break;
 
-                case '\n':
+            case '\r':
+            {
+                if (match(lexer, '\n', 1))
                 {
-                    result = make_token(lexer, TOKEN_NEWLINE, 1);
-                    lexing = false;
-                } break;
+                    result = make_token(lexer, TOKEN_NEWLINE, 2);
+                }
+                else
+                {
+                    result = make_token(lexer, TOKEN_NONE);
+                }
+            } break;
 
-                case '\r':
-                {
-                    if (match(lexer, '\n', 1))
-                    {
-                        result = make_token(lexer, TOKEN_NEWLINE, 2);
-                        lexing = false;
-                    }
-                    else
-                    {
-                        unallowed_unicode_codepoint(lexer, lexer.current, b);
-                        advance(lexer);
-                    }
-                } break;
+            case '.':
+            {
+                result = make_token(lexer, TOKEN_PERIOD, 1);
+            } break;
 
-                case '.':
-                {
-                    result = make_token(lexer, TOKEN_PERIOD, 1);
-                    lexing = false;
-                } break;
+            case '=':
+            {
+                result = make_token(lexer, TOKEN_EQUAL, 1);
+            } break;
 
-                case '=':
+            case '[':
+            {
+                if ((context & LEX_ARRAY_HEADER) && match(lexer, '[', 1))
                 {
-                    result = make_token(lexer, TOKEN_EQUAL, 1);
-                    lexing = false;
-                } break;
+                    result = make_token(lexer, TOKEN_DOUBLE_LBRACKET, 2);
+                }
+                else
+                {
+                    result = make_token(lexer, TOKEN_LBRACKET, 1);
+                }
+            } break;
 
-                case '[':
+            case ']':
+            {
+                if ((context & LEX_ARRAY_HEADER) && match(lexer, ']', 1))
                 {
-                    if ((context & LEX_ARRAY_HEADER) && match(lexer, '[', 1))
-                    {
-                        result = make_token(lexer, TOKEN_DOUBLE_LBRACKET, 2);
-                    }
-                    else
-                    {
-                        result = make_token(lexer, TOKEN_LBRACKET, 1);
-                    }
-                    lexing = false;
-                } break;
+                    result = make_token(lexer, TOKEN_DOUBLE_RBRACKET, 2);
+                }
+                else
+                {
+                    result = make_token(lexer, TOKEN_RBRACKET, 1);
+                }
+            } break;
 
-                case ']':
-                {
-                    if ((context & LEX_ARRAY_HEADER) && match(lexer, ']', 1))
-                    {
-                        result = make_token(lexer, TOKEN_DOUBLE_RBRACKET, 2);
-                    }
-                    else
-                    {
-                        result = make_token(lexer, TOKEN_RBRACKET, 1);
-                    }
-                    lexing = false;
-                } break;
+            case '{':
+            {
+                result = make_token(lexer, TOKEN_LBRACE, 1);
+            } break;
 
-                case '{':
-                {
-                    result = make_token(lexer, TOKEN_LBRACE, 1);
-                    lexing = false;
-                } break;
+            case '}':
+            {
+                result = make_token(lexer, TOKEN_RBRACE, 1);
+            } break;
 
-                case '}':
-                {
-                    result = make_token(lexer, TOKEN_RBRACE, 1);
-                    lexing = false;
-                } break;
+            case ',':
+            {
+                result = make_token(lexer, TOKEN_COMMA, 1);
+            } break;
 
-                case ',':
+            default:
+            {
+                if (context & LEX_VALUE)
                 {
-                    result = make_token(lexer, TOKEN_COMMA, 1);
-                    lexing = false;
-                } break;
-
-                default:
+                    result = lex_value(lexer, context);
+                }
+                else if (context & (LEX_KEY | LEX_ARRAY_HEADER | LEX_TABLE_HEADER))
                 {
-                    if (context & LEX_VALUE)
-                    {
-                        result = lex_value(lexer, context);
-                    }
-                    else if (context & (LEX_KEY | LEX_ARRAY_HEADER | LEX_TABLE_HEADER))
-                    {
-                        result = lex_key(lexer, context);
-                    }
-                    else
-                    {
-                        result = make_token(lexer, TOKEN_NONE);
-                    }
-                    lexing = false;
-                } break;
-            }
+                    result = lex_key(lexer, context);
+                }
+                else
+                {
+                    result = make_token(lexer, TOKEN_NONE);
+                }
+            } break;
         }
     }
 
