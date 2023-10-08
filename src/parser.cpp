@@ -248,7 +248,7 @@ parse_inline_table(Parser &parser, u32 context)
             {
                 if (prev != TOKEN_VALUE)
                 {
-                    add_error(parser, "Missing inline table value.");
+                    missing_keyval(parser);
                 }
                 table_context = context | LEX_TABLE | LEX_KEY;
                 advance(parser, table_context);
@@ -259,7 +259,7 @@ parse_inline_table(Parser &parser, u32 context)
             {
                 if (prev == TOKEN_COMMA)
                 {
-                    add_error(parser, "Unexpected end of table: a value is required after a comma.");
+                    missing_keyval(parser);
                 }
                 advance(parser, context);
                 parsing = false;
@@ -269,6 +269,10 @@ parse_inline_table(Parser &parser, u32 context)
             case TOKEN_EOF:
             case TOKEN_NEWLINE:
             {
+                if (prev == TOKEN_COMMA)
+                {
+                    missing_keyval(parser);
+                }
                 unterminated_inline_table(parser);
                 parsing = false;
             } break;
@@ -277,7 +281,7 @@ parse_inline_table(Parser &parser, u32 context)
             {
                 if (prev == TOKEN_VALUE)
                 {
-                    add_error(parser, "Missing ',' between inline table values.");
+                    missing_inline_table_separator(parser);
                 }
                 if (token.type == TOKEN_NONE)
                 {
@@ -324,6 +328,30 @@ parse_value(Parser &parser, u32 context)
         case TOKEN_EOF:
         {
             missing_value(parser);
+        } break;
+
+        case TOKEN_RBRACE:
+        {
+            if (context & LEX_TABLE)
+            {
+                missing_value(parser);
+            }
+            else
+            {
+                invalid_value(parser, context);
+            }
+        } break;
+
+        case TOKEN_RBRACKET:
+        {
+            if (context & LEX_ARRAY)
+            {
+                missing_value(parser);
+            }
+            else
+            {
+                invalid_value(parser, context);
+            }
         } break;
 
         default:
@@ -408,7 +436,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
                 }
                 else
                 {
-                    token.lexeme = resynchronize(parser, "Invalid key: ", context | LEX_KEY);
+                    invalid_key(parser, context | LEX_KEY);
                 }
                 valid = false;
             } break;
@@ -439,7 +467,7 @@ parse_keyval(Parser &parser, DefinitionTable *table, TableMeta *meta, u32 contex
     }
     else
     {
-        add_error(parser, "Missing '=' between key and value.");
+        missing_keyval_separator(parser);
         if (peek(parser, TOKEN_NONE))
         {
             advance(parser, context | LEX_VALUE);
@@ -540,7 +568,7 @@ parse_table_header(Parser &parser, u32 context)
 
             default:
             {
-                token.lexeme = resynchronize(parser, "Invalid key: ", context);
+                invalid_key(parser, context);
                 valid = false;
             } break;
         }
@@ -716,7 +744,7 @@ parse_expression(Parser &parser)
         // invalid case
         default:
         {
-            resynchronize(parser, "Invalid expression: ", LEX_EOL);
+            invalid_expression(parser, LEX_EOL);
         } break;
     }
 

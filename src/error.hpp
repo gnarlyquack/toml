@@ -81,6 +81,14 @@ second_out_of_range(Lexer &lexer, const SourceLocation &location);
 
 
 void
+invalid_expression(Parser &parser, u32 context);
+
+
+void
+invalid_key(Parser &parser, u32 context);
+
+
+void
 invalid_value(Lexer &lexer, u32 context);
 
 
@@ -98,6 +106,18 @@ leading_zeros(Lexer &lexer, const SourceLocation &location);
 
 void
 missing_array_separator(Parser &parser);
+
+
+void
+missing_inline_table_separator(Parser &parser);
+
+
+void
+missing_keyval(Parser &parser);
+
+
+void
+missing_keyval_separator(Parser &parser);
 
 
 void

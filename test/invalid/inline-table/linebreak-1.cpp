@@ -4,7 +4,7 @@ TEST(invalid_inline_table_tests, test_linebreak_1)
 
     const vector<Error> expected = {
         { 108, 3, 18, "Missing closing '}' for inline table." },
-        { 109, 4, 1, "Invalid expression: }" },
+        { 109, 4,  1, "Invalid expression: }" },
     };
 
     assert_errors(toml, expected);

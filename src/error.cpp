@@ -61,6 +61,14 @@ add_error(Parser &parser, string &&message)
 
 
 string
+get_lexeme(Parser &parser)
+{
+    string result = get_lexeme(parser.lexer, parser.token.location.index);
+    return result;
+}
+
+
+string
 byte_to_hex(byte value)
 {
     string result = "0x";
@@ -91,7 +99,7 @@ expected_end_of_line(Parser &parser)
 
     if (resynchronize(parser.lexer, context))
     {
-        string message = "Expected the end of the line but got: " + get_lexeme(parser.lexer, parser.token.location.index);
+        string message = "Expected the end of the line but got: " + get_lexeme(parser);
         add_error(parser, move(message));
     }
     advance(parser, context);
@@ -208,6 +216,28 @@ second_out_of_range(Lexer &lexer, const SourceLocation &location)
 
 
 void
+invalid_expression(Parser &parser, u32 context)
+{
+    if (resynchronize(parser.lexer, context))
+    {
+        add_error(parser, "Invalid expression: " + get_lexeme(parser));
+    }
+    advance(parser, context);
+}
+
+
+void
+invalid_key(Parser &parser, u32 context)
+{
+    if (resynchronize(parser.lexer, context))
+    {
+        add_error(parser, "Invalid key: " + get_lexeme(parser));
+    }
+    advance(parser, context);
+}
+
+
+void
 invalid_value(Lexer &lexer, u32 context)
 {
     if (resynchronize(lexer, context))
@@ -222,7 +252,7 @@ invalid_value(Parser &parser, u32 context)
 {
     if (resynchronize(parser.lexer, context))
     {
-        add_error(parser, "Invalid value: " + get_lexeme(parser.lexer, parser.token.location.index));
+        add_error(parser, "Invalid value: " + get_lexeme(parser));
     }
     advance(parser, context);
 }
@@ -247,6 +277,27 @@ void
 missing_array_separator(Parser &parser)
 {
     add_error(parser, "Missing ',' between array values.");
+}
+
+
+void
+missing_inline_table_separator(Parser &parser)
+{
+    add_error(parser, "Missing ',' between key-value pairs.");
+}
+
+
+void
+missing_keyval(Parser &parser)
+{
+    add_error(parser, "Expected a key-value pair.");
+}
+
+
+void
+missing_keyval_separator(Parser &parser)
+{
+    add_error(parser, "Missing '=' between key and value.");
 }
 
 
