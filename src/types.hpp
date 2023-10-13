@@ -515,9 +515,9 @@ struct Key final
 
 
 inline bool
-operator==(const Key &left, const Key &right)
+operator==(const Key &lhs, const Key &rhs)
 {
-    bool result = left.value == right.value;
+    bool result = lhs.value == rhs.value;
     return result;
 }
 
@@ -532,9 +532,211 @@ struct KeyHasher
 
 
 struct Definition;
-
-using DefinitionTable = std::unordered_map<Key, Definition, KeyHasher>;
 using DefinitionArray = std::vector<Definition>;
+
+// Thin wrapper around std::unordered_map to allow key lookup with strings
+struct DefinitionTable final
+{
+
+private:
+
+    using DefinitionTableImpl = std::unordered_map<Key, Definition, KeyHasher>;
+
+
+public:
+
+    using key_type = Key;
+    using mapped_type = Definition;
+    using value_type = std::pair<const Key, Definition>;
+    using size_type = DefinitionTableImpl::size_type;
+    using difference_type = DefinitionTableImpl::difference_type;
+    using iterator = DefinitionTableImpl::iterator;
+    using const_iterator = DefinitionTableImpl::const_iterator;
+
+
+    //
+    // Iterators
+    //
+
+    iterator
+    begin() noexcept
+    {
+        return _table.begin();
+    }
+
+
+    const_iterator
+    begin() const noexcept
+    {
+        return _table.begin();
+    }
+
+
+    const_iterator
+    cbegin() const noexcept
+    {
+        return _table.cbegin();
+    }
+
+
+    iterator
+    end() noexcept
+    {
+        return _table.end();
+    }
+
+
+    const_iterator
+    end() const noexcept
+    {
+        return _table.end();
+    }
+
+
+    const_iterator
+    cend() const noexcept
+    {
+        return _table.cend();
+    }
+
+
+    //
+    // Capacity
+    //
+
+    bool
+    empty() const noexcept
+    {
+        return _table.empty();
+    }
+
+
+    size_type
+    size() const noexcept
+    {
+        return _table.size();
+    }
+
+
+    //
+    // Modifiers
+    //
+
+    iterator
+    erase(iterator pos)
+    {
+        return _table.erase(pos);
+    }
+
+
+    iterator
+    erase(const_iterator pos)
+    {
+        return _table.erase(pos);
+    }
+
+
+    size_type
+    erase(const Key& key)
+    {
+        return _table.erase(key);
+    }
+
+
+    size_type
+    erase(const std::string& key)
+    {
+        return _table.erase({ key, {} });
+    }
+
+
+    //
+    // Lookup
+    //
+
+    Definition&
+    at(const Key& key)
+    {
+        return _table.at(key);
+    }
+
+
+    const Definition&
+    at(const Key& key) const
+    {
+        return _table.at(key);
+    }
+
+
+    Definition&
+    at(const std::string& key)
+    {
+        return _table.at({ key, {} });
+    }
+
+
+    const Definition&
+    at(const std::string& key) const
+    {
+        return _table.at({ key, {} });
+    }
+
+
+    Definition&
+    operator[](const Key& key)
+    {
+        return _table[key];
+    }
+
+
+    Definition&
+    operator[](Key&& key)
+    {
+        return _table[std::move(key)];
+    }
+
+
+    iterator
+    find(const Key& key)
+    {
+        return _table.find(key);
+    }
+
+
+    const_iterator
+    find(const Key& key) const
+    {
+        return _table.find(key);
+    }
+
+
+    iterator
+    find(const std::string& key)
+    {
+        return _table.find({ key, {} });
+    }
+
+
+    const_iterator
+    find(const std::string& key) const
+    {
+        return _table.find({ key, {} });
+    }
+
+
+    friend bool
+    operator==(const DefinitionTable& lhs, const DefinitionTable& rhs);
+
+
+    friend bool
+    operator!=(const DefinitionTable& lhs, const DefinitionTable& rhs);
+
+
+private:
+
+    DefinitionTableImpl _table;
+};
+
 
 // In order to access common union subsequence member '_type' in Definition,
 // all union members must be standard layout.
@@ -902,6 +1104,135 @@ private:
         }
     }
 };
+
+
+inline bool
+operator==(const Value &lhs, const Value &rhs)
+{
+    bool result = false;
+    if (lhs.type() == rhs.type())
+    {
+        switch (lhs.type())
+        {
+            case Value::Type::ARRAY:
+            {
+                result = lhs.as_array() == rhs.as_array();
+            } break;
+
+            case Value::Type::BOOLEAN:
+            {
+                result = lhs.as_boolean() == rhs.as_boolean();
+            } break;
+
+            case Value::Type::FLOAT:
+            {
+                double l = lhs.as_float();
+                double r = rhs.as_float();
+                result = (l == r) || (std::isnan(l) && std::isnan(r));
+            } break;
+
+            case Value::Type::INTEGER:
+            {
+                result = lhs.as_integer() == rhs.as_integer();
+            } break;
+
+            case Value::Type::LOCAL_DATE:
+            {
+                result = lhs.as_local_date() == rhs.as_local_date();
+            } break;
+
+            case Value::Type::LOCAL_DATETIME:
+            {
+                result = lhs.as_local_datetime() == rhs.as_local_datetime();
+            } break;
+
+            case Value::Type::LOCAL_TIME:
+            {
+                result = lhs.as_local_time().to_duration() == rhs.as_local_time().to_duration();
+            } break;
+
+            case Value::Type::OFFSET_DATETIME:
+            {
+                result = lhs.as_offset_datetime() == rhs.as_offset_datetime();
+            } break;
+
+            case Value::Type::STRING:
+            {
+                result = lhs.as_string() == rhs.as_string();
+            } break;
+
+            case Value::Type::TABLE:
+            {
+                result = lhs.as_table() == rhs.as_table();
+            } break;
+
+            case Value::Type::INVALID:
+            {
+                result = false;
+            } break;
+        }
+    }
+    return result;
+}
+
+
+inline bool
+operator!=(const Value &lhs, const Value &rhs)
+{
+    bool not_result = lhs == rhs;
+    return !not_result;
+}
+
+
+inline bool
+operator==(const Definition& lhs, const Definition& rhs)
+{
+    bool result = false;
+    if (lhs.type() == rhs.type())
+    {
+        switch (lhs.type())
+        {
+            case Value::Type::ARRAY:
+            {
+                result = lhs.as_array() == rhs.as_array();
+            } break;
+
+            case Value::Type::TABLE:
+            {
+                result = lhs.as_table() == rhs.as_table();
+            } break;
+
+            default:
+            {
+                result = lhs.as_value() == rhs.as_value();
+            } break;
+        }
+    }
+
+    return result;
+}
+
+
+inline bool
+operator!=(const Definition& lhs, const Definition& rhs)
+{
+    bool not_result = lhs == rhs;
+    return !not_result;
+}
+
+
+inline bool
+operator==(const DefinitionTable& lhs, const DefinitionTable& rhs)
+{
+    return lhs._table == rhs._table;
+}
+
+
+inline bool
+operator!=(const DefinitionTable& lhs, const DefinitionTable& rhs)
+{
+    return lhs._table != rhs._table;
+}
 
 
 struct Error
